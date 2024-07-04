@@ -53,7 +53,7 @@ class APIService:
         html_directory = os.path.abspath("static")
         if not os.path.exists(html_directory):
             os.makedirs(html_directory) 
-        self.app.mount("/static", StaticFiles(directory=html_directory), name="static")
+        self.app.mount("/", StaticFiles(directory=html_directory), name="static")
 
     def read_args(self):
         from core.utils.config_setting import Config

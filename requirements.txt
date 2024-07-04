@@ -10,3 +10,4 @@ qdrant-client
 openai
 google-cloud-aiplatform
 dashscope
+streamlit

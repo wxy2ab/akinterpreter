@@ -49,7 +49,7 @@ def test1_llm_factory():
     result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
 
-def test_data_interpreter():
+def test1_data_interpreter():
     import numpy as np
     import pandas as pd
     from core.interpreter.data_interpreter import DataInterpreter
@@ -80,3 +80,9 @@ def test_data_interpreter():
     print("\n" + "="*50 + "\n")
     print("分析报告:")
     print(report)
+
+def test_akshare_interpreter():
+    from core.planner.akshare_planner import AkshareInterpreterPlanner
+    planner = AkshareInterpreterPlanner()
+    result = planner.plan_and_execute("分析今年上半年上证指数走势")
+    print(result)

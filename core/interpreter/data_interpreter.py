@@ -45,6 +45,9 @@ class DataInterpreter(Interpreter):
         return code, report
 
     def generate_code(self, data: Any, user_request: str) -> str:
+        if "data_summary" not in self:
+            self.data_summary = DataSummarizer.get_data_summary(data)
+        
         prompt = ChinesePrompts.generate_data_code_prompt(
             self.data_summary, 
             user_request, 

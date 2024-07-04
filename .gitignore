@@ -29,6 +29,7 @@ share/python-wheels/
 *.egg
 MANIFEST
 setting.ini
+directly.py
 
 .replit
 replit.nix
