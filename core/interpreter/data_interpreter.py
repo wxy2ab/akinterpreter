@@ -103,7 +103,7 @@ class DataInterpreter(Interpreter):
 
 class ChinesePrompts:
     @staticmethod
-    def generate_data_code_prompt(data_summary, user_request, pre_installed_libraries, figure_dir, data_dir, generate_uuid):
+    def generate_data_code_prompt(data_summary, user_request, pre_installed_libraries, figure_dir, data_dir):
         return f"""根据以下数据摘要和用户请求，生成Python代码来分析数据并满足请求。
 
 数据摘要：
