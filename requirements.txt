@@ -8,6 +8,11 @@ Pillow
 akshare
 qdrant-client
 openai
-google-cloud-aiplatform
 dashscope
 streamlit
+pandas
+numpy
+matplotlib
+seaborn
+scikit-learn
+mplfinance

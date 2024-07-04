@@ -19,6 +19,7 @@ class DataInterpreter(Interpreter):
         self.data_dir = os.path.join(self.output_dir, "data")
         os.makedirs(self.figure_dir, exist_ok=True)
         os.makedirs(self.data_dir, exist_ok=True)
+        self.data_summary = None
 
     def interpret(self, data: Any, user_request: str) -> Tuple[str, str]:
         self.data = data
@@ -45,7 +46,7 @@ class DataInterpreter(Interpreter):
         return code, report
 
     def generate_code(self, data: Any, user_request: str) -> str:
-        if "data_summary" not in self:
+        if not self.data_summary:
             self.data_summary = DataSummarizer.get_data_summary(data)
         
         prompt = ChinesePrompts.generate_data_code_prompt(
