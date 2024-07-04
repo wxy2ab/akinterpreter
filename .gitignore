@@ -5,13 +5,16 @@ __pycache__/
 
 # C extensions
 *.so
-
+output/
 # Distribution / packaging
 .Python
 build/
+local_cache/
 develop-eggs/
+images/
 dist/
 downloads/
+database/
 eggs/
 .eggs/
 lib/
@@ -25,6 +28,10 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+setting.ini
+
+.replit
+replit.nix
 
 # PyInstaller
 #  Usually these files are written by a python script from a template
@@ -144,6 +151,7 @@ venv.bak/
 .mypy_cache/
 .dmypy.json
 dmypy.json
+wxy2ab.json
 
 # Pyre type checker
 .pyre/

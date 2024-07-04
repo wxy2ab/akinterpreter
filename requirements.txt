@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+colorlog 
+backoff
+anthropic[bedrock]
+pypdf2
+Pillow
+akshare
+qdrant-client
+openai
+google-cloud-aiplatform
