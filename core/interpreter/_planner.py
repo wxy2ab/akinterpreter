@@ -21,3 +21,6 @@ class Planner(ABC):
     @abstractmethod
     def generate_report(self,data:str,query:str)->str:
         pass
+    @abstractmethod
+    def plan_and_execute(self,user_requests:str,data:any)->Tuple[str,str]:
+        pass
