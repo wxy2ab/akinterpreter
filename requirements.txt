@@ -9,3 +9,4 @@ akshare
 qdrant-client
 openai
 google-cloud-aiplatform
+dashscope
