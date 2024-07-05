@@ -3,7 +3,7 @@ import json
 from ._embedding import Embedding
 from ..utils.config_setting import Config
 
-class BaiChuanEmbeddingConverter:
+class BaiChuanEmbedding(Embedding):
     def __init__(self,api_key :str = ""):
         config = Config()
         if api_key == "" and config.has_key("baichuan_api_key"):

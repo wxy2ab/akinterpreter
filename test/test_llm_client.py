@@ -45,8 +45,8 @@ def test1_llm_factory():
     from core.llms.llm_factory import LLMFactory
     factory = LLMFactory()
     print(factory.list_available_llms())
-    client = factory.get_instance("")
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
+    client = factory.get_instance("DoubaoApiClient")
+    result = client.one_chat("我问你，你是不是豆包")#("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
 
 def test1_data_interpreter():
@@ -81,8 +81,29 @@ def test1_data_interpreter():
     print("分析报告:")
     print(report)
 
-def test_akshare_interpreter():
+def test1_akshare_interpreter():
     from core.planner.akshare_planner import AkshareInterpreterPlanner
     planner = AkshareInterpreterPlanner()
     result = planner.plan_and_execute("分析今年上半年上证指数走势")
+    print(result)
+
+def test1_embeddings():
+    from core.utils.tsdata import check_proxy_running
+    check_proxy_running("172.22.32.1",10809,"http")
+    from core.embeddings._embedding import Embedding
+    from core.embeddings.embedding_factory import EmbeddingFactory
+    factory = EmbeddingFactory()
+    print(factory.list_available_embeddings())
+    embedding:Embedding = factory.get_instance("BGEM3Embedding")
+    result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
+    print(result)
+
+
+def test_volcengine_embeddings():
+    from core.embeddings._embedding import Embedding
+    from core.embeddings.embedding_factory import EmbeddingFactory
+    factory = EmbeddingFactory()
+    print(factory.list_available_embeddings())
+    embedding:Embedding = factory.get_instance("VolcengineEmbedding")
+    result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
