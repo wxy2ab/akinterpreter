@@ -125,3 +125,9 @@ def test1_ranker_factory():
     result = ranker.get_scores([["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"]])
     print(result)
 
+def test_excel_interpreter():
+    from core.interpreter.excel_interpreter import ExcelInterpreter
+    interpreter = ExcelInterpreter()
+    path="./output/sources_count.xlsx"
+    code ,report=interpreter.interpret(path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
+    print(report)
