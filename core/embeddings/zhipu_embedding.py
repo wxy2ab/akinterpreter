@@ -27,8 +27,8 @@ class ZhipuAIEmbeddings(Embedding):
         self.model = model
         self.api_key = api_key
         config = Config()
-        if self.api_key == "" and config.has_key("zhipu_api_key"):
-            self.api_key = config.get("zhipu_api_key")
+        if self.api_key == "" and config.has_key("glm_api_key"):
+            self.api_key = config.get("glm_api_key")
         self._initialize_client()
 
     def _initialize_client(self):

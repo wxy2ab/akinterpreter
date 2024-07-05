@@ -98,8 +98,8 @@ class DashScopeEmbeddings(Embedding):
     def __init__(self, model: str = "text-embedding-v1", dashscope_api_key: Optional[str] = None, max_retries: int = 5):
         import dashscope
         config=Config()
-        if dashscope_api_key is None and config.has_key("dashscope_api_key"):
-            dashscope_api_key = config.get("dashscope_api_key")
+        if dashscope_api_key is None and config.has_key("DASHSCOPE_API_KEY"):
+            dashscope_api_key = config.get("DASHSCOPE_API_KEY")
         self.model = model
         self.dashscope_api_key = dashscope_api_key or self._get_api_key_from_env()
         self.max_retries = max_retries
