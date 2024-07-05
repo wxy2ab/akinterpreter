@@ -98,12 +98,29 @@ def test1_embeddings():
     result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
 
-
-def test_volcengine_embeddings():
+def test1_volcengine_embeddings():
     from core.embeddings._embedding import Embedding
     from core.embeddings.embedding_factory import EmbeddingFactory
     factory = EmbeddingFactory()
     print(factory.list_available_embeddings())
     embedding:Embedding = factory.get_instance("VolcengineEmbedding")
     result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
+    print(result)
+
+def test1_cross_encoder():
+    from core.utils.tsdata import check_proxy_running
+    check_proxy_running("172.22.32.1",10809,"http")
+    from sentence_transformers import CrossEncoder
+    model = CrossEncoder('maidalun1020/bce-reranker-base_v1', max_length=512)
+    scores = model.predict([["我是中国人","去湖南的旅客"],["嫦娥六号","乘波体弹道飞行器"]])
+    print(scores)
+
+def test_ranker_factory():
+    from core.utils.tsdata import check_proxy_running
+    check_proxy_running("172.22.32.1",10809,"http")
+    from core.embeddings.ranker_factory import RankerFactory
+    factory = RankerFactory()
+    print(factory.list_available_rankers())
+    ranker = factory.get_instance("BCEBaseRanker")
+    result = ranker.get_scores([["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"]])
     print(result)
