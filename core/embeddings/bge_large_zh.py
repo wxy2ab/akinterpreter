@@ -6,7 +6,7 @@ from ..utils.config_setting import Config
 from ._embedding import Embedding
 
 class BGELargeZhAPI(Embedding):
-    def __init__(self, api_key: str = "", secret_key: str = ""):
+    def __init__(self, api_key: str = "", secret_key: str = "",model_name: str = "bge_large_zh"):
         config = Config()
         if api_key == "" and config.has_key("ERNIE_API_KEY"):
             api_key = config.get("ERNIE_API_KEY")
@@ -14,9 +14,10 @@ class BGELargeZhAPI(Embedding):
             secret_key = config.get("ERNIE_SERCRET_KEY")
         self.api_key = api_key
         self.secret_key = secret_key
+        self.model_name = model_name
         self.access_token = None
         self.base_url = "https://aip.baidubce.com"
-        self.embeddings_url = f"{self.base_url}/rpc/2.0/ai_custom/v1/wenxinworkshop/embeddings/bge_large_zh"
+        self.embeddings_url = f"{self.base_url}/rpc/2.0/ai_custom/v1/wenxinworkshop/embeddings/{self.model_name}"
 
     def get_access_token(self):  
         url = "https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=" + self.api_key + "&client_secret=" + self.secret_key  
@@ -49,10 +50,10 @@ class BGELargeZhAPI(Embedding):
             "access_token": self.access_token
         }
 
-        print(f"Sending request to {self.embeddings_url}")
-        print(f"Headers: {headers}")
-        print(f"Params: {params}")
-        print(f"Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        # print(f"Sending request to {self.embeddings_url}")
+        # print(f"Headers: {headers}")
+        # print(f"Params: {params}")
+        # print(f"Payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
 
         try:
             response = requests.post(self.embeddings_url, headers=headers, params=params, json=payload)
