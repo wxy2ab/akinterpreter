@@ -42,10 +42,11 @@ def test1_glm_client():
     print(result)
 
 def test1_llm_factory():
+    from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
     factory = LLMFactory()
+    client:LLMApiClient = factory.get_instance()
     print(factory.list_available_llms())
-    client = factory.get_instance("DoubaoApiClient")
     result = client.one_chat("我问你，你是不是豆包")#("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
 
@@ -94,7 +95,7 @@ def test1_embeddings():
     from core.embeddings.embedding_factory import EmbeddingFactory
     factory = EmbeddingFactory()
     print(factory.list_available_embeddings())
-    embedding:Embedding = factory.get_instance("BGEM3Embedding")
+    embedding:Embedding = factory.get_instance()
     result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
 
@@ -118,16 +119,27 @@ def test1_cross_encoder():
 def test1_ranker_factory():
     from core.utils.tsdata import check_proxy_running
     check_proxy_running("172.22.32.1",10809,"http")
+    from core.embeddings._ranker import Ranker
     from core.embeddings.ranker_factory import RankerFactory
     factory = RankerFactory()
+    ranker:Ranker = factory.get_instance()
     print(factory.list_available_rankers())
     ranker = factory.get_instance("BCEBaseRanker")
     result = ranker.get_scores([["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"]])
     print(result)
 
-def test_excel_interpreter():
+def test1_excel_interpreter():
     from core.interpreter.excel_interpreter import ExcelInterpreter
     interpreter = ExcelInterpreter()
     path="./output/sources_count.xlsx"
     code ,report=interpreter.interpret(path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
     print(report)
+
+def test_chat_pdf():
+    from core.utils.tsdata import check_proxy_running
+    check_proxy_running("172.22.32.1",10809,"http")
+    from core.rag.chat_pdf import ChatPDF
+    chatpdf=ChatPDF()
+    #chatpdf.add_corpus("README.md")
+    response, reference_results = chatpdf.predict("文档主要内容是什么")
+    print(response)
