@@ -1,17 +1,18 @@
 from core.llms.claude_aws_client import ClaudeAwsClient
 
-def test_claude_client():
+def test1_claude_client():
     from core.utils.all_tools import tools_info,AllTools
     client = ClaudeAwsClient()
     generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",tools_info,AllTools,is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-def test1_gpt_client():
+def test_gpt_client():
     from core.llms.azure_gpt_client import AzureGPT4oClient
     client = AzureGPT4oClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    generator = client.one_chat("写一个python函数，可以用于判断1000003是否是素数",is_stream=True)
+    for chunk in generator:
+        print(chunk, end='', flush=True)
 
 def test1_deepseek_client():
     from core.llms.deep_seek_client import DeepSeekClient

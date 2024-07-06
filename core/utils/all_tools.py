@@ -126,6 +126,75 @@ class AllTools:
                 output = f"发生错误: {str(e)}"
 
         return output
+
+tools_info_gpt = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_weather",
+            "description": "获取指定位置的当前天气信息。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "需要查询天气的地点，例如'北京'。"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_weather_en",
+            "description": "获取指定位置的当前天气信息（英文版本）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "需要查询天气的地点，例如'New York'。"
+                    }
+                },
+                "required": ["location"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_current_time",
+            "description": "获取当前的日期和时间。",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "CodeRunner",
+            "description": "执行给定的 Python 代码并返回输出。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "需要执行的 Python 代码。"
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    }
+]
+
+
+
+
 tools_info_claude =  [
     {
         "name": "get_current_weather",

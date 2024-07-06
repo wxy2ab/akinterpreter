@@ -1,6 +1,6 @@
 import ast
 import contextlib
-from typing import List, Dict, Any, Optional
+from typing import Iterator, List, Dict, Any, Optional, Union
 from openai import AzureOpenAI
 import os
 import base64
@@ -44,34 +44,44 @@ class AzureGPT4oClient(LLMApiClient):
         )
 
     def _update_usage_stats(self, response):
-        usage = response.usage
-        self.stat["total_input_tokens"] += usage.prompt_tokens
-        self.stat["total_output_tokens"] += usage.completion_tokens
-        # Cost calculation would depend on your specific Azure pricing
+        if hasattr(response, 'usage'):
+            usage = response.usage
+            self.stat["total_input_tokens"] += usage.prompt_tokens
+            self.stat["total_output_tokens"] += usage.completion_tokens
+            # Cost calculation would depend on your specific Azure pricing
 
-    def text_chat(self, message: str, max_tokens: int = 1000) -> str:
+    def _handle_streaming_response(self, response) -> Iterator[str]:
+        for chunk in response:
+            yield chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
+
+    def text_chat(self, message: str, max_tokens: int = 4000, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=self.history,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            stream=is_stream
         )
-        assistant_message = response.choices[0].message.content
-        self.history.append({"role": "assistant", "content": assistant_message})
-        self.stat["call_count"]["text_chat"] += 1
         self._update_usage_stats(response)
-        return assistant_message
+        if is_stream:
+            return self._handle_streaming_response(response)
+        else:
+            text_response = response['choices'][0]['text']
+            self.history.append({"role": "assistant", "content": text_response})
+            return text_response
 
-    def one_chat(self, message: str, max_tokens: int = 1000) -> str:
+    def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         response = self.client.chat.completions.create(
             model=self.deployment_name,
-            messages=[{"role": "user", "content": message}],
-            max_tokens=max_tokens
+            messages=message if isinstance(message,list) else [{"role": "user", "content": message}],
+            max_tokens=4000,
+            stream=is_stream
         )
-        assistant_message = response.choices[0].message.content
-        self.stat["call_count"]["text_chat"] += 1
         self._update_usage_stats(response)
-        return assistant_message
+        if is_stream:
+            return self._handle_streaming_response(response)
+        else:
+            return response['choices'][0]['text']
 
     def image_chat(self, message: str, image_path: str, max_tokens: int = 1000) -> str:
         with Image.open(image_path) as img:
@@ -140,54 +150,15 @@ class AzureGPT4oClient(LLMApiClient):
 
         return output
 
-    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 1000) -> str:
-        self.history.append({"role": "user", "content": user_message})
-        response = self.client.chat.completions.create(
-            model=self.deployment_name,
-            messages=self.history,
-            max_tokens=max_tokens,
-            functions=tools
-        )
-
-        assistant_message = response.choices[0].message.content or ""
-        function_call = response.choices[0].message.function_call
-
-        self.history.append({"role": "assistant", "content": assistant_message})
-        self._update_usage_stats(response)
-
-        if function_call:
-            function_name = function_call.name
-            function_args = function_call.arguments
-
-            if function_name == "CodeRunner":
-                tool_result = self.CodeRunner(function_args)
-            elif hasattr(function_module, function_name):
-                function = getattr(function_module, function_name)
-                try:
-                    tool_result = self._call_function(function, function_args)
-                except Exception as e:
-                    tool_result = f"Error executing {function_name}: {str(e)}"
-            else:
-                tool_result = f"Function {function_name} not found in the provided module."
-
-            self.history.append({"role": "function", "name": function_name, "content": str(tool_result)})
-
-            final_response = self.client.chat.completions.create(
-                model=self.deployment_name,
-                messages=self.history,
-                max_tokens=max_tokens
-            )
-
-            final_assistant_message = final_response.choices[0].message.content
-            self.history.append({"role": "assistant", "content": final_assistant_message})
-            self._update_usage_stats(final_response)
-            self.stat["call_count"]["tool_chat"] += 1
-            return f"*Initial response:* {assistant_message}\n*Function call:* {function_name}({function_args})\n*Function result:* {tool_result}\n*Final response:* {final_assistant_message}"
+    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 4000, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        iterator = ContinuousStreamIterator(self, user_message, tools, function_module, max_tokens, is_stream)
+        
+        if is_stream:
+            return (chunk for chunk in iterator if chunk is not None)
         else:
-            self.stat["call_count"]["tool_chat"] += 1
-            return assistant_message
+            return "".join(chunk for chunk in iterator if chunk is not None)
 
-    def one_tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 1000) -> str:
+    def one_tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 4000) -> str:
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=[{"role": "user", "content": user_message}],
@@ -265,3 +236,134 @@ class AzureGPT4oClient(LLMApiClient):
     
     def video_chat(self, message: str, video_path: str) -> str:
         raise NotImplementedError("Azure OpenAI does not support video input.")
+    
+
+class ContinuousStreamIterator:
+    def __init__(self, client, initial_message, tools, function_module, max_tokens, is_stream):
+        self.client = client
+        self.history = [{"role": "user", "content": initial_message}]
+        self.tools = tools
+        self.function_module = function_module
+        self.max_tokens = max_tokens
+        self.is_stream = is_stream
+        self.current_response = None
+        self.tool_uses = []
+        self.state = 'initial_response'
+        self.buffer = []
+        self.assistant_message = ""
+        self.initial_response_complete = False
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        while True:
+            if self.buffer:
+                return self.buffer.pop(0)
+
+            if self.state == 'initial_response':
+                self._handle_initial_response()
+            elif self.state == 'tool_calls':
+                self._handle_tool_calls()
+            elif self.state == 'final_response':
+                self._handle_final_response()
+            elif self.state == 'finished':
+                raise StopIteration
+            else:
+                raise StopIteration
+
+    def _handle_initial_response(self):
+        if not self.current_response:
+            self.current_response = self.client.client.chat.completions.create(
+                model=self.client.deployment_name,
+                max_tokens=self.max_tokens,
+                messages=self.history,
+                tools=self.tools,
+                stream=self.is_stream
+            )
+        
+        if self.is_stream:
+            try:
+                event = next(self.current_response)
+                self._process_event(event)
+            except StopIteration:
+                self._finalize_initial_response()
+        else:
+            for content in self.current_response.content:
+                if content.type == 'text':
+                    self.assistant_message += content.text
+                    self.buffer.append(content.text)
+                elif content.type == 'tool_calls':
+                    self.tool_uses.extend(content.tool_calls)
+            self._finalize_initial_response()
+
+    def _finalize_initial_response(self):
+        self.initial_response_complete = True
+        self.history.append({"role": "assistant", "content": self.assistant_message})
+        if self.tool_uses:
+            self.state = 'tool_calls'
+        else:
+            self.state = 'final_response'
+        self.current_response = None
+
+    def _handle_tool_calls(self):
+        if self.tool_uses:
+            tool_call = self.tool_uses.pop(0)
+            function_args=None
+            function_name = tool_call.name
+            try:
+                if not tool_call.input:
+                    function_args = {}
+                else:
+                    function_args = json.loads(tool_call.input)
+            except AttributeError:
+                function_name = "unknown"
+                function_args = {}
+
+            if hasattr(self.function_module, function_name):
+                function = getattr(self.function_module, function_name)
+                try:
+                    tool_result = function(**function_args)
+                    tool_result = self.client.process_tool_result(tool_result)
+                except Exception as e:
+                    tool_result = f"Error executing {function_name}: {str(e)}"
+            else:
+                tool_result = f"Function {function_name} not found in the provided module."
+
+            tool_result_message = f"\n使用工具: {function_name}\n参数: {function_args}\n工具结果: {tool_result}\n"
+            self.history.append({"role": "user", "content": tool_result_message})
+            self.buffer.append(tool_result_message)
+        else:
+            self.state = 'final_response'
+
+    def _handle_final_response(self):
+        if not self.current_response:
+            self.current_response = self.client.client.chat.completions.create(
+                model=self.client.deployment_name,
+                max_tokens=self.max_tokens,
+                messages=self.history,
+                stream=self.is_stream
+            )
+        
+        if self.is_stream:
+            try:
+                event = next(self.current_response)
+                self._process_event(event)
+            except StopIteration:
+                self.state = 'finished'
+        else:
+            content = "".join([c.text for c in self.current_response.content if c.type == 'text'])
+            self.buffer.append(content)
+            self.state = 'finished'
+
+    def _process_event(self, event):
+        for choice in event.choices:
+            delta = choice.delta
+            if delta.content:
+                self.assistant_message += delta.content
+                self.buffer.append(delta.content)
+            if delta.function_call:
+                self.tool_uses.append(delta.function_call)
+            elif choice.finish_reason == 'stop':
+                if not self.initial_response_complete:
+                    self._finalize_initial_response()

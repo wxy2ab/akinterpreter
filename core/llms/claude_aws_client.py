@@ -106,7 +106,7 @@ class ClaudeAwsClient(LLMApiClient):
             self.stat["total_input_tokens"] += usage.input_tokens
             self.stat["total_output_tokens"] += usage.output_tokens
 
-    def text_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Generator[str, None, None]]:
+    def text_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         
         if is_stream:
@@ -123,7 +123,7 @@ class ClaudeAwsClient(LLMApiClient):
             self._update_usage_stats(response)
             return assistant_message
     
-    def one_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Generator[str, None, None]]:
+    def one_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Iterator[str]]:
         msg = [{"role": "user", "content": message}]
 
         if is_stream:

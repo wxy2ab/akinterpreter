@@ -1,16 +1,16 @@
 from abc import ABC, abstractmethod
-from typing import Generator, List, Dict, Any, Union
+from typing import Generator, Iterator, List, Dict, Any, Union
 
 class LLMApiClient(ABC):
     """用于LLM API客户端（例如Gemini）的抽象基类。"""
 
     @abstractmethod
-    def text_chat(self, message: str, is_stream:bool = False) ->Union[ str ,Generator[str,None,None] ]:
+    def text_chat(self, message: str, is_stream:bool = False) ->Union[ str ,Iterator[str] ]:
         """处理文本消息并返回LLM的文本响应。"""
         pass
 
     @abstractmethod
-    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any ,is_stream:bool = False) -> Union[ str ,Generator[str,None,None] ]:
+    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any ,is_stream:bool = False) -> Union[ str ,Iterator[str] ]:
         """
         处理可以访问外部工具的文本消息。
 
@@ -35,7 +35,7 @@ class LLMApiClient(ABC):
         pass
 
     @abstractmethod
-    def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream:bool = False) -> Union[ str,Generator[str,None,None] ]:
+    def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream:bool = False) -> Union[ str,Iterator[str] ]:
         """执行单次聊天交互，不使用或存储聊天历史记录。"""
         pass
 
