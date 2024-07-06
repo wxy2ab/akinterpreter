@@ -1,9 +1,11 @@
 from core.llms.claude_aws_client import ClaudeAwsClient
 
-def test1_claude_client():
+def test_claude_client():
+    from core.utils.all_tools import tools_info,AllTools
     client = ClaudeAwsClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",tools_info,AllTools,is_stream=True)
+    for chunk in generator:
+        print(chunk, end='', flush=True)
 
 def test1_gpt_client():
     from core.llms.azure_gpt_client import AzureGPT4oClient
@@ -135,7 +137,7 @@ def test1_excel_interpreter():
     code ,report=interpreter.interpret(path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
     print(report)
 
-def test_chat_pdf():
+def test1_chat_pdf():
     from core.utils.tsdata import check_proxy_running
     check_proxy_running("172.22.32.1",10809,"http")
     from core.rag.chat_pdf import ChatPDF

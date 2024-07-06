@@ -1,7 +1,7 @@
 from fastapi import APIRouter , Response
 router = APIRouter()
 
-base_url:str="index"
+base_url:str=""
 
 @router.get("/" if base_url == "" else base_url)
 def index():
