@@ -4,21 +4,27 @@ import io
 import json
 import mimetypes
 import os
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Union, Iterator
 from vertexai.preview.generative_models import GenerativeModel, Part, Tool, GenerationConfig
 import vertexai
 from google.oauth2 import service_account
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+import asyncio
+import queue
+import threading
 
 #众所周知，这个类在一定范围内是运行不了的
 #想运行这个库，应该开启proxy 设置
 #不过这个api目前版本智能程度一般，你未必想用
+#使用这个文件需要安装下面的库
+#pip install google-cloud-aiplatform
 
 
 class GeminiAPIClient(LLMApiClient):
 
-    def __init__(self, project_id, location):
+    def __init__(self, project_id="", location="us-central1"):
+
         # 获取项目根目录的路径
         root_dir = self.find_project_root()
 
@@ -29,12 +35,15 @@ class GeminiAPIClient(LLMApiClient):
         if config.has_key("service_account_path"):
             service_account_path = config.get("service_account_path")
 
-        if not os.path.exists(service_account_path):
-            raise FileNotFoundError("Could not find service account JSON file")
-        
         if config.has_key("project_id"):
             project_id = config.get("project_id")
-        
+
+        if not os.path.exists(service_account_path):
+            raise FileNotFoundError("Could not find service account JSON file")
+
+        if config.has_key("project_id"):
+            project_id = config.get("project_id")
+
         if config.has_key("location"):
             location = config.get("location")
 
@@ -88,22 +97,42 @@ class GeminiAPIClient(LLMApiClient):
     def _get_chat_history(self):
         return self.history
 
-    def text_chat(self, message: str):
+    def text_chat(self,
+                  message: str,
+                  is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.function_calls += 1
         self._add_to_history("user", message)
-        response = self.chat.send_message(
-            message, generation_config=self.generation_config)
-        self._update_metadata(response)
-        self._add_to_history("assistant", response.text)
-        return response.text
 
-    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]],
-                  function_module: Any) -> str:
+        if is_stream:
+            return self._stream_response(message)
+        else:
+            response = self.chat.send_message(
+                message, generation_config=self.generation_config)
+            self._update_metadata(response)
+            self._add_to_history("assistant", response.text)
+            return response.text
+
+    def tool_chat(self,
+                  user_message: str,
+                  tools: List[Dict[str, Any]],
+                  function_module: Any,
+                  is_stream: bool = False) -> Union[str, Iterator[str]]:
         self._add_to_history("user", user_message)
-
-        # 将tools转换为Vertex AI的Tool格式
         vertex_tools = [Tool.from_dict(tool) for tool in tools]
 
+        if not is_stream:
+            return self._non_stream_tool_chat(user_message, vertex_tools,
+                                              function_module)
+
+        iterator = AsyncContentIterator()
+        threading.Thread(target=self._stream_tool_chat,
+                         args=(user_message, vertex_tools, function_module,
+                               iterator)).start()
+        return iterator
+
+    def _non_stream_tool_chat(self, user_message: str,
+                              vertex_tools: List[Tool],
+                              function_module: Any) -> str:
         response = self.chat.send_message(
             user_message,
             tools=vertex_tools,
@@ -120,33 +149,85 @@ class GeminiAPIClient(LLMApiClient):
             function_name = function_call.function.name
             function_args = function_call.function.args
 
-            if function_name == "CodeRunner":
-                tool_result = self.CodeRunner(function_args)
-            elif hasattr(function_module, function_name):
-                function = getattr(function_module, function_name)
-                try:
-                    tool_result = self._call_function(function, function_args)
-                except Exception as e:
-                    tool_result = f"Error executing {function_name}: {str(e)}"
-            else:
-                tool_result = f"Function {function_name} not found in the provided module."
-
-            self._add_to_history("function",
-                                 f"{function_name}: {str(tool_result)}")
+            tool_result = self._execute_function(function_name, function_args,
+                                                 function_module)
 
             final_response = self.chat.send_message(
                 f"Function {function_name} returned: {tool_result}",
                 generation_config=self.generation_config)
-            self._update_metadata(final_response)
             final_assistant_message = final_response.text
             self._add_to_history("assistant", final_assistant_message)
-            self.stat["call_count"]["tool_chat"] += 1
+            self._update_metadata(final_response)
+
             return f"*Initial response:* {assistant_message}\n*Function call:* {function_name}({function_args})\n*Function result:* {tool_result}\n*Final response:* {final_assistant_message}"
         else:
             self.stat["call_count"]["tool_chat"] += 1
             return assistant_message
 
+    def _stream_tool_chat(self, user_message: str, vertex_tools: List[Tool],
+                          function_module: Any,
+                          iterator: "AsyncContentIterator"):
+        try:
+            # Initial response
+            for chunk in self.chat.send_message(
+                    user_message,
+                    tools=vertex_tools,
+                    generation_config=self.generation_config,
+                    stream=True):
+                iterator.add_content(chunk.text)
+                self._update_metadata(chunk)
+
+            response = self.chat.send_message(
+                user_message,
+                tools=vertex_tools,
+                generation_config=self.generation_config)
+            function_call = response.candidates[0].content.parts[
+                -1] if response.candidates[0].content.parts else None
+
+            if function_call and isinstance(function_call, Tool):
+                function_name = function_call.function.name
+                function_args = function_call.function.args
+
+                iterator.add_content(
+                    f"\n*Function call:* {function_name}({function_args})\n")
+
+                tool_result = self._execute_function(function_name,
+                                                     function_args,
+                                                     function_module)
+                iterator.add_content(f"*Function result:* {tool_result}\n")
+
+                # Final response
+                for chunk in self.chat.send_message(
+                        f"Function {function_name} returned: {tool_result}",
+                        generation_config=self.generation_config,
+                        stream=True):
+                    iterator.add_content(chunk.text)
+                    self._update_metadata(chunk)
+
+            self.stat["call_count"]["tool_chat"] += 1
+        except Exception as e:
+            iterator.add_content(f"Error in tool_chat: {str(e)}")
+        finally:
+            iterator.mark_done()
+
+    def _execute_function(self, function_name: str, function_args: Dict[str,
+                                                                        Any],
+                          function_module: Any) -> Any:
+        if function_name == "CodeRunner":
+            return self.CodeRunner(function_args["code"])
+        elif hasattr(function_module, function_name):
+            function = getattr(function_module, function_name)
+            try:
+                return self._call_function(function, function_args)
+            except Exception as e:
+                return f"Error executing {function_name}: {str(e)}"
+        else:
+            return f"Function {function_name} not found in the provided module."
+
     def _call_function(self, function, function_args):
+        return function(**function_args)
+
+    def _call_function1(self, function, function_args):
         if isinstance(function_args, dict):
             return function(**function_args)
         elif isinstance(function_args, str):
@@ -240,30 +321,22 @@ class GeminiAPIClient(LLMApiClient):
         self._add_to_history("assistant", response.text)
         return response.text
 
-    def clear_chat(self):
-        self.chat = self.model.start_chat()
-        self.history.clear()
-
     def get_chat_history(self):
         return self._get_chat_history()
 
-    def one_chat(self, message: Union[str, List[Union[str, Part]]]) -> str:
-        """
-        执行单次对话，不发送或记录历史记录。
-
-        :param message: 可以是字符串消息或包含消息和多模态部分的列表
-        :return: 助手的响应文本
-        """
+    def one_chat(self,
+                 message: Union[str, List[Union[str, Part]]],
+                 is_stream: bool = False) -> Union[str, Iterator[str]]:
         try:
-            # 创建一个新的聊天实例，以确保不使用任何历史记录
             temp_chat = self.model.start_chat()
 
-            response = temp_chat.send_message(
-                message, generation_config=self.generation_config)
-
-            self._update_metadata(response)
-
-            return response.text
+            if is_stream:
+                return self._stream_response(message, chat=temp_chat)
+            else:
+                response = temp_chat.send_message(
+                    message, generation_config=self.generation_config)
+                self._update_metadata(response)
+                return response.text
         except Exception as e:
             error_message = f"Error in one_chat: {str(e)}"
             print(error_message)
@@ -312,3 +385,49 @@ class GeminiAPIClient(LLMApiClient):
             top_p=top_p,
             top_k=top_k,
             max_output_tokens=max_output_tokens)
+
+    def _stream_response(self,
+                         message: Union[str, List[Union[str, Part]]],
+                         chat=None,
+                         tools=None) -> Iterator[str]:
+        try:
+            if chat is None:
+                chat = self.chat
+
+            responses = chat.send_message(
+                message,
+                generation_config=self.generation_config,
+                tools=tools,
+                stream=True)
+
+            for chunk in responses:
+                yield chunk.text
+                #self._update_metadata(chunk)
+
+        except Exception as e:
+            yield f"Error in streaming response: {str(e)}"
+
+
+class AsyncContentIterator(Iterator[str]):
+
+    def __init__(self):
+        self.queue = queue.Queue()
+        self.is_done = False
+        self.lock = threading.Lock()
+
+    def add_content(self, content: str):
+        self.queue.put(content)
+
+    def mark_done(self):
+        with self.lock:
+            self.is_done = True
+        self.queue.put(None)  # Sentinel to signal the end
+
+    def __iter__(self):
+        return self
+
+    def __next__(self) -> str:
+        item = self.queue.get()
+        if item is None:
+            raise StopIteration
+        return item

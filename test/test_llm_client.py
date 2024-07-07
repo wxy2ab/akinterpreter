@@ -1,32 +1,56 @@
 from core.llms.claude_aws_client import ClaudeAwsClient
 
+
 def test1_claude_client():
-    from core.utils.all_tools import tools_info,AllTools
+    from core.utils.all_tools import tools_info, AllTools
     client = ClaudeAwsClient()
-    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",tools_info,AllTools,is_stream=True)
+    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
+                                 tools_info,
+                                 AllTools,
+                                 is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
+
 
 def test1_gpt_client():
     from core.llms.azure_gpt_client import AzureGPT4oClient
     client = AzureGPT4oClient()
-    generator = client.text_chat("写一个python函数，可以用于判断1000003是否是素数",is_stream=True)
+    generator = client.text_chat("写一个python函数，可以用于判断1000003是否是素数",
+                                 is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-def test_deepseek_client():
-    from core.utils.all_tools import tools_info_gpt,AllTools
+
+def test1_deepseek_client():
+    from core.utils.all_tools import tool_info_gemini, AllTools
     from core.llms.deep_seek_client import DeepSeekClient
     client = DeepSeekClient()
-    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",tools=tools_info_gpt,function_module=AllTools,is_stream=True)
+    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
+                                 tools=tool_info_gemini,
+                                 function_module=AllTools,
+                                 is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
-    
+
+
+def test_gemini_client():
+    from core.utils.all_tools import tools_info, AllTools
+    from core.llms.gemini_client import GeminiAPIClient
+    client = GeminiAPIClient("wxy2ab")
+    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
+                                 tools_info,
+                                 AllTools,
+                                 is_stream=True)
+    for chunk in generator:
+        print(chunk, end='', flush=True)
+
+
 def test1_ernie_client():
     from core.llms.ernie_client import ErnieApiClient
     client = ErnieApiClient()
     result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
+
 
 def test1_moonshot_client():
     from core.llms.moonshot_client import MoonShotClient
@@ -34,11 +58,13 @@ def test1_moonshot_client():
     result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
 
+
 def test1_qianwen_client():
     from core.llms.qianwen_client import QianWenClient
     client = QianWenClient()
     result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
+
 
 def test1_glm_client():
     from core.llms.glm_client import GLMClient
@@ -46,14 +72,16 @@ def test1_glm_client():
     result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
 
+
 def test1_llm_factory():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
     factory = LLMFactory()
-    client:LLMApiClient = factory.get_instance()
+    client: LLMApiClient = factory.get_instance()
     print(factory.list_available_llms())
-    result = client.one_chat("我问你，你是不是豆包")#("写一个python函数，可以用于判断1000003是否是素数")
+    result = client.one_chat("我问你，你是不是豆包")  #("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
+
 
 def test1_data_interpreter():
     import numpy as np
@@ -83,9 +111,10 @@ def test1_data_interpreter():
     # 打印生成的代码和报告
     print("生成的代码:")
     print(code)
-    print("\n" + "="*50 + "\n")
+    print("\n" + "=" * 50 + "\n")
     print("分析报告:")
     print(report)
+
 
 def test1_akshare_interpreter():
     from core.planner.akshare_planner import AkshareInterpreterPlanner
@@ -93,58 +122,67 @@ def test1_akshare_interpreter():
     result = planner.plan_and_execute("分析今年上半年上证指数走势")
     print(result)
 
+
 def test1_embeddings():
     from core.utils.tsdata import check_proxy_running
-    check_proxy_running("172.22.32.1",10809,"http")
+    check_proxy_running("172.22.32.1", 10809, "http")
     from core.embeddings._embedding import Embedding
     from core.embeddings.embedding_factory import EmbeddingFactory
     factory = EmbeddingFactory()
     print(factory.list_available_embeddings())
-    embedding:Embedding = factory.get_instance()
-    result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
+    embedding: Embedding = factory.get_instance()
+    result = embedding.convert_to_embedding(
+        ["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
+
 
 def test1_volcengine_embeddings():
     from core.embeddings._embedding import Embedding
     from core.embeddings.embedding_factory import EmbeddingFactory
     factory = EmbeddingFactory()
     print(factory.list_available_embeddings())
-    embedding:Embedding = factory.get_instance("VolcengineEmbedding")
-    result = embedding.convert_to_embedding(["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
+    embedding: Embedding = factory.get_instance("VolcengineEmbedding")
+    result = embedding.convert_to_embedding(
+        ["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
+
 
 def test1_cross_encoder():
     from core.utils.tsdata import check_proxy_running
-    check_proxy_running("172.22.32.1",10809,"http")
+    check_proxy_running("172.22.32.1", 10809, "http")
     from sentence_transformers import CrossEncoder
     model = CrossEncoder('maidalun1020/bce-reranker-base_v1', max_length=512)
-    scores = model.predict([["我是中国人","去湖南的旅客"],["嫦娥六号","乘波体弹道飞行器"]])
+    scores = model.predict([["我是中国人", "去湖南的旅客"], ["嫦娥六号", "乘波体弹道飞行器"]])
     print(scores)
+
 
 def test1_ranker_factory():
     from core.utils.tsdata import check_proxy_running
-    check_proxy_running("172.22.32.1",10809,"http")
+    check_proxy_running("172.22.32.1", 10809, "http")
     from core.embeddings._ranker import Ranker
     from core.embeddings.ranker_factory import RankerFactory
     factory = RankerFactory()
-    ranker:Ranker = factory.get_instance()
+    ranker: Ranker = factory.get_instance()
     print(factory.list_available_rankers())
     ranker = factory.get_instance("BCEBaseRanker")
     result = ranker.get_scores([["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"]])
     print(result)
 
+
 def test1_excel_interpreter():
     from core.interpreter.excel_interpreter import ExcelInterpreter
     interpreter = ExcelInterpreter()
-    path="./output/sources_count.xlsx"
-    code ,report=interpreter.interpret(path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
+    path = "./output/sources_count.xlsx"
+    code, report = interpreter.interpret(
+        path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
     print(report)
+
 
 def test1_chat_pdf():
     from core.utils.tsdata import check_proxy_running
-    check_proxy_running("172.22.32.1",10809,"http")
+    check_proxy_running("172.22.32.1", 10809, "http")
     from core.rag.chat_pdf import ChatPDF
-    chatpdf=ChatPDF()
+    chatpdf = ChatPDF()
     #chatpdf.add_corpus("README.md")
     response, reference_results = chatpdf.predict("文档主要内容是什么")
     print(response)
