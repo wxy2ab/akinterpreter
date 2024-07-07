@@ -123,8 +123,12 @@ class ClaudeAwsClient(LLMApiClient):
             self._update_usage_stats(response)
             return assistant_message
     
-    def one_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        msg = [{"role": "user", "content": message}]
+    def one_chat(self, message:  Union[str, List[Union[str, Any]]], max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        msg =None
+        if isinstance(message, list):
+            msg = message
+        else:
+            msg = [{"role": "user", "content": message}]
 
         if is_stream:
             return self._stream_one_response(msg, max_tokens)

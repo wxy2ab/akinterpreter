@@ -13,6 +13,7 @@ class AzureGPT4oClient(LLMApiClient):
     def __init__(self, 
                  api_key: Optional[str] = None,
                  azure_endpoint: Optional[str] = None,
+                 max_tokens: int = 4000,
                  deployment_name: str = "gpt-4o",
                  api_version: str = "2023-05-15"):
         from ..utils.config_setting import Config
@@ -22,6 +23,7 @@ class AzureGPT4oClient(LLMApiClient):
         self.azure_endpoint = azure_endpoint or config.get("AZURE_OPENAI_ENDPOINT")
         self.deployment_name = deployment_name
         self.api_version = api_version
+        self.max_tokens = max_tokens
         self.client = self._create_client()
         self.history: List[dict] = []
         self.stat: Dict[str, Any] = {
@@ -54,12 +56,12 @@ class AzureGPT4oClient(LLMApiClient):
         for chunk in response:
             yield chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
 
-    def text_chat(self, message: str, max_tokens: int = 4000, is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=self.history,
-            max_tokens=max_tokens,
+            max_tokens=self.max_tokens,
             stream=is_stream
         )
         self._update_usage_stats(response)
@@ -74,7 +76,7 @@ class AzureGPT4oClient(LLMApiClient):
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=message if isinstance(message,list) else [{"role": "user", "content": message}],
-            max_tokens=4000,
+            max_tokens=self.max_tokens,
             stream=is_stream
         )
         self._update_usage_stats(response)
@@ -150,8 +152,8 @@ class AzureGPT4oClient(LLMApiClient):
 
         return output
 
-    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 4000, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        iterator = ContinuousStreamIterator(self, user_message, tools, function_module, max_tokens, is_stream)
+    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        iterator = ContinuousStreamIterator(self, user_message, tools, function_module, self.max_tokens, is_stream)
         
         if is_stream:
             return (chunk for chunk in iterator if chunk is not None)

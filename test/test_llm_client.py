@@ -7,18 +7,20 @@ def test1_claude_client():
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-def test_gpt_client():
+def test1_gpt_client():
     from core.llms.azure_gpt_client import AzureGPT4oClient
     client = AzureGPT4oClient()
-    generator = client.one_chat("写一个python函数，可以用于判断1000003是否是素数",is_stream=True)
+    generator = client.text_chat("写一个python函数，可以用于判断1000003是否是素数",is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-def test1_deepseek_client():
+def test_deepseek_client():
+    from core.utils.all_tools import tools_info_gpt,AllTools
     from core.llms.deep_seek_client import DeepSeekClient
     client = DeepSeekClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",tools=tools_info_gpt,function_module=AllTools,is_stream=True)
+    for chunk in generator:
+        print(chunk, end='', flush=True)
     
 def test1_ernie_client():
     from core.llms.ernie_client import ErnieApiClient
