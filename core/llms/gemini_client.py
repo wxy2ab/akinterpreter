@@ -4,6 +4,7 @@ import io
 import json
 import mimetypes
 import os
+import time
 from typing import Any, Dict, List, Union, Iterator
 from vertexai.preview.generative_models import GenerativeModel, Part, Tool, GenerationConfig
 import vertexai
@@ -13,13 +14,49 @@ from ..utils.config_setting import Config
 import asyncio
 import queue
 import threading
+from ..utils.log import logger as logging
 
 #众所周知，这个类在一定范围内是运行不了的
 #想运行这个库，应该开启proxy 设置
 #不过这个api目前版本智能程度一般，你未必想用
 #使用这个文件需要安装下面的库
 #pip install google-cloud-aiplatform
+from google.protobuf.struct_pb2 import Value
 
+def convert_proto_struct_to_dict(struct):
+    result = {}
+    for key, value in struct.items():
+        if isinstance(value, Value):
+            if value.HasField('null_value'):
+                result[key] = None
+            elif value.HasField('number_value'):
+                result[key] = value.number_value
+            elif value.HasField('string_value'):
+                result[key] = value.string_value
+            elif value.HasField('bool_value'):
+                result[key] = value.bool_value
+            elif value.HasField('struct_value'):
+                result[key] = convert_proto_struct_to_dict(value.struct_value)
+            elif value.HasField('list_value'):
+                result[key] = [convert_proto_value(v) for v in value.list_value.values]
+        else:
+            result[key] = value
+    return result
+
+def convert_proto_value(value):
+    if value.HasField('null_value'):
+        return None
+    elif value.HasField('number_value'):
+        return value.number_value
+    elif value.HasField('string_value'):
+        return value.string_value
+    elif value.HasField('bool_value'):
+        return value.bool_value
+    elif value.HasField('struct_value'):
+        return convert_proto_struct_to_dict(value.struct_value)
+    elif value.HasField('list_value'):
+        return [convert_proto_value(v) for v in value.list_value.values]
+    return None
 
 class GeminiAPIClient(LLMApiClient):
 
@@ -97,38 +134,26 @@ class GeminiAPIClient(LLMApiClient):
     def _get_chat_history(self):
         return self.history
 
-    def text_chat(self,
-                  message: str,
-                  is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.function_calls += 1
         self._add_to_history("user", message)
 
         if is_stream:
             return self._stream_response(message)
         else:
-            response = self.chat.send_message(
-                message, generation_config=self.generation_config)
+            response = self.chat.send_message(message, generation_config=self.generation_config)
             self._update_metadata(response)
             self._add_to_history("assistant", response.text)
             return response.text
 
-    def tool_chat(self,
-                  user_message: str,
-                  tools: List[Dict[str, Any]],
-                  function_module: Any,
-                  is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self._add_to_history("user", user_message)
         vertex_tools = Tool.from_dict({'function_declarations': tools})
 
-        if not is_stream:
-            return self._non_stream_tool_chat(user_message, vertex_tools,
-                                              function_module)
-
-        iterator = AsyncContentIterator()
-        threading.Thread(target=self._stream_tool_chat,
-                         args=(user_message, vertex_tools, function_module,
-                               iterator)).start()
-        return iterator
+        if is_stream:
+            return self._stream_tool_chat(user_message, vertex_tools, function_module)
+        else:
+            return self._non_stream_tool_chat(user_message, vertex_tools, function_module)
 
     def _non_stream_tool_chat(self, user_message: str,
                               vertex_tools: List[Tool],
@@ -164,70 +189,156 @@ class GeminiAPIClient(LLMApiClient):
             self.stat["call_count"]["tool_chat"] += 1
             return assistant_message
 
-    def _stream_tool_chat(self, user_message: str, vertex_tools: List[Tool],
-                          function_module: Any,
-                          iterator: "AsyncContentIterator"):
+    def _stream_tool_chat(self, user_message: str, vertex_tools: Tool, function_module: Any) -> Iterator[str]:
+        iterator = AsyncContentIterator()
+        threading.Thread(target=self._stream_tool_chat_thread, args=(user_message, vertex_tools, function_module, iterator)).start()
+        return iterator
+
+    def _stream_tool_chat_thread(self, user_message: str, vertex_tools: Tool, function_module: Any, iterator: "AsyncContentIterator"):
         try:
-            # Initial response
-            for chunk in self.chat.send_message(
-                    user_message,
-                    tools=vertex_tools,
-                    generation_config=self.generation_config,
-                    stream=True):
-                iterator.add_content(chunk.text)
-                self._update_metadata(chunk)
-
-            response = self.chat.send_message(
-                user_message,
-                tools=vertex_tools,
-                generation_config=self.generation_config)
-            function_call = response.candidates[0].content.parts[
-                -1] if response.candidates[0].content.parts else None
-
-            if function_call and isinstance(function_call, Tool):
-                function_name = function_call.function.name
-                function_args = function_call.function.args
-
-                iterator.add_content(
-                    f"\n*Function call:* {function_name}({function_args})\n")
-
-                tool_result = self._execute_function(function_name,
-                                                     function_args,
-                                                     function_module)
-                iterator.add_content(f"*Function result:* {tool_result}\n")
-
-                # Final response
-                for chunk in self.chat.send_message(
-                        f"Function {function_name} returned: {tool_result}",
-                        generation_config=self.generation_config,
-                        stream=True):
-                    iterator.add_content(chunk.text)
-                    self._update_metadata(chunk)
-
+            for chunk in self.chat.send_message(user_message, tools=[vertex_tools], generation_config=self.generation_config, stream=True):
+                self._process_chunk(chunk, function_module, iterator)
             self.stat["call_count"]["tool_chat"] += 1
         except Exception as e:
-            iterator.add_content(f"Error in tool_chat: {str(e)}")
+            logging.error(f"Error in tool_chat: {str(e)}", exc_info=True)
+            iterator.add_content("An error occurred during processing. Please try again.")
         finally:
             iterator.mark_done()
 
-    def _execute_function(self, function_name: str, function_args: Dict[str,
-                                                                        Any],
-                          function_module: Any) -> Any:
-        if function_name == "CodeRunner":
-            return self.CodeRunner(function_args["code"])
-        elif hasattr(function_module, function_name):
-            function = getattr(function_module, function_name)
-            try:
-                return self._call_function(function, function_args)
-            except Exception as e:
-                return f"Error executing {function_name}: {str(e)}"
-        else:
-            return f"Function {function_name} not found in the provided module."
+    def _process_chunk(self, chunk, function_module, iterator):
+        try:
+            if self._has_function_call(chunk):
+                self._process_function_call_from_chunk(chunk, function_module, iterator)
+            elif self._has_text_content(chunk):
+                iterator.add_content(chunk.text)
+            self._update_metadata(chunk)
+        except Exception as e:
+            logging.warning(f"Error processing chunk: {str(e)}", exc_info=True)
 
-    def _call_function(self, function, function_args):
-        return function(**function_args)
+    def _has_function_call(self, chunk):
+        try:
+            return (hasattr(chunk, 'candidates') and
+                    chunk.candidates and
+                    hasattr(chunk.candidates[0], 'content') and
+                    hasattr(chunk.candidates[0].content, 'parts') and
+                    chunk.candidates[0].content.parts and
+                    hasattr(chunk.candidates[0].content.parts[0], 'function_call'))
+        except Exception:
+            return False
+
+    def _has_text_content(self, chunk):
+        try:
+            return hasattr(chunk, 'text') and bool(chunk.text)
+        except Exception:
+            return False
+
+    def _process_function_call_from_chunk(self, chunk, function_module, iterator):
+        try:
+            function_call = chunk.candidates[0].content.parts[0].function_call
+            function_name = function_call.name
+            function_args = self._safe_get_args(function_call)
+
+            self._stream_function_call_info(iterator, function_name, function_args)
+            tool_result = self._execute_function(function_name, function_args, function_module)
+            self._stream_function_result(iterator, tool_result)
+            self._stream_final_response(function_name, tool_result, iterator)
+        except Exception as e:
+            logging.error(f"Error processing function call from chunk: {str(e)}", exc_info=True)
+            iterator.add_content(f"Error processing function call: {str(e)}")
+
+    def _safe_get_args(self, function_call):
+        try:
+            args = getattr(function_call, 'args', None)
+            if args is None:
+                return {}
+            if hasattr(args, 'items'):  # If it's a dict-like object
+                return convert_proto_struct_to_dict(args)
+            elif isinstance(args, str):  # If it's a string (possibly JSON)
+                try:
+                    return json.loads(args)
+                except json.JSONDecodeError:
+                    return {"arg": args}  # Treat the whole string as a single argument
+            else:
+                return {"arg": str(args)}  # Convert any other type to string
+        except Exception as e:
+            logging.warning(f"Error converting function args: {str(e)}", exc_info=True)
+            return {}
+
+    def _process_function_call_from_chunk(self, chunk, function_module, iterator):
+        try:
+            function_call = chunk.candidates[0].content.parts[0].function_call
+            function_name = getattr(function_call, 'name', '')
+            function_args = self._safe_get_args(function_call)
+
+            if not function_name:
+                #logging.warning("Function name is empty")
+                #iterator.add_content("Error: Function name is empty\n")
+                return
+
+            self._stream_function_call_info(iterator, function_name, function_args)
+            tool_result = self._execute_function(function_name, function_args, function_module)
+            self._stream_function_result(iterator, tool_result)
+            self._stream_final_response(function_name, tool_result, iterator)
+        except Exception as e:
+            logging.error(f"Error processing function call from chunk: {str(e)}", exc_info=True)
+            iterator.add_content(f"Error processing function call: {str(e)}\n")
+
+    def _execute_function(self, function_name: str, function_args: Dict[str, Any], function_module: Any) -> Any:
+        try:
+            if function_name == "CodeRunner":
+                return self.CodeRunner(function_args.get("code", ""))
+            elif hasattr(function_module, function_name):
+                function = getattr(function_module, function_name)
+                return function(**function_args)
+            else:
+                error_msg = f"Function {function_name} not found in the provided module."
+                logging.warning(error_msg)
+                return error_msg
+        except Exception as e:
+            error_msg = f"Error executing {function_name}: {str(e)}"
+            logging.error(error_msg, exc_info=True)
+            return error_msg
+
+    def _stream_function_call_info(self, iterator, function_name, function_args):
+        args_str = ", ".join(f"{key}={value}" for key, value in function_args.items())
+        iterator.add_content(f"\n*Function call:* {function_name}({args_str})\n")
+
+    def _stream_function_result(self, iterator, tool_result):
+        iterator.add_content("*Function result:* ")
+        for char in str(tool_result):
+            iterator.add_content(char)
+            time.sleep(0.01)  # Simulate streaming for function result
+        iterator.add_content("\n")
+
+    def _stream_final_response(self, function_name, tool_result, iterator):
+        try:
+            for chunk in self.chat.send_message(f"Function {function_name} returned: {tool_result}", generation_config=self.generation_config, stream=True):
+                if hasattr(chunk, 'text') and chunk.text:
+                    iterator.add_content(chunk.text)
+                self._update_metadata(chunk)
+        except Exception as e:
+            logging.error(f"Error in final response streaming: {str(e)}", exc_info=True)
+            iterator.add_content("An error occurred while processing the final response.")
+
+    def _execute_function2(self, function_name: str, function_args: Dict[str, Any], function_module: Any) -> Any:
+        try:
+            if function_name == "CodeRunner":
+                return self.CodeRunner(function_args.get("code", ""))
+            elif hasattr(function_module, function_name):
+                function = getattr(function_module, function_name)
+                return self._call_function(function, function_args)
+            else:
+                return f"Function {function_name} not found in the provided module."
+        except Exception as e:
+            logging.error(f"Error executing function {function_name}: {str(e)}", exc_info=True)
+            return f"Error executing {function_name}: {str(e)}"
 
     def _call_function1(self, function, function_args):
+        return function(**function_args)
+
+    def _call_function(self, function, function_args):
+        if len(function_args)==0:
+                return function()
         if isinstance(function_args, dict):
             return function(**function_args)
         elif isinstance(function_args, str):
@@ -324,17 +435,14 @@ class GeminiAPIClient(LLMApiClient):
     def get_chat_history(self):
         return self._get_chat_history()
 
-    def one_chat(self,
-                 message: Union[str, List[Union[str, Part]]],
-                 is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def one_chat(self, message: Union[str, List[Union[str, Part]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         try:
             temp_chat = self.model.start_chat()
 
             if is_stream:
                 return self._stream_response(message, chat=temp_chat)
             else:
-                response = temp_chat.send_message(
-                    message, generation_config=self.generation_config)
+                response = temp_chat.send_message(message, generation_config=self.generation_config)
                 self._update_metadata(response)
                 return response.text
         except Exception as e:
@@ -356,10 +464,10 @@ class GeminiAPIClient(LLMApiClient):
                 # Update total_tokens for backwards compatibility
                 self.total_tokens = self.stat["total_tokens"]
 
-                print(
-                    f"Usage Metadata: Total Tokens: {self.stat['total_tokens']}, "
-                    f"Prompt Tokens: {self.stat['prompt_token_count']}, "
-                    f"Candidate Tokens: {self.stat['candidate_token_count']}")
+                # print(
+                #     f"Usage Metadata: Total Tokens: {self.stat['total_tokens']}, "
+                #     f"Prompt Tokens: {self.stat['prompt_token_count']}, "
+                #     f"Candidate Tokens: {self.stat['candidate_token_count']}")
             else:
                 print(
                     "Warning: Response does not have usage_metadata attribute."
@@ -386,23 +494,16 @@ class GeminiAPIClient(LLMApiClient):
             top_k=top_k,
             max_output_tokens=max_output_tokens)
 
-    def _stream_response(self,
-                         message: Union[str, List[Union[str, Part]]],
-                         chat=None,
-                         tools=None) -> Iterator[str]:
+    def _stream_response(self, message: Union[str, List[Union[str, Part]]], chat=None, tools=None) -> Iterator[str]:
         try:
             if chat is None:
                 chat = self.chat
 
-            responses = chat.send_message(
-                message,
-                generation_config=self.generation_config,
-                tools=tools,
-                stream=True)
+            responses = chat.send_message(message, generation_config=self.generation_config, tools=tools, stream=True)
 
             for chunk in responses:
                 yield chunk.text
-                #self._update_metadata(chunk)
+                # self._update_metadata(chunk)  # 如果需要，可以取消注释
 
         except Exception as e:
             yield f"Error in streaming response: {str(e)}"
