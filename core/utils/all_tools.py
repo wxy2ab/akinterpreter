@@ -134,53 +134,56 @@ class AllTools:
         return output
 
 
-tool_info_gemini = [{
-    "name": "get_current_weather",
-    "description": "获取指定地点的天气信息，使用高德开放平台的天气API。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "查询天气的城市名称"
-            }
-        },
-        "required": ["location"]
-    }
-}, {
-    "name": "get_current_weather_en",
-    "description": "获取指定地点的天气信息，使用OpenWeatherMap的天气API。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "location": {
-                "type": "string",
-                "description": "查询天气的城市名称"
-            }
-        },
-        "required": ["location"]
-    }
-}, {
-    "name": "get_current_time",
-    "description": "获取当前时间，格式为'年-月-日 时:分:秒'。",
-    "parameters": {
-        "type": "object",
-        "properties": {}
-    }
-}, {
-    "name": "CodeRunner",
-    "description": "执行Python代码并返回输出结果或错误信息。",
-    "parameters": {
-        "type": "object",
-        "properties": {
-            "code": {
-                "type": "string",
-                "description": "要执行的Python代码"
-            }
-        },
-        "required": ["code"]
-    }
-}]
+def get_gemini_tool_info():
+    from vertexai.preview.generative_models import (
+        FunctionDeclaration,
+        Tool,
+    )
+    return Tool(function_declarations=[
+        FunctionDeclaration(name="get_current_weather",
+                            description="获取指定地点的天气信息，使用高德开放平台的天气API。",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "location": {
+                                        "type": "string",
+                                        "description": "查询天气的城市名称"
+                                    }
+                                },
+                                "required": ["location"]
+                            }),
+        FunctionDeclaration(name="get_current_weather_en",
+                            description="获取指定地点的天气信息，使用OpenWeatherMap的天气API。",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "location": {
+                                        "type": "string",
+                                        "description": "查询天气的城市名称"
+                                    }
+                                },
+                                "required": ["location"]
+                            }),
+        FunctionDeclaration(name="get_current_time",
+                            description="获取当前时间，格式为'年-月-日 时:分:秒'。",
+                            parameters={
+                                "type": "object",
+                                "properties": {}
+                            }),
+        FunctionDeclaration(name="CodeRunner",
+                            description="执行Python代码并返回输出结果或错误信息。",
+                            parameters={
+                                "type": "object",
+                                "properties": {
+                                    "code": {
+                                        "type": "string",
+                                        "description": "要执行的Python代码"
+                                    }
+                                },
+                                "required": ["code"]
+                            })
+    ])
+
 
 tools_info_gpt = [{
     "type": "function",

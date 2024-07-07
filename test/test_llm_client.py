@@ -22,11 +22,11 @@ def test1_gpt_client():
 
 
 def test1_deepseek_client():
-    from core.utils.all_tools import tool_info_gemini, AllTools
-    from core.llms.deep_seek_client import DeepSeekClient
+    from core.utils.all_tools import tools_info_gpt, AllTools
+    from core.llms.deepseek_client import DeepSeekClient
     client = DeepSeekClient()
     generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
-                                 tools=tool_info_gemini,
+                                 tools=tools_info_gpt,
                                  function_module=AllTools,
                                  is_stream=True)
     for chunk in generator:
@@ -34,8 +34,9 @@ def test1_deepseek_client():
 
 
 def test_gemini_client():
-    from core.utils.all_tools import tools_info, AllTools
+    from core.utils.all_tools import get_gemini_tool_info, AllTools
     from core.llms.gemini_client import GeminiAPIClient
+    tools_info = get_gemini_tool_info()
     client = GeminiAPIClient("wxy2ab")
     generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
                                  tools_info,

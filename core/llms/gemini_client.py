@@ -118,7 +118,7 @@ class GeminiAPIClient(LLMApiClient):
                   function_module: Any,
                   is_stream: bool = False) -> Union[str, Iterator[str]]:
         self._add_to_history("user", user_message)
-        vertex_tools = [Tool.from_dict(tool) for tool in tools]
+        vertex_tools = Tool.from_dict({'function_declarations': tools})
 
         if not is_stream:
             return self._non_stream_tool_chat(user_message, vertex_tools,
