@@ -2,6 +2,7 @@ import time
 import logging
 import os
 import importlib
+import traceback
 
 
 class TestModule:
@@ -26,6 +27,7 @@ class TestModule:
             except Exception as e:
                 end_time = time.time()
                 logging.error(f"Test failed: {func_name}, Error: {str(e)}, Time elapsed: {end_time - start_time:.2f} seconds")
+                logging.error(traceback.format_exc())
                 if not continue_on_error:
                     raise
         
