@@ -33,7 +33,7 @@ def test1_deepseek_client():
         print(chunk, end='', flush=True)
 
 
-def test_gemini_client():
+def test1_gemini_client():
     from core.utils.all_tools import get_gemini_tool_info, AllTools
     from core.llms.gemini_client import GeminiAPIClient
     tools_info = get_gemini_tool_info()
@@ -53,11 +53,16 @@ def test1_ernie_client():
     print(result)
 
 
-def test1_moonshot_client():
+def test_moonshot_client():
+    from core.utils.all_tools import tools_info_gpt, AllTools
     from core.llms.moonshot_client import MoonShotClient
     client = MoonShotClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    iterator = client.tool_chat("现是几点",
+                                tools=tools_info_gpt,
+                                function_module=AllTools,
+                                is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
 
 
 def test1_qianwen_client():
