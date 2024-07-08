@@ -2,10 +2,10 @@ from core.llms.claude_aws_client import ClaudeAwsClient
 
 
 def test1_claude_client():
-    from core.utils.all_tools import tools_info, AllTools
+    from core.utils.all_tools import tools_info_claude, AllTools
     client = ClaudeAwsClient()
     generator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数",
-                                 tools_info,
+                                 tools_info_claude,
                                  AllTools,
                                  is_stream=True)
     for chunk in generator:
@@ -46,7 +46,7 @@ def test1_gemini_client():
         print(chunk, end='', flush=True)
 
 
-def test_ernie_client():
+def test1_ernie_client():
     from core.llms.ernie_client import ErnieApiClient
     from core.utils.all_tools import tools_info_gpt, AllTools
     client = ErnieApiClient()
@@ -57,7 +57,31 @@ def test_ernie_client():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
+def test1_simple_claude():
+    from core.llms._llm_api_client import LLMApiClient
+    from core.llms.llm_factory import LLMFactory
+    from core.utils.all_tools import tools_info_claude, AllTools
+    factory= LLMFactory()
+    client:LLMApiClient= factory.get_instance("SimpleClaudeAwsClient")
+    iterator= client.tool_chat("北京的天气",
+                               tools = tools_info_claude,
+                                function_module=AllTools,
+                               is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
 
+def test_simple_azure():
+    from core.llms._llm_api_client import LLMApiClient
+    from core.llms.llm_factory import LLMFactory
+    from core.utils.all_tools import tools_info_gpt, AllTools
+    factory= LLMFactory()
+    client:LLMApiClient= factory.get_instance("SimpleAzureClient")
+    iterator= client.tool_chat("写一个python函数，运行判断1000003是否是素数",
+                               tools = tools_info_gpt,
+                                function_module=AllTools,
+                               is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
 def test1_moonshot_client():
     from core.utils.all_tools import tools_info_gpt, AllTools
     from core.llms.moonshot_client import MoonShotClient
