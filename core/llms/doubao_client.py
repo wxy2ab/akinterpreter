@@ -1,4 +1,5 @@
-from typing import List, Dict, Any, Optional, Tuple
+import json
+from typing import Iterator, List, Dict, Any, Optional, Tuple, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from volcenginesdkarkruntime import Ark
@@ -51,19 +52,50 @@ class DoubaoApiClient(LLMApiClient):
         self.stats["total_tokens"] += response.usage.total_tokens
         return assistant_message
 
-    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any) -> str:
-        raise NotImplementedError("Tool chat is not implemented for DoubaoApiClient")
+    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        self.history.append({"role": "user", "content": message})
+        
+        if is_stream:
+            return self._stream_response(self.history)
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=self.history
+            )
+            assistant_message = response.choices[0].message.content
+            self.history.append({"role": "assistant", "content": assistant_message})
+            self.stats["call_count"]["text_chat"] += 1
+            self.stats["total_tokens"] += response.usage.total_tokens
+            return assistant_message
 
-    def one_chat(self, message: str) -> str:
-        response = self.client.chat.completions.create(
+    def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
+        messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
+        
+        if is_stream:
+            return self._stream_response(messages)
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages
+            )
+            assistant_message = response.choices[0].message.content
+            self.stats["call_count"]["text_chat"] += 1
+            self.stats["total_tokens"] += response.usage.total_tokens
+            return assistant_message
+
+    def _stream_response(self, messages: List[Dict[str, str]]) -> Iterator[str]:
+        stream = self.client.chat.completions.create(
             model=self.model,
-            messages=[{"role": "user", "content": message}]
+            messages=messages,
+            stream=True
         )
-        assistant_message = response.choices[0].message.content
+        for chunk in stream:
+            if chunk.choices:
+                content = chunk.choices[0].delta.content
+                if content:
+                    yield content
+        
         self.stats["call_count"]["text_chat"] += 1
-        self.stats["total_tokens"] += response.usage.total_tokens
-        return assistant_message
-
     def clear_chat(self):
         self.history.clear()
 
@@ -75,3 +107,58 @@ class DoubaoApiClient(LLMApiClient):
 
     def video_chat(self, message: str, video_path: str) -> str:
         raise NotImplementedError("Video chat is not supported by DoubaoApiClient")
+    
+    def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        if is_stream:
+            raise NotImplementedError("Streaming is not supported for tool_chat in DoubaoApiClient")
+
+        self.history.append({"role": "user", "content": user_message})
+        
+        request = {
+            "model": self.model,
+            "messages": self.history,
+            "tools": tools
+        }
+
+        completion = self.client.chat.completions.create(**request)
+        
+        if completion.choices[0].message.tool_calls:
+            tool_call = completion.choices[0].message.tool_calls[0]
+            self.history.append(completion.choices[0].message.dict())
+
+            # Execute the function
+            function_name = tool_call.function.name
+            function_args = json.loads(tool_call.function.arguments)
+            if hasattr(function_module, function_name):
+                function = getattr(function_module, function_name)
+                try:
+                    result = function(**function_args)
+                except Exception as e:
+                    result = f"Error executing {function_name}: {str(e)}"
+            else:
+                result = f"Function {function_name} not found in the provided module."
+
+            # Add the function result to the conversation
+            self.history.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": str(result),
+                "name": function_name,
+            })
+
+            # Get the final response from the model
+            final_completion = self.client.chat.completions.create(**request)
+            final_response = final_completion.choices[0].message.content
+
+            self.history.append({"role": "assistant", "content": final_response})
+            self.stats["call_count"]["tool_chat"] += 1
+            self.stats["total_tokens"] += completion.usage.total_tokens + final_completion.usage.total_tokens
+
+            return final_response
+        else:
+            # If no tool was called, return the initial response
+            assistant_message = completion.choices[0].message.content
+            self.history.append({"role": "assistant", "content": assistant_message})
+            self.stats["call_count"]["tool_chat"] += 1
+            self.stats["total_tokens"] += completion.usage.total_tokens
+            return assistant_message

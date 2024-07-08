@@ -72,7 +72,7 @@ def test1_qianwen_client():
     print(result)
 
 
-def test_glm_client():
+def test1_glm_client():
     from core.utils.all_tools import tools_info_gpt, AllTools
     from core.llms.glm_client import GLMClient
     client = GLMClient()
@@ -83,6 +83,15 @@ def test_glm_client():
     for chunk in result:
         print(chunk, end='', flush=True)
 
+
+def test_doubao_client():
+    from core.llms.doubao_client import DoubaoApiClient
+    from core.utils.all_tools import tools_info_gpt, AllTools
+    client = DoubaoApiClient()
+    iterator = client.tool_chat("北京的天气",
+                                tools=tools_info_gpt,function_module=AllTools,
+                                is_stream=False)
+    print(iterator)
 
 def test1_llm_factory():
     from core.llms._llm_api_client import LLMApiClient
