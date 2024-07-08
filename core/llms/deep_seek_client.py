@@ -24,8 +24,12 @@ class DeepSeekClient(LLMApiClient):
         }
 
     def _handle_streaming_response(self, response) -> Iterator[str]:
+        full_response = ""
         for chunk in response:
-            yield chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
+            text = chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
+            full_response += text
+            yield text
+        self.messages.append({"role": "assistant", "content": full_response})
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         response = self.client.chat.completions.create(
@@ -41,10 +45,10 @@ class DeepSeekClient(LLMApiClient):
             return response['choices'][0]['text']
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.history.append({"role": "user", "content": message})
+        self.messages.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.history,
+            messages=self.messages,
             max_tokens=self.max_tokens,
             stream=is_stream
         )
@@ -53,7 +57,7 @@ class DeepSeekClient(LLMApiClient):
             return self._handle_streaming_response(response)
         else:
             text_response = response['choices'][0]['text']
-            self.history.append({"role": "assistant", "content": text_response})
+            self.messages.append({"role": "assistant", "content": text_response})
             return text_response
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:

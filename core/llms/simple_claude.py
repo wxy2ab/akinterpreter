@@ -94,13 +94,19 @@ class SimpleClaudeAwsClient(LLMApiClient):
             return assistant_message
 
     def _handle_stream_response(self, response):
+        full_response = ""
         for chunk in response:
             if chunk.type == 'content_block':
                 if chunk.content_block.type == 'text':
-                    yield chunk.content_block.text
+                    text = chunk.content_block.text
+                    full_response += text
+                    yield text
             elif chunk.type == 'content_block_delta':
                 if chunk.delta.type == 'text_delta':
-                    yield chunk.delta.text
+                    text =  chunk.delta.text
+                    full_response += text
+                    yield text
+        self.history.append({"role": "assistant", "content": full_response})
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 1000, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": user_message})

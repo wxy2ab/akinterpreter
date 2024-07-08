@@ -179,11 +179,15 @@ class QianWenClient(LLMApiClient):
             stream=True,
             incremental_output=True
         )
+        full_response = ""
         for response in responses:
             if response.status_code == HTTPStatus.OK:
-                yield response.output.choices[0]['message']['content']
+                text =  response.output.choices[0]['message']['content']
+                full_response += text
+                yield text
             else:
                 yield f"Error: {response.code} - {response.message}"
+        self.messages.append({"role": "assistant", "content": full_response})
         self.request_count += 1
         self.successful_requests += 1
 

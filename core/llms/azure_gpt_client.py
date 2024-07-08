@@ -53,8 +53,12 @@ class AzureGPT4oClient(LLMApiClient):
             # Cost calculation would depend on your specific Azure pricing
 
     def _handle_streaming_response(self, response) -> Iterator[str]:
+        full_response = ""
         for chunk in response:
-            yield chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
+            text = chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
+            full_response += text
+            yield text
+        self.history.append({"role": "assistant", "content": full_response})
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})

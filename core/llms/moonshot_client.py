@@ -134,11 +134,14 @@ class MoonShotClient(LLMApiClient):
         return final_output
 
     def _process_stream(self, stream) -> Iterator[str]:
+        full_response = ""
         for chunk in stream:
             if hasattr(chunk, 'choices') and chunk.choices:
                 delta = chunk.choices[0].delta
                 if hasattr(delta, 'content') and delta.content:
+                    full_response+= delta.content
                     yield delta.content
+        self.messages.append({"role": "assistant", "content": full_response})
 
     def _execute_tool_calls(self, tool_calls, function_module: Any) -> List[Dict[str, str]]:
         tool_outputs = []

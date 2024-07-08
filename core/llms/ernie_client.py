@@ -34,9 +34,13 @@ class ErnieApiClient(LLMApiClient):
     def send_request(self, messages, functions=None, record_history=True, use_full_messages=False, stream=False):
         if not self.access_token:
             self.get_access_token()
-
+        full_messages = None
         # Only use chat_history if use_full_messages is True
-        full_messages = self.chat_history + messages if use_full_messages else messages
+        if use_full_messages:
+            self.chat_history.extend(messages)
+            full_messages = self.chat_history
+        else:
+            full_messages = messages
 
         payload = {
             "messages": full_messages,
@@ -71,16 +75,20 @@ class ErnieApiClient(LLMApiClient):
         self.chat_statistics['call_times'] += 1
 
     def _process_stream(self, response) -> Iterator[str]:
+        full_response = ""
         for line in response.iter_lines():
             if line:
                 line = line.decode('utf-8')
                 if line.startswith('data:'):
                     data = json.loads(line[5:])
                     if 'result' in data:
-                        yield data['result']
+                        text = data['result']
+                        full_response += str(text)
+                        yield text
                     if data.get('is_end', False):
                         self._update_stats(data)
                         break
+        self.chat_history.append({"role": "assistant", "content": full_response})
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}]

@@ -89,11 +89,14 @@ class DoubaoApiClient(LLMApiClient):
             messages=messages,
             stream=True
         )
+        full_response = ""
         for chunk in stream:
             if chunk.choices:
                 content = chunk.choices[0].delta.content
                 if content:
+                    full_response += content
                     yield content
+        self.history.append({"role": "assistant", "content": full_response})
         
         self.stats["call_count"]["text_chat"] += 1
     def clear_chat(self):

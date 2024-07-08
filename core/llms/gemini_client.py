@@ -500,11 +500,12 @@ class GeminiAPIClient(LLMApiClient):
                 chat = self.chat
 
             responses = chat.send_message(message, generation_config=self.generation_config, tools=tools, stream=True)
-
+            full_response = ""
             for chunk in responses:
+                full_response += chunk.text
                 yield chunk.text
                 # self._update_metadata(chunk)  # 如果需要，可以取消注释
-
+            self.history.append({"role": "assistant", "content": full_response})
         except Exception as e:
             yield f"Error in streaming response: {str(e)}"
 

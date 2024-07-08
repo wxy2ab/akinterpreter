@@ -11,7 +11,6 @@ def test1_claude_client():
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-
 def test1_gpt_client():
     from core.llms.azure_gpt_client import AzureGPT4oClient
     client = AzureGPT4oClient()
@@ -19,7 +18,6 @@ def test1_gpt_client():
                                  is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
-
 
 def test1_deepseek_client():
     from core.utils.all_tools import tools_info_gpt, AllTools
@@ -32,7 +30,6 @@ def test1_deepseek_client():
     for chunk in generator:
         print(chunk, end='', flush=True)
 
-
 def test1_gemini_client():
     from core.utils.all_tools import get_gemini_tool_info, AllTools
     from core.llms.gemini_client import GeminiAPIClient
@@ -44,7 +41,6 @@ def test1_gemini_client():
                                  is_stream=True)
     for chunk in generator:
         print(chunk, end='', flush=True)
-
 
 def test1_ernie_client():
     from core.llms.ernie_client import ErnieApiClient
@@ -70,7 +66,7 @@ def test1_simple_claude():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-def test_simple_azure():
+def test1_simple_azure():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
     from core.utils.all_tools import tools_info_gpt, AllTools
@@ -82,6 +78,7 @@ def test_simple_azure():
                                is_stream=True)
     for chunk in iterator:
         print(chunk, end='', flush=True)
+
 def test1_moonshot_client():
     from core.utils.all_tools import tools_info_gpt, AllTools
     from core.llms.moonshot_client import MoonShotClient
@@ -93,7 +90,6 @@ def test1_moonshot_client():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-
 def test1_qianwen_client():
     from core.llms.qianwen_client import QianWenClient
     from core.utils.all_tools import tools_info_gpt, AllTools
@@ -103,7 +99,6 @@ def test1_qianwen_client():
                                 is_stream=False)
     for chunk in iterator:
         print(chunk, end='', flush=True)
-
 
 def test1_glm_client():
     from core.utils.all_tools import tools_info_gpt, AllTools
@@ -115,7 +110,6 @@ def test1_glm_client():
                               is_stream=False)
     for chunk in result:
         print(chunk, end='', flush=True)
-
 
 def test1_doubao_client():
     from core.llms.doubao_client import DoubaoApiClient
@@ -134,7 +128,6 @@ def test1_llm_factory():
     print(factory.list_available_llms())
     result = client.one_chat("我问你，你是不是豆包")  #("写一个python函数，可以用于判断1000003是否是素数")
     print(result)
-
 
 def test1_data_interpreter():
     import numpy as np
@@ -168,13 +161,11 @@ def test1_data_interpreter():
     print("分析报告:")
     print(report)
 
-
 def test1_akshare_interpreter():
     from core.planner.akshare_planner import AkshareInterpreterPlanner
     planner = AkshareInterpreterPlanner()
     result = planner.plan_and_execute("分析今年上半年上证指数走势")
     print(result)
-
 
 def test1_embeddings():
     from core.utils.tsdata import check_proxy_running
@@ -188,7 +179,6 @@ def test1_embeddings():
         ["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
 
-
 def test1_volcengine_embeddings():
     from core.embeddings._embedding import Embedding
     from core.embeddings.embedding_factory import EmbeddingFactory
@@ -199,7 +189,6 @@ def test1_volcengine_embeddings():
         ["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"])
     print(result)
 
-
 def test1_cross_encoder():
     from core.utils.tsdata import check_proxy_running
     check_proxy_running("172.22.32.1", 10809, "http")
@@ -207,7 +196,6 @@ def test1_cross_encoder():
     model = CrossEncoder('maidalun1020/bce-reranker-base_v1', max_length=512)
     scores = model.predict([["我是中国人", "去湖南的旅客"], ["嫦娥六号", "乘波体弹道飞行器"]])
     print(scores)
-
 
 def test1_ranker_factory():
     from core.utils.tsdata import check_proxy_running
@@ -221,7 +209,6 @@ def test1_ranker_factory():
     result = ranker.get_scores([["中国是世界上汽车出口最大的国家", "嫦娥火箭刚刚完成了登月采集月壤并返回的任务"]])
     print(result)
 
-
 def test1_excel_interpreter():
     from core.interpreter.excel_interpreter import ExcelInterpreter
     interpreter = ExcelInterpreter()
@@ -229,7 +216,6 @@ def test1_excel_interpreter():
     code, report = interpreter.interpret(
         path, "这个excel文件显示了，过去一段时间内，一天24个小时，每个小时不同数据源的新闻数量，帮我分析这个文件，提取有用的信息")
     print(report)
-
 
 def test1_chat_pdf():
     from core.utils.tsdata import check_proxy_running
@@ -239,3 +225,62 @@ def test1_chat_pdf():
     #chatpdf.add_corpus("README.md")
     response, reference_results = chatpdf.predict("文档主要内容是什么")
     print(response)
+
+def test1_sse_data_interpreter():
+    from core.interpreter.sse_data_interpreter import SSEDataInterpreter
+    interpreter = SSEDataInterpreter()
+    data = [3,4]
+    user_request = "比较两个数的大小"
+    iterator = interpreter.interpret(data, user_request, is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
+def test1_simple_claude_multi_chat():
+    from core.llms._llm_api_client import LLMApiClient
+    from core.llms.llm_factory import LLMFactory
+    from core.utils.all_tools import tools_info_claude, AllTools
+    factory= LLMFactory()
+    client:LLMApiClient= factory.get_instance("SimpleClaudeAwsClient")
+    iterator= client.text_chat("37是不是素数",is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+    iterator= client.text_chat("我上一个问的是什么问题",is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
+def test1_simple_azure_multi_chat():
+    from core.llms._llm_api_client import LLMApiClient
+    from core.llms.llm_factory import LLMFactory
+    from core.utils.all_tools import tools_info_claude, AllTools
+    factory= LLMFactory()
+    client:LLMApiClient= factory.get_instance("SimpleAzureClient")
+    iterator= client.text_chat("37是不是素数",is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+    iterator= client.text_chat("我上一个问的是什么问题",is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
+def test_all_multi_chat():
+    from core.utils.tsdata import check_proxy_running
+    from core.llms._llm_api_client import LLMApiClient
+    from core.llms.llm_factory import LLMFactory
+    from core.utils.all_tools import tools_info_claude, AllTools
+    #check_proxy_running("172.22.32.1",10809,"http")
+    factory= LLMFactory()
+    #"AzureGPT4oClient","ClaudeAwsClient","SimpleAzureClient","SimpleClaudeAwsClient","DeepSeekClient","DoubaoApiClient","ErnieApiClient","GeminiAPIClient","GLMClient","MoonShotClient","QianWenClient"
+    llms = [""]
+    for llm in llms:
+        print(llm)
+        print("\n","="*50)
+        client:LLMApiClient= factory.get_instance(llm)
+        iterator= client.text_chat("37是不是素数",is_stream=True)
+        for chunk in iterator:
+            print(chunk, end='', flush=True)
+        
+        print("\n","*"*50)
+
+        iterator= client.text_chat("57是不是素数",is_stream=True)
+        for chunk in iterator:
+            print(chunk, end='', flush=True)
+        print("\n","="*50)
