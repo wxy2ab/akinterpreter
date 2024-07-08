@@ -226,7 +226,7 @@ def test1_chat_pdf():
     response, reference_results = chatpdf.predict("文档主要内容是什么")
     print(response)
 
-def test1_sse_data_interpreter():
+def test_sse_data_interpreter():
     from core.interpreter.sse_data_interpreter import SSEDataInterpreter
     interpreter = SSEDataInterpreter()
     data = [3,4]
@@ -261,7 +261,7 @@ def test1_simple_azure_multi_chat():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-def test_all_multi_chat():
+def test1_all_multi_chat():
     from core.utils.tsdata import check_proxy_running
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
