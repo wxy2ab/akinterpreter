@@ -46,11 +46,16 @@ def test1_gemini_client():
         print(chunk, end='', flush=True)
 
 
-def test1_ernie_client():
+def test_ernie_client():
     from core.llms.ernie_client import ErnieApiClient
+    from core.utils.all_tools import tools_info_gpt, AllTools
     client = ErnieApiClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    iterator = client.tool_chat("写一个python函数，可以用于判断1000003是否是素数,调用工具执行代码进行判断",
+                                tools=tools_info_gpt,
+                                function_module=AllTools,
+                                is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
 
 
 def test1_moonshot_client():
@@ -67,9 +72,13 @@ def test1_moonshot_client():
 
 def test1_qianwen_client():
     from core.llms.qianwen_client import QianWenClient
+    from core.utils.all_tools import tools_info_gpt, AllTools
     client = QianWenClient()
-    result = client.one_chat("写一个python函数，可以用于判断1000003是否是素数")
-    print(result)
+    iterator = client.tool_chat("北京的天气",
+                                tools=tools_info_gpt,function_module=AllTools,
+                                is_stream=False)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
 
 
 def test1_glm_client():
@@ -84,7 +93,7 @@ def test1_glm_client():
         print(chunk, end='', flush=True)
 
 
-def test_doubao_client():
+def test1_doubao_client():
     from core.llms.doubao_client import DoubaoApiClient
     from core.utils.all_tools import tools_info_gpt, AllTools
     client = DoubaoApiClient()
