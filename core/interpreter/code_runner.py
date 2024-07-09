@@ -89,7 +89,7 @@ class CodeRunner:
             print(f"无法安装模块: {module_name}")
             return False
 
-    def format_error(self, e: Exception, code: str, info_level: Literal["short", "medium", "long", "all"] = "short") -> str:
+    def format_error(self, e: Exception, code: str, info_level: Literal["short", "medium", "long", "all"] = "all") -> str:
         tb = traceback.extract_tb(sys.exc_info()[2])
 
         # 替换 <string> 为 <dynamic_code>
