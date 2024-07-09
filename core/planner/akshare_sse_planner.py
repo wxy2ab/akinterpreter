@@ -7,9 +7,10 @@ import json
 from typing import Generator, Dict, Any, List, Optional
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
-from ..interpreter.code_runner import CodeRunner
+from ..interpreter.sse_code_runner import SSECodeRunner
 from ..interpreter.data_summarizer import DataSummarizer
 from ..interpreter._sse_planner import SSEPlanner, RetrievalProvider
+
 
 class AkshareRetrievalProvider:
     def __init__(self):
@@ -17,6 +18,7 @@ class AkshareRetrievalProvider:
         self.category_summaries = self.data_singleton.get_category_summaries()
         self.classified_functions = self.data_singleton.get_classified_functions()
         self.akshare_docs = self.data_singleton.get_akshare_docs()
+
 
     def get_categories(self) -> Dict[str, str]:
         """
@@ -284,17 +286,17 @@ class AksharePrompts:
         """
 
 class AkshareSSEPlanner(SSEPlanner):
-    def __init__(self,max_retry=8,allow_yfinance:bool=False):
+    def __init__(self, max_retry=8, allow_yfinance: bool = False):
         self.llm_factory = LLMFactory()
         self.llm_client: LLMApiClient = self.llm_factory.get_instance()
-        self.code_runner = CodeRunner()
+        self.code_runner = SSECodeRunner()
         self.data_summarizer = DataSummarizer()
         self.retriever = self.get_retrieval_provider()
         self.reset()
         self.prompts = AksharePrompts()
         self.max_retry = max_retry
         self.allow_yfinance = allow_yfinance
-        self.step_codes = {} 
+        self.step_codes = {}
 
     def get_new_llm_client(self) -> LLMApiClient:
         return self.llm_factory.get_instance()
@@ -303,7 +305,7 @@ class AkshareSSEPlanner(SSEPlanner):
         return AkshareRetrievalProvider()
 
     def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
-        confirm_keywords = ["确认计划", "确认", "开始", "开始执行", "运行", "执行", "没问题", "没问题了"]
+        confirm_keywords = ["确认计划", "确认", "开始", "开始执行", "运行", "执行", "没问题", "没问题了","执行计划"]
         reset_keywords = ["重来", "清除", "再来一次"]
 
         if query.lower() in reset_keywords:
@@ -400,27 +402,13 @@ class AkshareSSEPlanner(SSEPlanner):
         for attempt in range(max_attempts):
             try:
                 if current_step['type'] == 'data_retrieval':
-                    # 对于数据检索任务
-                    result = self.execute_code(full_code)
-                    if current_step['save_data_to'] in result['variables']:
-                        self.step_vars[current_step['save_data_to']] = result['variables'][current_step['save_data_to']]
-                        yield {"type": "code_execution", "content": f"数据已保存到 {current_step['save_data_to']}"}
-                        self.step_codes[self.current_step] = full_code  # 保存成功的代码
-                    else:
-                        raise Exception(f"执行代码未产生预期的 '{current_step['save_data_to']}' 变量")
+                    yield from self.execute_data_retrieval(full_code, current_step)
                 elif current_step['type'] == 'data_analysis':
-                    # 对于数据分析任务
-                    result = self.execute_code(full_code)
-                    if 'analysis_result' in result['variables']:
-                        self.step_vars[f"analysis_result_{self.current_step}"] = result['variables']['analysis_result']
-                        yield {"type": "code_execution", "content": "分析结果已生成"}
-                        self.step_codes[self.current_step] = full_code  # 保存成功的代码
-                    else:
-                        raise Exception("执行代码未产生预期的 'analysis_result' 变量")
+                    yield from self.execute_data_analysis(full_code, current_step)
                 else:
                     raise Exception(f"未知的步骤类型: {current_step['type']}")
 
-                self.execution_results.append({"step": self.current_step, "result": result})
+                self.step_codes[self.current_step] = full_code
                 break
             except Exception as e:
                 if attempt < max_attempts - 1:
@@ -431,6 +419,69 @@ class AkshareSSEPlanner(SSEPlanner):
                     yield {"type": "error", "content": f"在 {max_attempts} 次尝试后仍无法执行代码。最后的错误：{str(e)}"}
 
         self.current_step += 1
+
+    def execute_data_retrieval(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+        global_vars = self.step_vars.copy()
+        global_vars['llm_client'] = self.get_new_llm_client()
+
+        updated_vars = {}
+        for event in self.code_runner.run_sse(code, global_vars):
+            if event['type'] == 'output':
+                yield {"type": "code_execution", "content": event['content']}
+            elif event['type'] == 'error':
+                yield {"type": "error", "content": event['content']}
+                raise Exception(event['content'])
+            elif event['type'] == 'variables':
+                updated_vars = event['content']
+
+        if step['save_data_to'] in updated_vars:
+            data = updated_vars[step['save_data_to']]
+            self.step_vars[step['save_data_to']] = data
+            
+            # 生成数据摘要
+            summary = self.data_summarizer.get_data_summary(data)
+            self.step_vars[f"{step['save_data_to']}_summary"] = summary
+            
+            result = f"数据已保存到 {step['save_data_to']}"
+            self.execution_results.append({
+                "step": self.current_step,
+                "type": "data_retrieval",
+                "result": result
+            })
+            yield {"type": "code_execution", "content": result}
+            yield {"type": "summary", "content": f"数据摘要: {summary}"}
+        else:
+            error_msg = f"执行代码未产生预期的 '{step['save_data_to']}' 变量。可用变量: {list(updated_vars.keys())}"
+            yield {"type": "error", "content": error_msg}
+            raise Exception(error_msg)
+
+    def execute_data_analysis(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+        global_vars = self.step_vars.copy()
+        global_vars['llm_client'] = self.get_new_llm_client()
+
+        updated_vars = {}
+        for event in self.code_runner.run_sse(code, global_vars):
+            if event['type'] == 'output':
+                yield {"type": "code_execution", "content": event['content']}
+            elif event['type'] == 'error':
+                yield {"type": "error", "content": event['content']}
+                raise Exception(event['content'])
+            elif event['type'] == 'variables':
+                updated_vars = event['content']
+
+        if 'analysis_result' in updated_vars:
+            result = updated_vars['analysis_result']
+            self.step_vars[f"analysis_result_{self.current_step}"] = result
+            self.execution_results.append({
+                "step": self.current_step,
+                "type": "data_analysis",
+                "result": result
+            })
+            yield {"type": "code_execution", "content": "分析结果已生成"}
+        else:
+            error_msg = f"执行代码未产生预期的 'analysis_result' 变量。可用变量: {list(updated_vars.keys())}"
+            yield {"type": "error", "content": error_msg}
+            raise Exception(error_msg)
 
     def execute_code(self, code: str) -> Dict[str, Any]:
         global_vars = self.step_vars.copy()
@@ -454,15 +505,6 @@ class AkshareSSEPlanner(SSEPlanner):
             yield from self.step()
 
         yield from self.get_final_report()
-
-    def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
-        if not self.execution_results:
-            yield {"type": "message", "content": "没有可报告的结果。请先执行计划。"}
-            return
-
-        prompt = self._create_report_prompt()
-        for chunk in self.llm_client.text_chat(prompt, is_stream=True):
-            yield {"type": "report", "content": chunk}
 
     def handle_error(self, error: Exception) -> Generator[Dict[str, Any], None, None]:
         error_message = str(error)
@@ -612,23 +654,34 @@ class AkshareSSEPlanner(SSEPlanner):
 
         # 收集所有分析结果
         analysis_results = []
-        for step in self.current_plan['steps']:
-            if step['type'] == 'data_analysis':
-                result_key = f"analysis_result_{step['step_number']}"
-                if result_key in self.step_vars:
-                    analysis_results.append({
-                        "task": step['description'],
-                        "result": self.step_vars[result_key]
-                    })
+        for result in self.execution_results:
+            if result['type'] == 'data_analysis':
+                analysis_results.append({
+                    "task": self.current_plan['steps'][result['step']]['description'],
+                    "result": result['result']
+                })
+
+        if not analysis_results:
+            yield {"type": "message", "content": "未找到任何分析结果。请检查数据分析步骤是否正确执行。"}
+            return
 
         prompt = self._create_report_prompt(analysis_results)
         for chunk in self.llm_client.text_chat(prompt, is_stream=True):
             yield {"type": "report", "content": chunk}
-
-        saved = self._save_code_after_report()
-        yield saved
+        
+        self._save_code_after_report()
         self.reset()
-        yield {"type": "finished", "content": "查询已完成，已重置所有数据。可以开始新的查啦。"}
+        yield {"type": "finished", "content": "报告已生成，计划已重置。可以重新开始新的任务啦！"}
+
+    def _create_report_prompt(self, analysis_results: List[Dict[str, str]]) -> str:
+        initial_query = self.current_plan.get('query_summary', '未提供初始查询')
+        
+        results_summary = "\n\n".join([
+            f"任务: {result['task']}\n结果: {result['result']}"
+            for result in analysis_results
+        ])
+
+        return self.prompts.create_report_prompt(initial_query, results_summary)
 
     def _save_code_after_report(self):
         # 确保输出目录存在
@@ -647,22 +700,12 @@ class AkshareSSEPlanner(SSEPlanner):
     def _generate_query_summary(self) -> str:
         # 使用 LLM 生成查询总结
         query = self.current_plan.get('query_summary', '未知查询')
-        prompt = f"请将以下查询总结为4-6个字的简短描述：\n{query}"
+        prompt = f"请将以下查询总结为6个字以内的短语：\n{query}"
         response = self.llm_client.one_chat(prompt)
         
         # 清理响应，确保它是一个有效的文件名
         summary = ''.join(c for c in response if c.isalnum() or c in ('-', '_'))
         return summary[:20]  # 限制长度为20个字符
-
-    def _create_report_prompt(self, analysis_results: List[Dict[str, str]]) -> str:
-        initial_query = self.current_plan.get('initial_query', '未提供初始查询')
-        
-        results_summary = "\n\n".join([
-            f"任务: {result['task']}\n结果: {result['result']}"
-            for result in analysis_results
-        ])
-
-        return self.prompts.create_report_prompt(initial_query, results_summary)
 
     def save_to_file(self, filename: str):
         """保存计划和代码到文件"""

@@ -15,34 +15,6 @@ def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool 
     end_color = '\033[0m'
     print(f"{colors.get(color, '')}{text}{end_color}", end=end, flush=flush)
 
-
-def handle_dict_response(response: Dict[str, Any]):
-    global current_response_type
-    response_type = response.get('type', '')
-    content = response.get('content', '')
-
-    if response_type != current_response_type:
-        if current_response_type is not None:
-            print()  # 添加换行，为新类型做准备
-        current_response_type = response_type
-        if response_type == 'error':
-            print_colored("[错误] ", 'red', end='')
-        elif response_type == 'plan':
-            print_colored("[计划] ", 'cyan', end='')
-        elif response_type == 'code_generation':
-            print_colored("[代码生成] ", 'magenta', end='')
-        elif response_type == 'finished':
-            print_colored("[完成] ", 'green', end='')
-        elif response_type == 'report':
-            print_colored("[报告] ", 'yellow', end='')
-
-    # 打印内容
-    if response_type in ['message', 'error', 'plan', 'code_generation', 'finished', 'report']:
-        print(content, end='', flush=True)
-    else:
-        # 处理其他类型作为普通消息
-        print(content, end='', flush=True)
-
 def chat_cli():
     factory = TalkerFactory()
     talker = factory.get_instance()  # 获取默认的 Talker 实例
@@ -101,7 +73,7 @@ def handle_dict_response(response: Dict[str, Any]):
             print_colored("[报告] ", 'yellow', end='')
 
     # 打印内容
-    if response_type in ['message', 'error', 'plan', 'code_generation', 'finished', 'report']:
+    if response_type in ['message', 'error', 'plan', 'code_generation', 'finished', 'report','code_execution']:
         print(content, end='', flush=True)
     else:
         # 处理其他类型作为普通消息

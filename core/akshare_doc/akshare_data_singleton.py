@@ -21,6 +21,8 @@ class AKShareDataSingleton:
         self.tools_dict_path = self._load_json("json/akshare_tools_dict.json")
         self.completed_querys_json_path = "json/completed_querys.json"
         self.completed_querys = self._load_json(self.completed_querys_json_path)
+        from ..patch.makepatch import takepatch
+        takepatch()
 
     def _load_json(self, file_path: str) ->Union[ Dict , List[Dict]]:
         if not os.path.exists(file_path):
