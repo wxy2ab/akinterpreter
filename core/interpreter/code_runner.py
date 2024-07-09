@@ -5,7 +5,7 @@ import runpy
 import subprocess
 import io
 import sys
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Literal, Tuple
 import types
 
 class CodeRunner:
@@ -89,28 +89,36 @@ class CodeRunner:
             print(f"无法安装模块: {module_name}")
             return False
 
-    def format_error(self, e: Exception, code: str) -> str:
+    def format_error(self, e: Exception, code: str, info_level: Literal["short", "medium", "long", "all"] = "short") -> str:
         tb = traceback.extract_tb(sys.exc_info()[2])
+
+        # 替换 <string> 为 <dynamic_code>
         for i, frame in enumerate(tb):
             if frame.filename == "<string>":
-                # 创建一个新的 FrameSummary 对象，而不是使用 _replace
                 tb[i] = traceback.FrameSummary(
                     filename="<dynamic_code>",
                     lineno=frame.lineno,
                     name=frame.name,
                     line=frame.line
                 )
-        
-        formatted_tb = traceback.format_list(tb)
-        formatted_exception = traceback.format_exception_only(type(e), e)
-        
-        error_message = "Traceback (most recent call last):\n"
-        error_message += "".join(formatted_tb)
-        error_message += "".join(formatted_exception)
-        
-        if self.debug:
+
+        error_message = ""
+
+        if info_level in ["medium", "long", "all"]:
+            formatted_tb = traceback.format_list(tb)
+            error_message += "Traceback (most recent call last):\n"
+            error_message += "".join(formatted_tb)
+
+        if info_level in ["long", "all"]:
+            formatted_exception = traceback.format_exception_only(type(e), e)
+            error_message += "".join(formatted_exception)
+
+        if info_level == "all" and self.debug:
             error_message += "\n调试信息: Error occurred in the following code:\n"
             error_message += code
+
+        elif info_level == "short":
+            error_message = f"Error: {type(e).__name__}: {e}"
         
         return error_message
 

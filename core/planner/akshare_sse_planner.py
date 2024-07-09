@@ -1,7 +1,6 @@
 from datetime import datetime
 import os
 import re
-import traceback
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 from typing import List, Dict, Tuple, Union
 import json
@@ -296,7 +295,6 @@ class AkshareSSEPlanner(SSEPlanner):
         self.max_retry = max_retry
         self.allow_yfinance = allow_yfinance
         self.step_codes = {} 
-
 
     def get_new_llm_client(self) -> LLMApiClient:
         return self.llm_factory.get_instance()
@@ -593,14 +591,6 @@ class AkshareSSEPlanner(SSEPlanner):
         
         fixed_code = self._extract_code(full_code)
         yield fixed_code
-
-    def execute_code(self, code: str) -> Dict[str, Any]:
-        global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.get_new_llm_client()  # 为每次执行提供新的 LLMApiClient 实例
-        output, error = self.code_runner.run(code, global_vars)
-        if error:
-            raise Exception(error)
-        return {"output": output, "variables": global_vars}
 
     def reset(self) -> None:
         self.current_step = 0
