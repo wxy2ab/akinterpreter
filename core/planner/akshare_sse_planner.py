@@ -284,7 +284,7 @@ class AksharePrompts:
         """
 
 class AkshareSSEPlanner(SSEPlanner):
-    def __init__(self,max_retry=6,allow_yfinance:bool=False):
+    def __init__(self,max_retry=8,allow_yfinance:bool=False):
         self.llm_factory = LLMFactory()
         self.llm_client: LLMApiClient = self.llm_factory.get_instance()
         self.code_runner = CodeRunner()
