@@ -93,7 +93,13 @@ class CodeRunner:
         tb = traceback.extract_tb(sys.exc_info()[2])
         for i, frame in enumerate(tb):
             if frame.filename == "<string>":
-                tb[i] = frame._replace(filename="<dynamic_code>")
+                # 创建一个新的 FrameSummary 对象，而不是使用 _replace
+                tb[i] = traceback.FrameSummary(
+                    filename="<dynamic_code>",
+                    lineno=frame.lineno,
+                    name=frame.name,
+                    line=frame.line
+                )
         
         formatted_tb = traceback.format_list(tb)
         formatted_exception = traceback.format_exception_only(type(e), e)
