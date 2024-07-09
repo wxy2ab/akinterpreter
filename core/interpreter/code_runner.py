@@ -107,6 +107,7 @@ class CodeRunner:
             error_message += code
         
         return error_message
+
     def _execute_code_with_vars(self, code: str, global_vars: Dict[str, Any]) -> Tuple[str, str]:
         # 创建一个临时文件
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.py', delete=False) as temp_file:

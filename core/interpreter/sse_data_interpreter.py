@@ -32,22 +32,44 @@ class SSEDataInterpreter(SSEInterpreter):
             return self._non_stream_interpret()
 
     def _stream_interpret(self) -> Generator[str, None, None]:
-        code = yield from self.generate_code(self.data, self.user_request, is_stream=True)
+        code_generator = self.generate_code(self.data, self.user_request, is_stream=True)
+        code = ""
+        for chunk in code_generator:
+            yield chunk
+            code += chunk
+        
+        code = self._extract_code(code)  # Extract the final code from the accumulated response
+        yield f"\n最终代码:\n{code}\n"
         
         for attempt in range(self.max_retries):
-            output, error = self.execute_code(code)
+            yield f"运行代码 (尝试第 {attempt + 1}) 次...\n"
+            output, error = self.execute_code(code, self.data)
             
             if not error:
+                yield "代码执行成功.\n"
                 break
             
+            yield f"Execution failed. Error: {error}\n"
+            
             if attempt < self.max_retries - 1:
-                yield f"尝试 {attempt + 1} 失败。正在尝试修复代码...\n"
+                yield f"第{attempt + 1}次尝试失败. 尝试更正代码...\n"
                 code = yield from self.fix_code(code, error)
             else:
-                yield f"所有 {self.max_retries} 次尝试都失败了。无法修复代码。\n"
+                yield f"所有 {self.max_retries} 次尝试失败. 无法更正代码.\n"
         
         yield from self.generate_report(output, error, self.user_request, is_stream=True)
 
+    def _stream_generate_code(self, prompt: str) -> Generator[str, None, None]:
+        response_stream = self.llm_client.text_chat(prompt, is_stream=True)
+        accumulated_code = ""
+        for chunk in response_stream:
+            accumulated_code += chunk
+            yield chunk
+        
+        extracted_code = self._extract_code(accumulated_code)
+        yield f"\nExtracted code:\n{extracted_code}"
+        return extracted_code
+    
     def _non_stream_interpret(self) -> Tuple[str, str]:
         code = self.generate_code(self.data, self.user_request)
         
@@ -93,8 +115,8 @@ class SSEDataInterpreter(SSEInterpreter):
             response = self.llm_client.text_chat(prompt)
             return self._extract_code(response)
 
-    def execute_code(self, code: str) -> Tuple[str, str]:
-        return self.code_runner.run(code, self.data)
+    def execute_code(self, code: str, data: Any) -> Tuple[str, str]:
+        return self.code_runner.run(code, {'data': data})
 
     def process_sse_event(self, event: Dict[str, Any]) -> str:
         if 'content' in event:
@@ -172,10 +194,10 @@ class SSEDataInterpreter(SSEInterpreter):
         
         if code_blocks:
             code = code_blocks[0].strip()
-            if 'import' in code and 'data' in code:
+            if  'data' in code:
                 return code
             else:
-                raise ValueError("Code block does not contain 'import' or 'data' keyword.")
+                raise ValueError("Code block does not contain 'data' keyword.")
         else:
             return response.strip()
 

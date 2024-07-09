@@ -230,7 +230,7 @@ def test_sse_data_interpreter():
     from core.interpreter.sse_data_interpreter import SSEDataInterpreter
     interpreter = SSEDataInterpreter()
     data = [3,4]
-    user_request = "比较两个数的大小"
+    user_request = "找出集合中的最大值"
     iterator = interpreter.interpret(data, user_request, is_stream=True)
     for chunk in iterator:
         print(chunk, end='', flush=True)
