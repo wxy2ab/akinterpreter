@@ -17,7 +17,7 @@ def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool 
 
 def chat_cli():
     factory = TalkerFactory()
-    talker = factory.get_instance()  # 获取默认的 Talker 实例
+    talker = factory.get_instance("CliTalker")  # 获取默认的 Talker 实例
 
     print_colored("欢迎使用聊天程序！输入 'quit' 或 'exit' 结束对话。", 'cyan')
 

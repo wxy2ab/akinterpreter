@@ -304,22 +304,63 @@ class AkshareSSEPlanner(SSEPlanner):
     def get_retrieval_provider(self) -> RetrievalProvider:
         return AkshareRetrievalProvider()
 
-    def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
-        confirm_keywords = ["确认计划", "确认", "开始", "开始执行", "运行", "执行", "没问题", "没问题了","执行计划"]
+    def _parse_special_commands(self, query: str) -> Generator[Dict[str, Any], bool, None]:
+        confirm_keywords = ["确认计划", "确认", "开始", "开始执行", "运行", "执行", "没问题", "没问题了", "执行计划"]
         reset_keywords = ["重来", "清除", "再来一次"]
+
+        if query.lower().startswith("set_max_retry="):
+            try:
+                new_max_retry = int(query.split("=")[1])
+                self.max_retry = new_max_retry
+                yield {"type": "message", "content": f"已将 max_retry 设置为 {new_max_retry}"}
+                return True
+            except ValueError:
+                yield {"type": "error", "content": "无效的 max_retry 值。请输入一个整数。"}
+                return True
+
+        if query.lower().startswith("set_allow_yfinance="):
+            value = query.split("=")[1].lower()
+            if value in ["true", "false"]:
+                self.allow_yfinance = value == "true"
+                yield {"type": "message", "content": f"已将 allow_yfinance 设置为 {self.allow_yfinance}"}
+            else:
+                yield {"type": "error", "content": "无效的 allow_yfinance 值。请使用 true 或 false。"}
+            return True
+
+        if query.lower() == "show_config":
+            config = f"当前配置：\nmax_retry: {self.max_retry}\nallow_yfinance: {self.allow_yfinance}"
+            yield {"type": "message", "content": config}
+            return True
 
         if query.lower() in reset_keywords:
             self.reset()
             yield {"type": "message", "content": "已重置所有数据，请重新开始。"}
-            return
+            return True
 
         if query.lower() in confirm_keywords:
             if not self.current_plan:
                 yield {"type": "error", "content": "没有可确认的计划。请先创建一个计划。"}
-                return
-            yield from self.handle_confirm_plan()
+            else:
+                yield from self.handle_confirm_plan()
+            return True
+
+        return False
+
+    def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
+        # 首先尝试解析特殊命令
+        command_handled = False
+        command_generator = self._parse_special_commands(query)
+        try:
+            while True:
+                command_result = next(command_generator)
+                yield command_result
+        except StopIteration as e:
+            command_handled = e.value
+
+        if command_handled:
             return
 
+        # 如果不是特殊命令，则继续原有的计划创建或修改逻辑
         prompt = self._create_plan_prompt(query) if self.current_plan is None else self._create_modify_plan_prompt(query)
         
         plan_text = ""
