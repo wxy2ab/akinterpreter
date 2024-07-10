@@ -60,6 +60,7 @@ class AksharePrompts:
         3. 确保步骤编号的连续性和正确性。
         4. 更新 query_summary 以反映新的要求。
         5. 确保数据分析步骤的 required_data 与数据检索步骤的 save_data_to 保持一致。
+        6. 目前步骤的类型只支持 "data_retrieval" 和 "data_analysis"。其他类型均会不允许。
 
         请提供修改后的完整JSON格式计划，确保其可以被直接解析为Python字典。
         """
@@ -139,7 +140,7 @@ class AksharePrompts:
         可用的变量和对象：
         - llm_factory: LLMFactory 实例，用于获取新的 LLMApiClient
         - code_runner: CodeRunner 实例
-        - data_summarizer: DataSummarizer 实例
+        - data_summarizer: DataSummarizer 实例,用于获得数据摘要
         - retriever: RetrievalProvider 实例，用于获取额外的数据检索信息
 
         对于之前步骤的数据，你可以使用以下变量名访问：
@@ -259,4 +260,26 @@ class AksharePrompts:
         {query}
 
         请根据修改请求提供更新后的完整代码。只返回修改后的代码，不需要任何解释。
+        """
+    @staticmethod
+    def schedule_run_prompt(schedule_query: str, current_time: str) -> str:
+        return f"""
+        基于以下调度请求和当前时间，请提供适当的调度参数：
+
+        调度请求: {schedule_query}
+        当前时间: {current_time}
+
+        请提供以下格式的 JSON 响应：
+        {{
+            "trigger": "date" 或 "interval" 或 "cron",
+            "trigger_args": {{
+                // 相应的触发器参数
+            }}
+        }}
+
+        对于 "date" 触发器，请使用 "run_date" 参数。
+        对于 "interval" 触发器，可以使用 "weeks", "days", "hours", "minutes", "seconds" 等参数。
+        对于 "cron" 触发器，可以使用 "year", "month", "day", "week", "day_of_week", "hour", "minute", "second" 等参数。
+
+        如果无法解析请求，请返回 {{"error": "无法解析调度请求"}}。
         """

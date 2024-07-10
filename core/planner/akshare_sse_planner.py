@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 import os
 import re
@@ -12,6 +13,7 @@ from ..interpreter.data_summarizer import DataSummarizer
 from ..interpreter._sse_planner import SSEPlanner, RetrievalProvider
 from .akshare_prompts import AksharePrompts
 from .akshare_retrieval_provider import AkshareRetrievalProvider
+from ..scheduler.replay_message_queue import ReplayMessageQueue
 
 class AkshareSSEPlanner(SSEPlanner):
     def __init__(self, max_retry=8, allow_yfinance: bool = False):
@@ -285,7 +287,7 @@ class AkshareSSEPlanner(SSEPlanner):
 
     def execute_data_retrieval(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.get_new_llm_client()
+        self.set_global_vars(global_vars) 
 
         updated_vars = {}
         for event in self.code_runner.run_sse(code, global_vars):
@@ -320,7 +322,7 @@ class AkshareSSEPlanner(SSEPlanner):
 
     def execute_data_analysis(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.get_new_llm_client()
+        self.set_global_vars(global_vars) 
 
         updated_vars = {}
         for event in self.code_runner.run_sse(code, global_vars):
@@ -373,7 +375,7 @@ class AkshareSSEPlanner(SSEPlanner):
 
     def execute_code(self, code: str) -> Dict[str, Any]:
         global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.get_new_llm_client()  # 为每次执行提供新的 LLMApiClient 实例
+        self.set_global_vars(global_vars)  # 为每次执行提供新的 LLMApiClient 实例
         output, error = self.code_runner.run(code, global_vars)
         if error:
             raise Exception(error)
@@ -609,6 +611,12 @@ class AkshareSSEPlanner(SSEPlanner):
         with open(filename, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
 
+    def set_global_vars(self, global_vars: Dict[str, Any]):
+        global_vars['llm_client'] = self.llm_factory.get_instance()
+        global_vars['llm_factory'] = self.llm_factory
+        global_vars["data_summarizer"]=self.data_summarizer
+        global_vars["retriever"]=self.retriever
+
     @classmethod
     def load_from_file(cls, filename: str):
         """从文件加载计划和代码"""
@@ -665,3 +673,4 @@ class AkshareSSEPlanner(SSEPlanner):
             await async_queue.put(report_chunk)
 
         await async_queue.put({"type": "message", "content": "重放完成。"})
+

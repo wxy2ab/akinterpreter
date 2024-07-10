@@ -1,6 +1,10 @@
+import asyncio
 from datetime import datetime
 import os
 import re
+import traceback
+
+from core.scheduler.schedule_manager import SchedulerManager
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 from typing import List, Dict, Tuple, Union,Optional,Any
 import json
@@ -154,75 +158,42 @@ class AkshareFunPlanner(SSEPlanner):
 
     def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
         try:
-            execution_results = self.plan_manager.execution_results
-            yield {"type": "debug", "content": f"执行结果数量: {len(execution_results)}"}
-            
-            if not execution_results:
-                yield {"type": "message", "content": "没有可报告的结果。请检查执行过程是否出现错误。"}
+            # 调用 StepsPlanManager 的 get_final_report 方法
+            report_generator = self.plan_manager.get_final_report()
+            report_data = None
+
+            for item in report_generator:
+                if item['type'] == 'report_data':
+                    report_data = item['content']
+                else:
+                    yield item
+
+            if report_data is None:
+                yield {"type": "error", "content": "无法获取报告所需的数据。"}
                 return
 
-            analysis_results = []
-            for result in execution_results:
-                yield {"type": "debug", "content": f"处理结果: {result}"}
-                if result['type'] == 'data_analysis':
-                    step = result.get('step')
-                    if step is None:
-                        yield {"type": "error", "content": f"结果中缺少步骤信息: {result}"}
-                        continue
-
-                    step_description = "未知任务"
-                    try:
-                        steps = self.plan_manager.current_plan.get('steps', [])
-                        if 0 <= step - 1 < len(steps):
-                            step_description = steps[step - 1].get('description', "未知任务")
-                        else:
-                            yield {"type": "error", "content": f"步骤索引 {step - 1} 超出范围，总步骤数: {len(steps)}"}
-                    except Exception as e:
-                        yield {"type": "error", "content": f"获取步骤 {step} 的描述时发生错误: {str(e)}"}
-
-                    result_content = result.get('result', '结果不可用')
-                    if not isinstance(result_content, str):
-                        error_msg = f"分析结果必须是字符串类型，但得到了 {type(result_content).__name__} 类型"
-                        yield {"type": "error", "content": error_msg}
-                        raise TypeError(error_msg)
-
-                    analysis_results.append({
-                        "task": step_description,
-                        "result": result_content
-                    })
-
-            yield {"type": "debug", "content": f"分析结果数量: {len(analysis_results)}"}
-
-            if not analysis_results:
-                yield {"type": "message", "content": "未找到任何分析结果。请检查数据分析步骤是否正确执行。"}
-                return
-
-            initial_query = self.plan_manager.get_plan_summary()
-            results_summary = "\n\n".join([
-                f"任务: {result['task']}\n结果: {result['result']}"
-                for result in analysis_results
-            ])
-
-            report_prompt = self.prompts.create_report_prompt(initial_query, results_summary)
+            # 使用 LLM 生成最终报告
+            report_prompt = self.prompts.create_report_prompt(
+                report_data['initial_query'], 
+                report_data['results_summary']
+            )
             for chunk in self.llm_client.text_chat(report_prompt, is_stream=True):
                 yield {"type": "report", "content": chunk}
 
+            self._save_task()
             yield {"type": "finished", "content": "报告已生成，任务已完成。"}
 
         except Exception as e:
             yield {"type": "error", "content": f"生成最终报告时发生错误: {str(e)}"}
-            import traceback
             yield {"type": "error", "content": f"错误详情: {traceback.format_exc()}"}
 
     def _save_task(self):
         os.makedirs("output/succeed", exist_ok=True)
         query_summary = self._generate_query_summary()
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
-        filename = f"output/succeed/{query_summary}_{timestamp}.json"
+        filename = f"output/succeed/{query_summary}_{timestamp}.pickle"
         
-        data = self.plan_manager.to_dict()
-        with open(filename, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        self.plan_manager.save_to_file(filename)
         
         self.task_saved_path = filename
 
@@ -233,5 +204,37 @@ class AkshareFunPlanner(SSEPlanner):
         summary = ''.join(c for c in response if c.isalnum() or c in ('-', '_'))
         return summary[:20]
 
-    def _handle_schedule_run(self,query:str):
-        pass
+    def _handle_schedule_run(self, query: str) -> Generator[Dict[str, Any], None, None]:
+        if not self.task_saved_path:
+            yield {"type": "error", "content": "计划尚未执行完毕，无法添加计划任务。"}
+            return
+
+        try:
+            saved_plan = StepsPlanManager.load_from_file(self.task_saved_path)
+        except Exception as e:
+            yield {"type": "error", "content": f"无法加载保存的计划：{str(e)}"}
+            return
+
+        schedule_prompt = self.prompts.schedule_run_prompt(query, datetime.now().isoformat())
+        schedule_response = self.llm_client.one_chat(schedule_prompt)
+
+        try:
+            schedule_params = self.plan_manager._extract_json_from_text(schedule_response)
+            trigger = schedule_params.get('trigger')
+            trigger_args = schedule_params.get('trigger_args', {})
+        except json.JSONDecodeError:
+            yield {"type": "error", "content": "无法解析调度参数。"}
+            return
+
+        if not trigger or not isinstance(trigger_args, dict):
+            yield {"type": "error", "content": "无效的调度参数。"}
+            return
+
+        schedule = SchedulerManager()
+
+        try:
+            job = schedule.add_job(func=saved_plan.replay, trigger=trigger, **trigger_args)
+            yield {"type": "message", "content": f"成功添加计划任务。任务ID: {job.id}"}
+        except Exception as e:
+            yield {"type": "error", "content": f"添加计划任务失败：{str(e)}"}
+

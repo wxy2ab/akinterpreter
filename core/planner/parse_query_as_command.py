@@ -41,11 +41,23 @@ class ParseQueryAsCommand:
 
     def get_help(self) -> List[Tuple[str, str]]:
         help_list = []
+        seen_help_texts = set()
+
+        # 处理正则表达式命令
         for cmd, (_, help_text) in self.commands.items():
-            cmd_str = cmd.pattern if isinstance(cmd, re.Pattern) else cmd
-            help_list.append((cmd_str, help_text))
+            if help_text not in seen_help_texts:
+                cmd_str = cmd.pattern if isinstance(cmd, re.Pattern) else cmd
+                # 只取正则表达式的第一个单词或短语
+                first_word = cmd_str.split('|')[0].strip('^$')
+                help_list.append((first_word, help_text))
+                seen_help_texts.add(help_text)
+
+        # 处理关键词命令
         for keyword, (_, help_text) in self.keyword_commands.items():
-            help_list.append((keyword, help_text))
+            if help_text not in seen_help_texts:
+                help_list.append((keyword, help_text))
+                seen_help_texts.add(help_text)
+
         return sorted(help_list)
 
 def create_command_parser():
@@ -58,7 +70,7 @@ def create_command_parser():
         "确认并执行当前计划"
     )
     parser.add_keyword_command(
-        ["重来", "清除", "再来一次", "重新开始", "重置", "清空", "清空所有", "清空数据", "清空状态", "清空计划", 
+        ["重置", "清除", "再来一次", "重新开始", "重来", "清空", "清空所有", "清空数据", "清空状态", "清空计划", 
          "清空所有数据", "清空所有状态", "清空所有计划", "清空所有数据和状态", "清空所有数据和计划", "reset"],
         lambda ctx: (ctx.reset(), (yield {"type": "message", "content": "已重置所有数据，请重新开始。"})),
         "重置所有数据并重新开始"
@@ -86,12 +98,12 @@ def create_command_parser():
         use_regex=False
     )
     parser.add_command(r"show_step_code=(?P<step>\d+)", 
-        lambda ctx, step: ctx.show_step_code(int(step)),
+        lambda ctx, step: ctx.show_step_code(int(step)-1),
         "显示特定步骤的代码",
         use_regex=True
     )
     parser.add_command(r"modify_step_code=(?P<step>\d+)\s*(?P<query>.*)", 
-        lambda ctx, step, query: ctx.modify_step_code(int(step), query),
+        lambda ctx, step, query: ctx.modify_step_code(int(step)-1, query),
         "修改特定步骤的代码",
         use_regex=True
     )

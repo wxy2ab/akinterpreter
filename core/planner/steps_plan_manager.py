@@ -1,7 +1,12 @@
+import asyncio
 import json
+import os
 import re
+import pickle
+import traceback
 from typing import Dict, Any, List, Generator, Optional, Union
 from core.interpreter.sse_code_runner import SSECodeRunner
+from core.scheduler.replay_message_queue import ReplayMessageQueue
 from ..interpreter.data_summarizer import DataSummarizer
 from .akshare_prompts import AksharePrompts
 from ..llms.llm_factory import LLMFactory
@@ -78,6 +83,9 @@ class StepsPlanManager:
         
         try:
             self.current_plan = self._extract_json_from_text(plan_text)
+            if not self.validate_plan(self.current_plan):
+                yield {"type": "error", "content": "修改后的计划格式不正确。请重试。"}
+                raise SyntaxError("Invalid plan format")
             yield {"type": "plan", "content": self.current_plan}
             yield {"type": "message", "content": "计划修改完毕。请检查修改后的计划并输入'确认计划'来开始执行，或继续修改计划。"}
         except json.JSONDecodeError:
@@ -132,25 +140,6 @@ class StepsPlanManager:
             return json.loads(json_str)
         raise json.JSONDecodeError("No valid JSON found in the text", text, 0)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "current_plan": self.current_plan,
-            "step_vars": self.step_vars,
-            "step_codes": self.step_codes,
-            "total_steps": self.total_steps,
-            "execution_results": self.execution_results
-        }
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any], llm_client) -> 'StepsPlanManager':
-        plan = cls(llm_client)
-        plan.current_plan = data.get("current_plan", {})
-        plan.step_vars = data.get("step_vars", {})
-        plan.step_codes = data.get("step_codes", {})
-        plan.total_steps = data.get("total_steps", 0)
-        plan.execution_results = data.get("execution_results", [])
-        return plan
-    
     def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
         current_code = self.get_step_code(step)
         if not current_code:
@@ -306,8 +295,7 @@ class StepsPlanManager:
         yield {"type": "message", "content": "开始执行数据检索..."}
 
         global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.llm_factory.get_instance()
-        global_vars['llm_factory'] = self.llm_factory
+        self.set_global_vars(global_vars)
 
         try:
             updated_vars = None
@@ -347,8 +335,7 @@ class StepsPlanManager:
         yield {"type": "message", "content": "开始执行数据分析..."}
 
         global_vars = self.step_vars.copy()
-        global_vars['llm_client'] = self.llm_factory.get_instance()
-        global_vars['llm_factory'] = self.llm_factory
+        self.set_global_vars(global_vars)
 
         try:
             events = list(self.code_runner.run_sse(code, global_vars))
@@ -396,22 +383,219 @@ class StepsPlanManager:
         self.step_codes = {}
         self.current_step_number = 0
         self.execution_results = []
+        self.llm_client.clear_chat()
 
-    def to_dict(self) -> Dict[str, Any]:
-        return {
+    def set_global_vars(self, global_vars: Dict[str, Any]):
+        global_vars['llm_client'] = self.llm_factory.get_instance()
+        global_vars['llm_factory'] = self.llm_factory
+        global_vars["data_summarizer"]=self.data_summarizer
+        global_vars["retriever"]=self.retriever
+
+    def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
+        try:
+            yield {"type": "debug", "content": f"执行结果数量: {len(self.execution_results)}"}
+            
+            if not self.execution_results:
+                yield {"type": "message", "content": "没有可报告的结果。请检查执行过程是否出现错误。"}
+                return
+
+            analysis_results = []
+            for result in self.execution_results:
+                yield {"type": "debug", "content": f"处理结果: {result}"}
+                if result['type'] == 'data_analysis':
+                    step = result.get('step')
+                    if step is None:
+                        yield {"type": "error", "content": f"结果中缺少步骤信息: {result}"}
+                        continue
+
+                    step_description = "未知任务"
+                    try:
+                        steps = self.current_plan.get('steps', [])
+                        if 0 <= step - 1 < len(steps):
+                            step_description = steps[step - 1].get('description', "未知任务")
+                        else:
+                            yield {"type": "error", "content": f"步骤索引 {step - 1} 超出范围，总步骤数: {len(steps)}"}
+                    except Exception as e:
+                        yield {"type": "error", "content": f"获取步骤 {step} 的描述时发生错误: {str(e)}"}
+
+                    result_content = result.get('result', '结果不可用')
+                    if not isinstance(result_content, str):
+                        error_msg = f"分析结果必须是字符串类型，但得到了 {type(result_content).__name__} 类型"
+                        yield {"type": "error", "content": error_msg}
+                        result_content = str(result_content)  # 尝试转换为字符串
+
+                    analysis_results.append({
+                        "task": step_description,
+                        "result": result_content
+                    })
+
+            yield {"type": "debug", "content": f"分析结果数量: {len(analysis_results)}"}
+
+            if not analysis_results:
+                yield {"type": "message", "content": "未找到任何分析结果。请检查数据分析步骤是否正确执行。"}
+                return
+
+            initial_query = self.get_plan_summary()
+            results_summary = "\n\n".join([
+                f"任务: {result['task']}\n结果: {result['result']}"
+                for result in analysis_results
+            ])
+
+            yield {"type": "debug", "content": f"初始查询: {initial_query}"}
+            yield {"type": "debug", "content": f"结果摘要: {results_summary[:200]}..."}  # 只显示前200个字符
+
+            yield {
+                "type": "report_data", 
+                "content": {
+                    "initial_query": initial_query,
+                    "results_summary": results_summary
+                }
+            }
+
+        except Exception as e:
+            yield {"type": "error", "content": f"生成最终报告时发生错误: {str(e)}"}
+            yield {"type": "error", "content": f"错误详情: {traceback.format_exc()}"}
+
+    def save_to_file(self, filename: str) -> None:
+        """
+        将当前计划状态保存到文件中，使用 pickle 序列化。
+        
+        :param filename: 要保存到的文件路径
+        """
+        data = {
             "current_plan": self.current_plan,
             "step_vars": self.step_vars,
             "step_codes": self.step_codes,
             "current_step_number": self.current_step_number,
-            "execution_results": self.execution_results
+            "execution_results": self.execution_results,
+            "is_plan_confirmed": self.is_plan_confirmed
         }
+        
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'StepsPlanManager':
-        manager = cls()
-        manager.current_plan = data.get("current_plan", {})
-        manager.step_vars = data.get("step_vars", {})
-        manager.step_codes = data.get("step_codes", {})
-        manager.current_step_number = data.get("current_step_number", 0)
-        manager.execution_results = data.get("execution_results", [])
-        return manager
+    def load_from_file(cls, filename: str) -> 'StepsPlanManager':
+        """
+        从文件中加载计划状态，使用 pickle 反序列化。
+        
+        :param filename: 要加载的文件路径
+        :return: 加载了状态的 StepsPlanManager 实例
+        """
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"文件 {filename} 不存在")
+
+        with open(filename, 'rb') as f:
+            data = pickle.load(f)
+
+        instance = cls()
+        instance.current_plan = data.get("current_plan", {})
+        instance.step_vars = data.get("step_vars", {})
+        instance.step_codes = data.get("step_codes", {})
+        instance.current_step_number = data.get("current_step_number", 0)
+        instance.execution_results = data.get("execution_results", [])
+        instance.is_plan_confirmed = data.get("is_plan_confirmed", False)
+
+        return instance
+
+    async def replay(self) -> None:
+        """
+        异步重放所有执行步骤，实际执行代码，将消息发送到 ReplayMessageQueue。
+        """
+        async_queue = ReplayMessageQueue()
+
+        # 重置执行状态
+        self.current_step_number = 0
+        self.execution_results = []
+        self.step_vars = {}  # 清空 step_vars
+
+        await async_queue.put({"type": "replay_start", "content": "开始重放，所有变量已重置"})
+
+        # 重放计划创建
+        await async_queue.put({"type": "plan", "content": self.current_plan})
+
+        # 重放每个步骤
+        for step in self.current_plan.get('steps', []):
+            await async_queue.put({"type": "step_start", "content": f"开始执行步骤 {step['step_number']}: {step['description']}"})
+
+            await self._replay_step(step, async_queue)
+
+            await async_queue.put({"type": "step_end", "content": f"步骤 {step['step_number']} 执行完成"})
+
+        # 重放最终报告生成
+        await self._replay_final_report(async_queue)
+
+        await async_queue.put({"type": "replay_complete", "content": "重放完成"})
+
+    async def _replay_step(self, step: Dict[str, Any], queue: ReplayMessageQueue) -> None:
+        code = self.step_codes.get(step['step_number'])
+        if not code:
+            await queue.put({"type": "error", "content": f"步骤 {step['step_number']} 没有对应的代码"})
+            return
+
+        await queue.put({"type": "code", "content": code})
+        
+        # 实际执行代码
+        global_vars = self.step_vars.copy()
+        global_vars['llm_client'] = self.llm_factory.get_instance()
+        global_vars['llm_factory'] = self.llm_factory
+
+        for event in self.code_runner.run_sse(code, global_vars):
+            if event['type'] == 'output':
+                await queue.put({"type": "code_output", "content": event['content']})
+            elif event['type'] == 'error':
+                await queue.put({"type": "error", "content": f"执行代码时发生错误: {event['content']}"})
+            elif event['type'] == 'variables':
+                updated_vars = event['content']
+                await self._handle_step_result(step, updated_vars, queue)
+
+    async def _handle_step_result(self, step: Dict[str, Any], updated_vars: Dict[str, Any], queue: ReplayMessageQueue) -> None:
+        # 处理需要保存的数据
+        if 'save_data_to' in step:
+            for var_name in step['save_data_to']:
+                if var_name in updated_vars:
+                    data = updated_vars[var_name]
+                    self.set_step_vars(var_name, data)
+                    summary = self.data_summarizer.get_data_summary(data)
+                    await queue.put({"type": "data_summary", "content": f"{var_name}: {summary}"})
+                else:
+                    await queue.put({"type": "error", "content": f"未找到预期的变量 {var_name}"})
+
+        # 处理分析结果
+        if 'analysis_result' in updated_vars:
+            result = updated_vars['analysis_result']
+            self.add_execution_result(step['step_number'], step['type'], result)
+            await queue.put({"type": "analysis_result", "content": result})
+
+    async def _replay_final_report(self, queue: ReplayMessageQueue) -> None:
+        report_generator = self.get_final_report()
+        report_data = None
+        llm_client = LLMFactory().get_instance()
+        prompts = AksharePrompts()
+
+        for item in report_generator:
+            if item['type'] == 'report_data':
+                report_data = item['content']
+            else:
+                await queue.put(item)
+
+        if report_data is None:
+            await queue.put({"type": "error", "content": "无法获取报告所需的数据。"})
+            return
+
+        # 使用 LLM 生成最终报告
+        report_prompt = prompts.create_report_prompt(
+            report_data['initial_query'], 
+            report_data['results_summary']
+        )
+
+        await queue.put({"type": "message", "content": "正在生成最终报告..."})
+
+        # 使用 run_in_executor 来在后台线程中运行同步的 text_chat 方法
+        loop = asyncio.get_running_loop()
+        for chunk in await loop.run_in_executor(None, lambda: llm_client.text_chat(report_prompt, is_stream=True)):
+            await queue.put({"type": "report", "content": chunk})
+
+        await queue.put({"type": "finished", "content": "报告已生成，任务已完成。"})
+
+
