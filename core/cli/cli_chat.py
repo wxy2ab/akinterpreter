@@ -22,39 +22,60 @@ def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool 
 
 
 async def chat_cli():
+    from ..scheduler.replay_message_queue import ReplayMessageQueue
     factory = TalkerFactory()
     talker = factory.get_instance("CliTalker")
+    message_queue = ReplayMessageQueue()
 
     print_colored("欢迎使用聊天程序！输入 'quit' 或 'exit' 结束对话。", 'cyan')
 
     while True:
-        try:
-            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "\n您: ")
-            if user_input.lower() in ['quit', 'exit']:
-                print_colored("谢谢使用，再见！", 'yellow')
+        user_input = await asyncio.get_event_loop().run_in_executor(None, input, "\n您: ")
+        if user_input.lower() in ['quit', 'exit']:
+            print_colored("谢谢使用，再见！", 'yellow')
+            break
+
+        if user_input.strip() == "":
+            continue
+
+        print_colored("AI: ", 'green', end='')
+        sys.stdout.flush()
+
+        # 启动 talker 和 planner 任务
+        talker_task = asyncio.create_task(process_talker_response(talker, user_input))
+        planner_task = asyncio.create_task(process_planner_response(message_queue))
+
+        while True:
+            # 使用 wait 和超时机制
+            done, pending = await asyncio.wait(
+                [talker_task, planner_task], 
+                timeout=0.1,  # 100ms 超时
+                return_when=asyncio.FIRST_COMPLETED
+            )
+
+            if talker_task in done:
+                # Talker 完成了响应
                 break
 
-            if user_input.strip() == "":
-                continue
+            if planner_task in done:
+                # Planner 完成了一次响应，重新启动它
+                planner_task = asyncio.create_task(process_planner_response(message_queue))
 
-            print_colored("AI: ", 'green', end='')
-            sys.stdout.flush()
+            # 处理 planner 的输出
+            while not message_queue.empty():
+                message = await message_queue.get()
+                handle_dict_response(message)
 
-            global current_response_type
-            current_response_type = None  # 重置响应类型
+        # 确保所有任务都完成
+        for task in [talker_task, planner_task]:
+            if not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
-            talker_task = asyncio.create_task(process_talker_response(talker, user_input))
-            planner_task = asyncio.create_task(process_planner_response())
-
-            await asyncio.gather(talker_task, planner_task)
-
-            print()  # 换行
-
-        except KeyboardInterrupt:
-            print_colored("\n程序被中断。再见！", 'yellow')
-            break
-        except Exception as e:
-            print_colored(f"发生错误: {str(e)}", 'red')
+        
 
 async def process_talker_response(talker, user_input):
     for chunk in talker.chat(user_input):
@@ -65,12 +86,9 @@ async def process_talker_response(talker, user_input):
         else:
             print(str(chunk), end='', flush=True)
 
-async def process_planner_response():
-    async for chunk in async_generator:
-        if isinstance(chunk, dict):
-            handle_dict_response(chunk)
-        else:
-            print(str(chunk), end='', flush=True)
+async def process_planner_response(message_queue):
+    message = await message_queue.get()
+    return message
 
 def handle_dict_response(response: Dict[str, Any]):
     global current_response_type

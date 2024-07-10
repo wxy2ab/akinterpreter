@@ -1,14 +1,14 @@
 from typing import Generator, Union, Dict, Any
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
-from ..planner.akshare_sse_planner import AkshareSSEPlanner
+from ..planner.akshare_fun_planner import AkshareFunPlanner
 from ._talker import Talker
 
 class CliTalker(Talker):
     def __init__(self):
         factory = LLMFactory()
         self.llm_client: LLMApiClient = factory.get_instance()
-        self.akshare_planner = AkshareSSEPlanner()
+        self.akshare_planner = AkshareFunPlanner()
         self.use_akshare = False
 
     def chat(self, message: str) -> Generator[Union[str, Dict[str, Any]], None, None]:

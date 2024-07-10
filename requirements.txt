@@ -17,3 +17,4 @@ seaborn
 scikit-learn
 mplfinance
 apscheduler
+wordcloud

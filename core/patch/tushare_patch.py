@@ -42,6 +42,9 @@ channels	str	N	分类
 
 接口调用:
 import tushare as ts
+from core.utils.config_setting import Config
+config = Config()
+ts.set_token(config.get("tushare_key"))  #生成代码的时候这句话一个字都不要改
 pro = ts.pro_api()
 
 df = pro.news(src='sina', start_date='2018-11-21 09:00:00', end_date='2018-11-22 10:10:00')

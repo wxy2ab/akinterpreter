@@ -34,28 +34,12 @@ class RetrievalProvider(ABC):
         pass
 
 class SSEPlanner(ABC):
-    def __init__(self, llm_factory: LLMFactory):
-        self.llm_factory = llm_factory
-        self.llm_client: LLMApiClient = self.llm_factory.get_instance()
-        self.current_plan: Optional[Dict[str, Any]] = None
-        self.execution_results: List[Dict[str, Any]] = []
-
-    @abstractmethod
-    def get_retrieval_provider(self) -> RetrievalProvider:
-        """返回一个RetrievalProvider实例，提供数据检索相关的信息"""
-        pass
-
     @abstractmethod
     def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
         """
         与用户进行多轮对话，生成并修改计划
         yield 格式: {"type": "plan", "content": plan_dict} 或 {"type": "message", "content": message_str}
         """
-        pass
-
-    @abstractmethod
-    def confirm_plan(self) -> None:
-        """确认当前计划，准备执行"""
         pass
 
     @abstractmethod
@@ -70,42 +54,6 @@ class SSEPlanner(ABC):
         pass
 
     @abstractmethod
-    def execute_code(self, code: str) -> Dict[str, Any]:
-        """执行给定的代码并返回结果"""
-        pass
-
-    @abstractmethod
-    def stream_progress(self) -> Generator[Dict[str, Any], None, None]:
-        """
-        流式输出整个过程的进度信息
-        yield 格式: {"step": int, "total_steps": int, "description": str, "progress": float}
-        """
-        pass
-
-    @abstractmethod
     def get_final_report(self) -> Generator[str, None, None]:
         """生成并流式输出最终报告"""
-        pass
-
-    @abstractmethod
-    def handle_error(self, error: Exception) -> Generator[Dict[str, Any], None, None]:
-        """
-        处理执行过程中的错误
-        yield 格式: {"type": "error", "content": error_message}
-        """
-        pass
-
-    @abstractmethod
-    def reset(self) -> None:
-        """重置计划器状态"""
-        pass
-
-    @abstractmethod
-    def save_state(self) -> Dict[str, Any]:
-        """保存当前状态"""
-        pass
-
-    @abstractmethod
-    def load_state(self, state: Dict[str, Any]) -> None:
-        """加载保存的状态"""
         pass

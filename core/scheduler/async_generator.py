@@ -7,7 +7,7 @@ class AsyncSingletonReplayGenerator(metaclass=Singleton):
     def __init__(self):
         self.queue = Queue()
 
-    async def __aiter__(self)->AsyncGenerator[Union[Dict[str,Any],str],None,None]:
+    async def __aiter__(self)->AsyncGenerator[Union[Dict[str,Any],str],None]:
         while True:
             item = await self.queue.get()
             if item is None:  # 使用 None 作为结束信号
