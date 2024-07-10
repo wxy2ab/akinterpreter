@@ -1,7 +1,12 @@
 import sys
+import asyncio
 from typing import Union, Dict, Any
 from ..talk.talker_factory import TalkerFactory
+from ..scheduler.async_generator import AsyncSingletonReplayGenerator
+
+async_generator = AsyncSingletonReplayGenerator()
 current_response_type = None
+
 def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool = True):
     colors = {
         'red': '\033[91m',
@@ -15,15 +20,16 @@ def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool 
     end_color = '\033[0m'
     print(f"{colors.get(color, '')}{text}{end_color}", end=end, flush=flush)
 
-def chat_cli():
+
+async def chat_cli():
     factory = TalkerFactory()
-    talker = factory.get_instance("CliTalker")  # 获取默认的 Talker 实例
+    talker = factory.get_instance("CliTalker")
 
     print_colored("欢迎使用聊天程序！输入 'quit' 或 'exit' 结束对话。", 'cyan')
 
     while True:
         try:
-            user_input = input("\n您: ")
+            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "\n您: ")
             if user_input.lower() in ['quit', 'exit']:
                 print_colored("谢谢使用，再见！", 'yellow')
                 break
@@ -37,13 +43,11 @@ def chat_cli():
             global current_response_type
             current_response_type = None  # 重置响应类型
 
-            for chunk in talker.chat(user_input):
-                if isinstance(chunk, str):
-                    print(chunk, end='', flush=True)
-                elif isinstance(chunk, dict):
-                    handle_dict_response(chunk)
-                else:
-                    print(str(chunk), end='', flush=True)
+            talker_task = asyncio.create_task(process_talker_response(talker, user_input))
+            planner_task = asyncio.create_task(process_planner_response())
+
+            await asyncio.gather(talker_task, planner_task)
+
             print()  # 换行
 
         except KeyboardInterrupt:
@@ -51,6 +55,22 @@ def chat_cli():
             break
         except Exception as e:
             print_colored(f"发生错误: {str(e)}", 'red')
+
+async def process_talker_response(talker, user_input):
+    for chunk in talker.chat(user_input):
+        if isinstance(chunk, str):
+            print(chunk, end='', flush=True)
+        elif isinstance(chunk, dict):
+            handle_dict_response(chunk)
+        else:
+            print(str(chunk), end='', flush=True)
+
+async def process_planner_response():
+    async for chunk in async_generator:
+        if isinstance(chunk, dict):
+            handle_dict_response(chunk)
+        else:
+            print(str(chunk), end='', flush=True)
 
 def handle_dict_response(response: Dict[str, Any]):
     global current_response_type

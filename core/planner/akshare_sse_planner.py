@@ -297,6 +297,8 @@ class AkshareSSEPlanner(SSEPlanner):
         self.max_retry = max_retry
         self.allow_yfinance = allow_yfinance
         self.step_codes = {}
+        self.task_finished:bool= False
+        self.task_saved_path:str = ""
 
     def get_new_llm_client(self) -> LLMApiClient:
         return self.llm_factory.get_instance()
@@ -307,6 +309,15 @@ class AkshareSSEPlanner(SSEPlanner):
     def _parse_special_commands(self, query: str) -> Generator[Dict[str, Any], bool, None]:
         confirm_keywords = ["确认计划", "确认", "开始", "开始执行", "运行", "执行", "没问题", "没问题了", "执行计划"]
         reset_keywords = ["重来", "清除", "再来一次"]
+
+        if query.lower().startswith("schedule_run "):
+            if not self.task_saved_path:
+                yield {"type": "error", "content": "没有可运行的已保存任务。请先保存任务。"}
+                return True
+
+            schedule_query = query[len("schedule_run "):]
+            yield from self._handle_schedule_run(schedule_query)
+            return True
 
         if query.lower().startswith("set_max_retry="):
             try:
@@ -344,7 +355,115 @@ class AkshareSSEPlanner(SSEPlanner):
                 yield from self.handle_confirm_plan()
             return True
 
+        if query.lower().startswith("show_step_code="):
+            try:
+                step = int(query.split("=")[1])
+                yield from self.show_step_code(step)
+            except ValueError:
+                yield {"type": "error", "content": "无效的步骤编号。请输入一个整数。"}
+            return True
+
+        if query.lower().startswith("modify_step_code="):
+            try:
+                parts = query.split("=", 1)[1].split(" ", 1)
+                step = int(parts[0])
+                modification_query = parts[1] if len(parts) > 1 else ""
+                yield from self.modify_step_code(step, modification_query)
+            except ValueError:
+                yield {"type": "error", "content": "无效的步骤编号。请输入一个整数。"}
+            except IndexError:
+                yield {"type": "error", "content": "无效的命令格式。请使用 'modify_step_code=[step] [query]'。"}
+            return True
+
         return False
+    def _handle_schedule_run(self, schedule_query: str) -> Generator[Dict[str, Any], None, None]:
+        import pytz
+        from ..scheduler.schedule_manager import SchedulerManager
+        import asyncio
+        
+        current_time = datetime.now(pytz.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
+        prompt = f"""
+        基于以下调度请求和当前时间，请提供适当的调度参数：
+
+        调度请求: {schedule_query}
+        当前时间: {current_time}
+
+        请提供以下格式的 JSON 响应：
+        {{
+            "trigger": "date" 或 "interval" 或 "cron",
+            "trigger_args": {{
+                // 相应的触发器参数
+            }}
+        }}
+
+        对于 "date" 触发器，请使用 "run_date" 参数。
+        对于 "interval" 触发器，可以使用 "weeks", "days", "hours", "minutes", "seconds" 等参数。
+        对于 "cron" 触发器，可以使用 "year", "month", "day", "week", "day_of_week", "hour", "minute", "second" 等参数。
+
+        如果无法解析请求，请返回 {{"error": "无法解析调度请求"}}。
+        """
+
+        llm_client = self.get_new_llm_client()
+        response = llm_client.one_chat(prompt)
+
+        try:
+            parsed_response = json.loads(response)
+            if "error" in parsed_response:
+                yield {"type": "error", "content": parsed_response["error"]}
+                return
+
+            trigger = parsed_response["trigger"]
+            trigger_args = parsed_response["trigger_args"]
+
+            manager = SchedulerManager()
+
+            def run_task():
+                planner = AkshareSSEPlanner.load_from_file(self.task_saved_path)
+                asyncio.run(planner.replay())
+
+            job = manager.add_job(func=run_task, trigger=trigger, **trigger_args)
+
+            if job:
+                yield {"type": "message", "content": f"任务已成功调度。触发器类型: {trigger}, 参数: {trigger_args}"}
+            else:
+                yield {"type": "error", "content": "任务调度失败。"}
+
+        except json.JSONDecodeError:
+            yield {"type": "error", "content": "LLM 响应解析失败。无法调度任务。"}
+        except Exception as e:
+            yield {"type": "error", "content": f"调度任务时发生错误: {str(e)}"}
+    def show_step_code(self, step: int) -> Generator[Dict[str, Any], None, None]:
+        if str(step - 1) not in self.step_codes:
+            yield {"type": "error", "content": f"步骤 {step} 的代码不存在。"}
+        else:
+            code = self.step_codes[str(step - 1)]
+            yield {"type": "code", "content": f"步骤 {step} 的代码：\n{code}"}
+
+    def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
+        if str(step - 1) not in self.step_codes:
+            yield {"type": "error", "content": f"步骤 {step} 的代码不存在。"}
+            return
+
+        current_code = self.step_codes[str(step - 1)]
+        prompt = f"""
+        当前代码：
+        {current_code}
+
+        修改请求：
+        {query}
+
+        请根据修改请求提供更新后的完整代码。只返回修改后的代码，不需要任何解释。
+        """
+
+        llm_client = self.get_new_llm_client()
+        modified_code = ""
+        for chunk in llm_client.text_chat(prompt, is_stream=True):
+            modified_code += chunk
+            yield {"type": "code_modification_progress", "content": chunk}
+
+        self.step_codes[str(step - 1)] = modified_code.strip()
+        yield {"type": "message", "content": f"步骤 {step} 的代码已更新。"}
+        yield {"type": "code", "content": f"更新后的代码：\n{modified_code.strip()}"}
 
     def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
         # 首先尝试解析特殊命令
@@ -676,10 +795,12 @@ class AkshareSSEPlanner(SSEPlanner):
         yield fixed_code
 
     def reset(self) -> None:
+        self.task_finished=False
         self.current_step = 0
         self.total_steps = 0
         self.is_plan_confirmed = False
         self.current_plan = None
+        self.task_saved_path = ""
         self.execution_results = []
         self.step_codes = {}
         self.step_vars: Dict[str, Any] = {
@@ -711,8 +832,8 @@ class AkshareSSEPlanner(SSEPlanner):
             yield {"type": "report", "content": chunk}
         
         self._save_code_after_report()
-        self.reset()
-        yield {"type": "finished", "content": "报告已生成，计划已重置。可以重新开始新的任务啦！"}
+        self.task_finished = True
+        #yield {"type": "finished", "content": "报告已生成，计划已重置。可以重新开始新的任务啦！"}
 
     def _create_report_prompt(self, analysis_results: List[Dict[str, str]]) -> str:
         initial_query = self.current_plan.get('query_summary', '未提供初始查询')
@@ -735,6 +856,8 @@ class AkshareSSEPlanner(SSEPlanner):
 
         # 保存代码
         self.save_to_file(filename)
+
+        self.task_saved_path = filename
         
         return {"type": "message", "content": f"代码已保存到 {filename}"}
 
@@ -769,34 +892,48 @@ class AkshareSSEPlanner(SSEPlanner):
         planner.step_codes = data['step_codes']
         return planner
 
-    def replay(self) -> Generator[Dict[str, Any], None, None]:
-        """重放已保存的计划和代码"""
-        if not self.current_plan or not self.step_codes:
-            yield {"type": "error", "content": "没有可重放的计划或代码。"}
-            return
+async def replay(self):
+    from ..scheduler.async_generator import AsyncSingletonReplayGenerator
+    async_generator = AsyncSingletonReplayGenerator()
+    if not self.current_plan or not self.step_codes:
+        await async_generator.put({"type": "error", "content": "没有可重放的计划或代码。"})
+        return
 
-        self.reset()
-        self.is_plan_confirmed = True
+    self.reset()
+    self.is_plan_confirmed = True
 
-        for step in self.current_plan['steps']:
-            self.current_step = step['step_number'] - 1  # step_number 是从1开始的
-            yield {"type": "message", "content": f"执行步骤 {step['step_number']}: {step['description']}"}
+    for step in self.current_plan['steps']:
+        self.current_step = step['step_number'] - 1
+        await async_generator.put({"type": "message", "content": f"执行步骤 {step['step_number']}: {step['description']}"})
 
-            if str(self.current_step) in self.step_codes:
-                code = self.step_codes[str(self.current_step)]
-                try:
-                    result = self.execute_code(code)
-                    if step['type'] == 'data_retrieval':
-                        self.step_vars[step['save_data_to']] = result['variables'][step['save_data_to']]
-                        yield {"type": "code_execution", "content": f"数据已保存到 {step['save_data_to']}"}
-                    elif step['type'] == 'data_analysis':
-                        self.step_vars[f"analysis_result_{self.current_step}"] = result['variables']['analysis_result']
-                        yield {"type": "code_execution", "content": "分析结果已生成"}
+        if str(self.current_step) in self.step_codes:
+            code = self.step_codes[str(self.current_step)]
+            try:
+                result = self.execute_code(code)
+                if step['type'] == 'data_retrieval':
+                    data = result['variables'][step['save_data_to']]
+                    self.step_vars[step['save_data_to']] = data
+                    await async_generator.put({"type": "code_execution", "content": f"数据已保存到 {step['save_data_to']}"})
                     
-                    self.execution_results.append({"step": self.current_step, "result": result})
-                except Exception as e:
-                    yield {"type": "error", "content": f"重放步骤 {step['step_number']} 时出错: {str(e)}"}
-            else:
-                yield {"type": "error", "content": f"步骤 {step['step_number']} 没有对应的代码。"}
+                    # 生成数据摘要
+                    summary = self.data_summarizer.get_data_summary(data)
+                    self.step_vars[f"{step['save_data_to']}_summary"] = summary
+                    await async_generator.put({"type": "summary", "content": f"数据摘要: {summary}"})
 
-        yield {"type": "message", "content": "重放完成。"}
+                elif step['type'] == 'data_analysis':
+                    self.step_vars[f"analysis_result_{self.current_step}"] = result['variables']['analysis_result']
+                    await async_generator.put({"type": "code_execution", "content": "分析结果已生成"})
+                
+                self.execution_results.append({"step": self.current_step, "type": step['type'], "result": result})
+            except Exception as e:
+                await async_generator.put({"type": "error", "content": f"重放步骤 {step['step_number']} 时出错: {str(e)}"})
+        else:
+            await async_generator.put({"type": "error", "content": f"步骤 {step['step_number']} 没有对应的代码。"})
+
+    await async_generator.put({"type": "message", "content": "所有步骤执行完成。正在生成最终报告..."})
+
+    # 生成最终报告
+    async for report_chunk in self.get_final_report():
+        await async_generator.put(report_chunk)
+
+    await async_generator.put({"type": "message", "content": "重放完成。"})
