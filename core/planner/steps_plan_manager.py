@@ -67,7 +67,7 @@ class StepsPlanManager:
                 plan = json.loads(plan_text)
                 if self.validate_plan(plan):
                     self.current_plan = plan
-                    yield {"type": "plan", "content": plan}
+                    #yield {"type": "plan", "content": plan}
                     return
                 else:
                     yield {"type": "error", "content": f"生成的计划格式不正确，正在重试（尝试 {attempt + 1}/{max_attempts}）"}
@@ -88,8 +88,8 @@ class StepsPlanManager:
             if not self.validate_plan(self.current_plan):
                 yield {"type": "error", "content": "修改后的计划格式不正确。请重试。"}
                 raise SyntaxError("Invalid plan format")
-            yield {"type": "plan", "content": self.current_plan}
-            yield {"type": "message", "content": "计划修改完毕。请检查修改后的计划并输入'确认计划'来开始执行，或继续修改计划。"}
+            #yield {"type": "plan", "content": self.current_plan}
+            #yield {"type": "message", "content": "计划修改完毕。请检查修改后的计划并输入'确认计划'来开始执行，或继续修改计划。"}
         except json.JSONDecodeError:
             yield {"type": "error", "content": "无法修改计划。请重试。"}
 

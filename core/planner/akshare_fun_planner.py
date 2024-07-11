@@ -84,7 +84,7 @@ class AkshareFunPlanner(SSEPlanner):
 
         # 计划创建或修改完成后，提示用户确认
         if self.plan_manager.current_plan:
-            yield {"type": "plan", "content": self.plan_manager.current_plan}
+            #yield {"type": "plan", "content": self.plan_manager.current_plan}
             yield {"type": "message", "content": "计划生成完毕。请检查计划并输入'确认计划'来开始执行，或继续修改计划。"}
 
         # 如果计划已确认，开始执行

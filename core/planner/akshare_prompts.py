@@ -63,6 +63,7 @@ class AksharePrompts:
         6. 目前步骤的类型只支持 "data_retrieval" 和 "data_analysis"。其他类型均会不允许。
 
         请提供修改后的完整JSON格式计划，确保其可以被直接解析为Python字典。
+        如果json内容和plain text混合输出，确保json内容用```json和```包裹。
         """
     
     @staticmethod
