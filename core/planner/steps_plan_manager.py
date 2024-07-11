@@ -123,6 +123,8 @@ class StepsPlanManager:
         return {}
 
     def is_plan_complete(self) -> bool:
+        if self.current_plan=={}:
+            return False
         return len(self.execution_results) >= self.total_steps
 
     def get_plan_summary(self) -> str:
@@ -388,6 +390,7 @@ class StepsPlanManager:
         self.step_codes = {}
         self.current_step_number = 0
         self.execution_results = []
+        self.is_plan_confirmed = False
         self.llm_client.clear_chat()
 
     def set_global_vars(self, global_vars: Dict[str, Any]):

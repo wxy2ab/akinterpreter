@@ -9,46 +9,60 @@ interface MessageProps {
 }
 
 const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
-  const renderCodeBlock = (code: string, language: string) => {
-    return (
-      <div className="max-h-96 overflow-y-auto my-2">
-        <SyntaxHighlighter language={language} style={docco}>
-          {code}
-        </SyntaxHighlighter>
-      </div>
-    );
-  };
-
-  const renderJsonContent = (jsonString: string) => {
-    try {
-      const jsonContent = JSON.parse(jsonString);
-      return renderCodeBlock(JSON.stringify(jsonContent, null, 2), 'json');
-    } catch (e) {
-      console.error("Error parsing JSON:", e);
-      return <p className="break-words whitespace-pre-wrap">{jsonString}</p>;
-    }
-  };
-
   const renderContent = () => {
-    if (typeof content === 'string') {
-      // 使用正则表达式匹配 ```json ... ``` 和 ```python ... ``` 块
-      const parts = content.split(/(```(json|python)\s*[\s\S]*?```)/);
-      return parts.map((part, index) => {
-        if (part.startsWith('```json')) {
-          const jsonContent = part.replace(/```json\s*/, '').replace(/\s*```$/, '');
-          return <React.Fragment key={index}>{renderJsonContent(jsonContent)}</React.Fragment>;
-        } else if (part.startsWith('```python')) {
-          const pythonCode = part.replace(/```python\s*/, '').replace(/\s*```$/, '');
-          return <React.Fragment key={index}>{renderCodeBlock(pythonCode, 'python')}</React.Fragment>;
-        } else {
-          return <p key={index} className="break-words whitespace-pre-wrap">{part}</p>;
-        }
-      });
-    } else if (typeof content === 'object') {
-      return renderJsonContent(JSON.stringify(content));
-    } else {
-      return <p className="break-words whitespace-pre-wrap">{String(content)}</p>;
+    if (typeof content === 'object') {
+      return (
+        <SyntaxHighlighter language="json" style={docco}>
+          {JSON.stringify(content, null, 2)}
+        </SyntaxHighlighter>
+      );
     }
+
+    if (typeof content === 'string') {
+      const cleanContent = content.replace(/^```(json|python)?\s*|\s*```$/g, '');
+      
+      // 尝试解析 JSON
+      try {
+        const jsonContent = JSON.parse(cleanContent);
+        return (
+          <SyntaxHighlighter language="json" style={docco}>
+            {JSON.stringify(jsonContent, null, 2)}
+          </SyntaxHighlighter>
+        );
+      } catch (e) {
+        // 如果不是 JSON，继续处理
+      }
+
+      // 检查是否是 Python 代码
+      if (cleanContent.includes('def ') || cleanContent.includes('import ') || cleanContent.includes('print(')) {
+        return (
+          <SyntaxHighlighter language="python" style={docco}>
+            {cleanContent}
+          </SyntaxHighlighter>
+        );
+      }
+
+      // 处理图片和链接
+      const parts = cleanContent.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
+      return parts.map((part, index) => {
+        if (part.startsWith('![')) {
+          // 图片
+          const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
+          if (match) {
+            return <img key={index} src={match[2]} alt={match[1]} className="max-w-full h-auto my-2" />;
+          }
+        } else if (part.startsWith('[')) {
+          // 链接
+          const match = part.match(/\[(.*?)\]\((.*?)\)/);
+          if (match) {
+            return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
+          }
+        }
+        return <span key={index}>{part}</span>;
+      });
+    }
+
+    return <p className="break-words whitespace-pre-wrap">{String(content)}</p>;
   };
 
   return (
