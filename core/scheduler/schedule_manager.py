@@ -1,5 +1,5 @@
 import logging
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.job import Job
 from typing import Callable, List, Any
 import asyncio
@@ -11,7 +11,7 @@ from ..utils.log import logger
 
 class SchedulerManager(metaclass=Singleton):
     def __init__(self):
-        self.scheduler = AsyncIOScheduler()
+        self.scheduler = BackgroundScheduler()
         self.scheduler.start()
         logger.info("Scheduler started.")
 

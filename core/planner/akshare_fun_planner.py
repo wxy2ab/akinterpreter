@@ -231,9 +231,14 @@ class AkshareFunPlanner(SSEPlanner):
             return
 
         schedule = SchedulerManager()
-
+        def sync_wrapper():
+            """将异步函数包装为同步函数"""
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            task = loop.create_task(saved_plan.replay())
+            return loop.run_until_complete(task) 
         try:
-            job = schedule.add_job(func=saved_plan.replay, trigger=trigger, **trigger_args)
+            job = schedule.add_job(func=sync_wrapper, trigger=trigger, **trigger_args)
             yield {"type": "message", "content": f"成功添加计划任务。任务ID: {job.id}"}
         except Exception as e:
             yield {"type": "error", "content": f"添加计划任务失败：{str(e)}"}

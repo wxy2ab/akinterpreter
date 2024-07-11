@@ -6,6 +6,7 @@ import pickle
 import traceback
 from typing import Dict, Any, List, Generator, Optional, Union
 from core.interpreter.sse_code_runner import SSECodeRunner
+from core.planner.replay_event_bus import ReplayEventBus
 from core.scheduler.replay_message_queue import ReplayMessageQueue
 from ..interpreter.data_summarizer import DataSummarizer
 from .akshare_prompts import AksharePrompts
@@ -15,6 +16,7 @@ from .akshare_retrieval_provider import AkshareRetrievalProvider
 
 class StepsPlanManager:
     def __init__(self,max_retry: int= 8 , allow_yfinance: bool = False):
+        self.event_bus = ReplayEventBus()
         self.llm_factory = LLMFactory()
         self.current_plan: Dict[str, Any] = {}
         self.step_vars: Dict[str, Any] = {}
@@ -254,6 +256,8 @@ class StepsPlanManager:
 
         yield {"type": "code_generation", "content": full_code}
 
+        self.set_step_code(self.current_step_number+1, full_code)
+
         # 执行代码
         for attempt in range(self.max_retry):
             try:
@@ -264,7 +268,7 @@ class StepsPlanManager:
                 else:
                     raise Exception(f"未知的步骤类型: {current_step['type']}")
 
-                self.set_step_code(self.current_step_number, full_code)
+                self.set_step_code(self.current_step_number+1, full_code)
                 yield {"type": "message", "content": f"步骤 {self.current_step_number + 1} 执行成功。"}
                 break
             except Exception as e:
@@ -278,6 +282,7 @@ class StepsPlanManager:
                         yield chunk
                     if new_code:
                         full_code = new_code
+                        self.set_step_code(self.current_step_number+1, full_code)
                     else:
                         yield {"type": "error", "content": "未能生成修复后的代码。"}
                         break
@@ -500,40 +505,38 @@ class StepsPlanManager:
 
     async def replay(self) -> None:
         """
-        异步重放所有执行步骤，实际执行代码，将消息发送到 ReplayMessageQueue。
+        异步重放所有执行步骤，实际执行代码，通过 EventBus 发布事件。
         """
-        async_queue = ReplayMessageQueue()
-
         # 重置执行状态
         self.current_step_number = 0
         self.execution_results = []
         self.step_vars = {}  # 清空 step_vars
 
-        await async_queue.put({"type": "replay_start", "content": "开始重放，所有变量已重置"})
+        await self.event_bus.publish("message", {"content": "开始重放，所有变量已重置"})
 
         # 重放计划创建
-        await async_queue.put({"type": "plan", "content": self.current_plan})
+        await self.event_bus.publish("message", {"content": f"当前计划: {self.current_plan}"})
 
         # 重放每个步骤
         for step in self.current_plan.get('steps', []):
-            await async_queue.put({"type": "step_start", "content": f"开始执行步骤 {step['step_number']}: {step['description']}"})
+            await self.event_bus.publish("message", {"content": f"开始执行步骤 {step['step_number']}: {step['description']}"})
 
-            await self._replay_step(step, async_queue)
+            await self._replay_step(step)
 
-            await async_queue.put({"type": "step_end", "content": f"步骤 {step['step_number']} 执行完成"})
+            await self.event_bus.publish("message", {"content": f"步骤 {step['step_number']} 执行完成"})
 
         # 重放最终报告生成
-        await self._replay_final_report(async_queue)
+        await self._replay_final_report()
 
-        await async_queue.put({"type": "replay_complete", "content": "重放完成"})
+        await self.event_bus.publish("message", {"content": "重放完成"})
 
-    async def _replay_step(self, step: Dict[str, Any], queue: ReplayMessageQueue) -> None:
+    async def _replay_step(self, step: Dict[str, Any]) -> None:
         code = self.step_codes.get(step['step_number'])
         if not code:
-            await queue.put({"type": "error", "content": f"步骤 {step['step_number']} 没有对应的代码"})
+            await self.event_bus.publish("error", {"content": f"步骤 {step['step_number']} 没有对应的代码"})
             return
 
-        await queue.put({"type": "code", "content": code})
+        await self.event_bus.publish("message", {"content": f"执行代码:\n{code}"})
         
         # 实际执行代码
         global_vars = self.step_vars.copy()
@@ -542,14 +545,14 @@ class StepsPlanManager:
 
         for event in self.code_runner.run_sse(code, global_vars):
             if event['type'] == 'output':
-                await queue.put({"type": "code_output", "content": event['content']})
+                await self.event_bus.publish("message", {"content": f"代码输出: {event['content']}"})
             elif event['type'] == 'error':
-                await queue.put({"type": "error", "content": f"执行代码时发生错误: {event['content']}"})
+                await self.event_bus.publish("error", {"content": f"执行代码时发生错误: {event['content']}"})
             elif event['type'] == 'variables':
                 updated_vars = event['content']
-                await self._handle_step_result(step, updated_vars, queue)
+                await self._handle_step_result(step, updated_vars)
 
-    async def _handle_step_result(self, step: Dict[str, Any], updated_vars: Dict[str, Any], queue: ReplayMessageQueue) -> None:
+    async def _handle_step_result(self, step: Dict[str, Any], updated_vars: Dict[str, Any]) -> None:
         # 处理需要保存的数据
         if 'save_data_to' in step:
             for var_name in step['save_data_to']:
@@ -557,45 +560,47 @@ class StepsPlanManager:
                     data = updated_vars[var_name]
                     self.set_step_vars(var_name, data)
                     summary = self.data_summarizer.get_data_summary(data)
-                    await queue.put({"type": "data_summary", "content": f"{var_name}: {summary}"})
+                    await self.event_bus.publish("message", {"content": f"数据摘要 {var_name}: {summary}"})
                 else:
-                    await queue.put({"type": "error", "content": f"未找到预期的变量 {var_name}"})
+                    await self.event_bus.publish("error", {"content": f"未找到预期的变量 {var_name}"})
 
         # 处理分析结果
         if 'analysis_result' in updated_vars:
             result = updated_vars['analysis_result']
             self.add_execution_result(step['step_number'], step['type'], result)
-            await queue.put({"type": "analysis_result", "content": result})
+            await self.event_bus.publish("message", {"content": f"分析结果: {result}"})
 
-    async def _replay_final_report(self, queue: ReplayMessageQueue) -> None:
-        report_generator = self.get_final_report()
-        report_data = None
-        llm_client = LLMFactory().get_instance()
-        prompts = AksharePrompts()
+    async def _replay_final_report(self) -> None:
+        report_data = self._get_report_data()
 
-        for item in report_generator:
-            if item['type'] == 'report_data':
-                report_data = item['content']
-            else:
-                await queue.put(item)
-
-        if report_data is None:
-            await queue.put({"type": "error", "content": "无法获取报告所需的数据。"})
+        if not report_data:
+            await self.event_bus.publish("error", {"content": "无法获取报告所需的数据。"})
             return
 
         # 使用 LLM 生成最终报告
-        report_prompt = prompts.create_report_prompt(
+        report_prompt = self.prompts.create_report_prompt(
             report_data['initial_query'], 
             report_data['results_summary']
         )
 
-        await queue.put({"type": "message", "content": "正在生成最终报告..."})
+        await self.event_bus.publish("message", {"content": "正在生成最终报告..."})
 
+        llm_client = self.llm_factory.get_instance()
         # 使用 run_in_executor 来在后台线程中运行同步的 text_chat 方法
         loop = asyncio.get_running_loop()
         for chunk in await loop.run_in_executor(None, lambda: llm_client.text_chat(report_prompt, is_stream=True)):
-            await queue.put({"type": "report", "content": chunk})
+            await self.event_bus.publish("message", {"content": f"报告生成进度: {chunk}"})
 
-        await queue.put({"type": "finished", "content": "报告已生成，任务已完成。"})
+        await self.event_bus.publish("message", {"content": "报告已生成，任务已完成。"})
 
-
+    def _get_report_data(self) -> Dict[str, Any]:
+        initial_query = self.current_plan.get('query_summary', '未提供查询摘要')
+        results_summary = "\n\n".join([
+            f"步骤 {result['step']}: {result['result']}"
+            for result in self.execution_results
+            if result['type'] == 'data_analysis'
+        ])
+        return {
+            'initial_query': initial_query,
+            'results_summary': results_summary
+        }
