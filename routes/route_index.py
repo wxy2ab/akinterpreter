@@ -30,6 +30,15 @@ async def serve_static(request: Request, full_path: str):
                 logger.debug(f"Serving JavaScript file: {js_path}")
                 return FileResponse(js_path, media_type="application/javascript")
         
+        if 'output/' in full_path:
+            file_path = full_path
+            if os.path.exists(file_path):
+                logger.debug(f"Serving file: {file_path}")
+                return FileResponse(file_path)
+            else:
+                logger.error(f"File not found: {file_path}")
+                raise HTTPException(status_code=404, detail="File not found")
+
         # 处理其他静态文件
         static_path = f"static/.next/{full_path}"
         if os.path.exists(static_path) and not os.path.isdir(static_path):
