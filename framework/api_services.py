@@ -1,12 +1,15 @@
 import os
 import importlib
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request, HTTPException
 from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
+from core.session.chat_session_manager import ChatSessionManager
 
 class APIService:
     def __init__(self,port=8181):
+        manager = ChatSessionManager()
         self.port = port
-        self.app = FastAPI()
+        self.app = FastAPI(lifespan=manager.lifespan)
         
         self.modules = []
         self.read_args()
@@ -54,8 +57,18 @@ class APIService:
         if not os.path.exists(html_directory):
             os.makedirs(html_directory) 
         self.app.mount("/", StaticFiles(directory=html_directory,html=True), name="static")
-        self.app.mount("/_next/static", StaticFiles(directory="static/.next/static"), name="static_next")
+        self.app.mount("/output", StaticFiles(directory="output"), name="static_output")
+        if os.path.exists("static/.next/static"):
+            self.app.mount("/_next/static", StaticFiles(directory="static/.next/static"), name="static_next")
 
+    def load_middle_ware(self):
+        self.app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # 允许所有源，您可能想要限制这个
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
     def read_args(self):
         from core.utils.config_setting import Config
         import sys
