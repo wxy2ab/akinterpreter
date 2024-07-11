@@ -57,9 +57,9 @@ class APIService:
         if not os.path.exists(html_directory):
             os.makedirs(html_directory) 
         self.app.mount("/", StaticFiles(directory=html_directory,html=True), name="static")
-        self.app.mount("/output", StaticFiles(directory="output"), name="static_output")
+        self.app.mount("/output", StaticFiles(directory=os.path.abspath("output")), name="static_output")
         if os.path.exists("static/.next/static"):
-            self.app.mount("/_next/static", StaticFiles(directory="static/.next/static"), name="static_next")
+            self.app.mount("/_next/static", StaticFiles(directory=os.path.abspath("static/.next/static")), name="static_next")
 
     def load_middle_ware(self):
         self.app.add_middleware(
