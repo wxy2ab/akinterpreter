@@ -1,5 +1,9 @@
+import asyncio
 from datetime import datetime
+import json
 from typing import Generator, Union, Dict, Any
+
+
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
 from ..planner.akshare_fun_planner import AkshareFunPlanner
@@ -16,6 +20,7 @@ class WebTalker(Talker):
         self.message_queue = SSEMessageQueue()
         self.chat_history = []
         self.sessions = UserSessionManager()
+        self.loop = self._get_or_create_event_loop()
 
     def chat(self, message: str) -> Generator[Union[str, Dict[str, Any]], None, None]:
         self.chat_history.append({"role":"user","content":message})
@@ -31,15 +36,18 @@ class WebTalker(Talker):
         else:
             # 否则，继续使用LLM API响应
             generator = self.llm_client.text_chat(message, is_stream=True)
-        repleys=[]
+        
+        yield from self._process_generator(generator)
+    def _process_generator(self, generator) -> Generator[str, None, None]:
+        replies = []
         for chunk in generator:
             if "content" in chunk:
-                repleys.append(chunk["content"])
+                replies.append(chunk["content"])
             yield chunk
-        repley = ''.join(repleys)
-        self.chat_history.append({"role":"assistant","content":repley})
-        self.sessions.update_chat_history(self.chat_history)
-        yield {"type":"message","content":""}
+        reply = ''.join(replies)
+        self.chat_history.append({"role": "assistant", "content": reply})
+        self.sessions.update_chat_history(self.session_id, self.chat_history)
+
     def clear(self) -> None:
         self.llm_client.clear_chat()
         self.use_akshare = False  # 重置状态
@@ -70,11 +78,27 @@ class WebTalker(Talker):
         self.session_id = session_id
         self.akshare_planner.add_plan_change_listener(self._on_plan_change)
         self.akshare_planner.add_code_change_listener(self._on_code_change)
-    
+
+    def _get_or_create_event_loop(self):
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:  # No running event loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop
+        
     def _on_plan_change(self, plan: dict) -> None:
-        self.message_queue.put(self.session_id , {"type":"plan", "plan":  plan})
+
+        asyncio.run_coroutine_threadsafe(
+            self.message_queue.put(self.session_id, {"type": "plan", "plan": plan}),
+            self.loop
+        )
         self.sessions.update_current_plan(self.session_id ,plan)
     
     def _on_code_change(self,step_codes:dict) -> None:
-        self.message_queue.put(self.session_id,{"type":"code", "setp_codes": step_codes})
+
+        asyncio.run_coroutine_threadsafe(
+            self.message_queue.put(self.session_id, {"type": "code", "step_codes": step_codes}),
+            self.loop
+        )
         self.sessions.update_step_codes(self.session_id,step_codes=step_codes)

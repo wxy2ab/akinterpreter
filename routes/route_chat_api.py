@@ -19,10 +19,6 @@ from core.session.chat_manager import ChatManager
 
 chat_manager = ChatManager()
 
-
-
-
-
 @router.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
     try:
@@ -43,13 +39,14 @@ async def schat_endpoint(request: SessionChatRequest):
             raise HTTPException(status_code=400, detail="session_id is required")
         
         logger.info(f"Received chat request for session {session_id}: {request.message}")
+        
         chatbot = chat_manager.get_chatbot(session_id)
         if not chatbot:
             chatbot = chat_manager.create_chatbot(session_id)
             logger.info(f"Created new chatbot instance for session ID: {session_id}")
-
         generator = chatbot.chat(request.message)
-        return StreamingResponse(generator, media_type="text/event-stream")
+        chat_sid = manager.create_session(generator)
+        return JSONResponse({"session_id": chat_sid}) 
     except Exception as e:
         logger.error(f"Error in schat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
