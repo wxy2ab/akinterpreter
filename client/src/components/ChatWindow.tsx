@@ -10,8 +10,12 @@ interface Message {
   isBot: boolean;
 }
 
-const ChatWindow: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>([]);
+interface ChatWindowProps {
+  chatHistory: Message[];
+}
+
+const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
+  const [messages, setMessages] = useState<Message[]>(chatHistory);
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const messageBufferRef = useRef<Message | null>(null);
@@ -53,7 +57,7 @@ const ChatWindow: React.FC = () => {
   useEffect(() => {
     let eventSource: EventSource | null = null;
 
-    if (sessionId) {
+    if (sessionId && typeof window !== 'undefined') {
       eventSource = new EventSource(`/api/chat-stream?session_id=${sessionId}`);
 
       eventSource.onmessage = (event) => {

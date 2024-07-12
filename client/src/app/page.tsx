@@ -1,21 +1,40 @@
-import React from 'react';
-import ChatWindow from '@/components/ChatWindow';
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { getSession } from '../lib/api';
+
+const ChatWindow = dynamic(() => import('../components/ChatWindow'), { ssr: false });
+const MainWindow = dynamic(() => import('../components/MainWindow'), { ssr: false });
 
 const Home: React.FC = () => {
-  return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      {/* 其他组件 */}
-      <div className="flex-shrink-0">
-        <h1 className="text-2xl font-bold p-4">来吧，来玩耍啊</h1>
-        {/* 其他固定高度的组件 */}
-      </div>
-      
-      {/* ChatWindow 将填充剩余空间 */}
-      <div className="flex-grow overflow-hidden">
-        <ChatWindow />
-      </div>
-    </div>
-  );
+    const [sessionData, setSessionData] = useState<any | null>(null);
+
+    useEffect(() => {
+        const fetchSession = async () => {
+            const session = await getSession();
+            setSessionData(session);
+        };
+
+        if (typeof window !== 'undefined') {
+            fetchSession();
+        }
+    }, []);
+
+    if (!sessionData) {
+        return <div>Loading...</div>;
+    }
+
+    return (
+        <div style={{ display: 'flex', height: '100vh' }}>
+            <div style={{ flex: 1, borderRight: '1px solid #ccc' }}>
+                <ChatWindow chatHistory={sessionData.chat_history} />
+            </div>
+            <div style={{ flex: 2, padding: '10px' }}>
+                <MainWindow currentPlan={sessionData.current_plan} stepCodes={sessionData.step_codes} />
+            </div>
+        </div>
+    );
 };
 
 export default Home;
