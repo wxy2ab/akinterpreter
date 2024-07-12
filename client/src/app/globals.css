@@ -1,4 +1,35 @@
 @tailwind base;
   @tailwind components;
   @tailwind utilities;
-  
+/* 全局样式 */
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+  background-color: #282a36;
+  color: #f8f8f2;
+}
+
+/* 可选：自定义 PanelResizeHandle 样式 */
+.PanelResizeHandle {
+  background-color: #44475a;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 1;
+}
+.SplitPane {
+  position: relative !important;
+}
+
+.SplitPane .Pane {
+  height: 100% !important;
+  overflow: auto !important;
+}
+
+.SplitPane .Resizer {
+  background: #44475a;
+  width: 5px;
+  cursor: col-resize;
+  margin: 0 -2px;
+  z-index: 1;
+  box-sizing: border-box;
+}

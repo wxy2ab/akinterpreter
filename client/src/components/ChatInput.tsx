@@ -32,22 +32,32 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end">
+    <form onSubmit={handleSubmit} className="flex items-end" style={{ backgroundColor: '#282a36' }}>
       <textarea
         ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="flex-grow p-2 border rounded-l resize-none overflow-hidden"
+        className="flex-grow p-2 border-none rounded-l resize-none overflow-hidden"
         placeholder="Type your message..."
         disabled={disabled}
         rows={1}
-        style={{ maxHeight: '150px' }}
+        style={{
+          maxHeight: '150px',
+          backgroundColor: '#44475a',
+          color: '#f8f8f2',
+          border: '1px solid #6272a4',
+        }}
       />
       <button
         type="submit"
-        className="p-2 bg-blue-500 text-white rounded-r h-full"
+        className="p-2 text-white rounded-r h-full"
         disabled={disabled}
+        style={{
+          backgroundColor: '#6272a4',
+          border: '1px solid #6272a4',
+          cursor: disabled ? 'not-allowed' : 'pointer',
+        }}
       >
         Send
       </button>

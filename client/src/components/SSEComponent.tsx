@@ -10,8 +10,12 @@ const SSEComponent: React.FC<SSEComponentProps> = ({ sessionId, onMessage }) => 
         const eventSource = new EventSource(`/api/sse?session_id=${sessionId}`);
 
         eventSource.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            onMessage(data);
+            try {
+                const data = JSON.parse(event.data);
+                onMessage(data);
+            } catch (error) {
+                console.error('Error parsing SSE data:', error);
+            }
         };
 
         eventSource.onerror = (error) => {

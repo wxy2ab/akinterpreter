@@ -30,7 +30,7 @@ class APIService:
         import sys
         routes_dir =   os.path.join(sys.path[0], "routes")
         route_files = [f for f in os.listdir(routes_dir) if f.startswith("route_") and f.endswith(".py")]
-        
+        route_files = sorted(route_files)
         for route_file in route_files:
             route_module_name = os.path.splitext(route_file)[0]
             route_module = importlib.import_module(f"routes.{route_module_name}")

@@ -1,6 +1,7 @@
 import os
 from fastapi import APIRouter, HTTPException , Response
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse,FileResponse
 from fastapi.templating import Jinja2Templates
 from core.utils.log import logger
@@ -20,8 +21,7 @@ async def serve_index(request: Request):
 
 @router.get("/{full_path:path}")
 async def serve_static(request: Request, full_path: str):
-    logger.debug(f"Received request for path: {full_path}")
-    
+
     try:
         # 优先处理 JavaScript 文件
         if full_path.endswith('.js'):

@@ -38,6 +38,7 @@ class WebTalker(Talker):
             generator = self.llm_client.text_chat(message, is_stream=True)
         
         yield from self._process_generator(generator)
+
     def _process_generator(self, generator) -> Generator[str, None, None]:
         replies = []
         for chunk in generator:

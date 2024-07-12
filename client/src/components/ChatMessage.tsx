@@ -1,6 +1,6 @@
 import React from 'react';
 import SyntaxHighlighter from 'react-syntax-highlighter';
-import { docco } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import { dracula } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
 interface MessageProps {
   type: string;
@@ -12,7 +12,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
   const renderContent = () => {
     if (typeof content === 'object') {
       return (
-        <SyntaxHighlighter language="json" style={docco}>
+        <SyntaxHighlighter language="json" style={dracula}>
           {JSON.stringify(content, null, 2)}
         </SyntaxHighlighter>
       );
@@ -25,7 +25,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
       try {
         const jsonContent = JSON.parse(cleanContent);
         return (
-          <SyntaxHighlighter language="json" style={docco}>
+          <SyntaxHighlighter language="json" style={dracula}>
             {JSON.stringify(jsonContent, null, 2)}
           </SyntaxHighlighter>
         );
@@ -36,7 +36,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
       // 检查是否是 Python 代码
       if (cleanContent.includes('def ') || cleanContent.includes('import ') || cleanContent.includes('print(')) {
         return (
-          <SyntaxHighlighter language="python" style={docco}>
+          <SyntaxHighlighter language="python" style={dracula}>
             {cleanContent}
           </SyntaxHighlighter>
         );
@@ -53,7 +53,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
           }
         } else if (part.startsWith('[')) {
           // 链接
-          const match = part.match(/\[(.*?)\]\((.*?)\)/);
+          const match = part.match(/\[(.*?)\)\((.*?)\)/);
           if (match) {
             return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
           }
@@ -67,7 +67,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
 
   return (
     <div className={`max-w-3/4 ${isBot ? 'ml-0 mr-auto' : 'ml-auto mr-0'}`}>
-      <div className={`p-3 rounded-lg ${isBot ? 'bg-gray-200' : 'bg-blue-500 text-white'} max-h-[80vh] overflow-y-auto`}>
+      <div className={`p-3 rounded-lg ${isBot ? 'bg-gray-700 text-white' : 'bg-blue-500 text-white'} max-h-[80vh] overflow-y-auto`}>
         {renderContent()}
       </div>
     </div>
