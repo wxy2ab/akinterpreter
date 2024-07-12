@@ -7,7 +7,7 @@ from typing import Union, Dict, Any, Generator
 from core.talk.talker_factory import TalkerFactory
 import asyncio
 from core.session.chat_session_manager import ChatSessionManager
-
+from core.model.chat_request import ChatRequest, SessionChatRequest
 from core.utils.log import logger
 
 router = APIRouter()
@@ -19,8 +19,9 @@ from core.session.chat_manager import ChatManager
 
 chat_manager = ChatManager()
 
-class ChatRequest(BaseModel):
-    message: str
+
+
+
 
 @router.post("/api/chat")
 async def chat_endpoint(request: ChatRequest):
@@ -35,7 +36,7 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/api/schat")
-async def schat_endpoint(request: ChatRequest):
+async def schat_endpoint(request: SessionChatRequest):
     try:
         session_id = request.session_id
         if not session_id:
@@ -48,7 +49,7 @@ async def schat_endpoint(request: ChatRequest):
             logger.info(f"Created new chatbot instance for session ID: {session_id}")
 
         generator = chatbot.chat(request.message)
-        return StreamingResponse(generator(), media_type="text/event-stream")
+        return StreamingResponse(generator, media_type="text/event-stream")
     except Exception as e:
         logger.error(f"Error in schat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))

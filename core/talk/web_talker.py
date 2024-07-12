@@ -1,9 +1,11 @@
+from datetime import datetime
 from typing import Generator, Union, Dict, Any
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
 from ..planner.akshare_fun_planner import AkshareFunPlanner
 from ._talker import Talker
-from  core.sse.sse_message_queue import SSEMessageQueue
+from  ..sse.sse_message_queue import SSEMessageQueue
+from  ..session.user_session_manager import UserSessionManager
 
 class WebTalker(Talker):
     def __init__(self):
@@ -12,19 +14,32 @@ class WebTalker(Talker):
         self.akshare_planner = AkshareFunPlanner()
         self.use_akshare = False
         self.message_queue = SSEMessageQueue()
+        self.chat_history = []
+        self.sessions = UserSessionManager()
 
     def chat(self, message: str) -> Generator[Union[str, Dict[str, Any]], None, None]:
+        self.chat_history.append({"role":"user","content":message})
+        self.sessions.update_chat_history(self.session_id, self.chat_history)
+        self.sessions.update_last_request_time(self.session_id)
         if not self.use_akshare:
             # 只在第一次判断是否是金融数据查询
             self.use_akshare = self._is_financial_data_query(message)
-
+        generator = None
         if self.use_akshare:
             # 如果已经确定使用AkshareSSEPlanner，就继续使用它
-            yield from self.akshare_planner.plan_chat(message)
+            generator = self.akshare_planner.plan_chat(message)
         else:
             # 否则，继续使用LLM API响应
-            yield from self.llm_client.text_chat(message, is_stream=True)
-
+            generator = self.llm_client.text_chat(message, is_stream=True)
+        repleys=[]
+        for chunk in generator:
+            if "content" in chunk:
+                repleys.append(chunk["content"])
+            yield chunk
+        repley = ''.join(repleys)
+        self.chat_history.append({"role":"assistant","content":repley})
+        self.sessions.update_chat_history(self.chat_history)
+        yield {"type":"message","content":""}
     def clear(self) -> None:
         self.llm_client.clear_chat()
         self.use_akshare = False  # 重置状态
@@ -58,6 +73,8 @@ class WebTalker(Talker):
     
     def _on_plan_change(self, plan: dict) -> None:
         self.message_queue.put(self.session_id , {"type":"plan", "plan":  plan})
+        self.sessions.update_current_plan(self.session_id ,plan)
     
     def _on_code_change(self,step_codes:dict) -> None:
         self.message_queue.put(self.session_id,{"type":"code", "setp_codes": step_codes})
+        self.sessions.update_step_codes(self.session_id,step_codes=step_codes)

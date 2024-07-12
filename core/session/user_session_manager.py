@@ -4,8 +4,9 @@ from typing import Dict, List, Optional
 import uuid
 from ..model.user_session_model import UserSession
 from ..db.session_db import SessionDb
+from ..utils.single_ton import Singleton
 
-class UserSessionManager:
+class UserSessionManager(metaclass= Singleton):
     def __init__(self):
         self.db = SessionDb()
 

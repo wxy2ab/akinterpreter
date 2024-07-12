@@ -19,7 +19,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
   const [messages, setMessages] = useState<Message[]>(chatHistory);
   const [isLoading, setIsLoading] = useState(false);
   const [appSessionId, setAppSessionId] = useState<string | null>(null);
-  const [chatSessionId, setChatSessionId] = useState<string | null>(null);
   const messageBufferRef = useRef<Message | null>(null);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
 
@@ -57,29 +56,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
         throw new Error('Network response was not ok');
       }
 
-      const { session_id: newChatSessionId } = await response.json();
-      setChatSessionId(newChatSessionId);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      setMessages(prevMessages => [...prevMessages, { type: 'text', content: 'Error: Unable to get response from the server.', isBot: true }]);
-      setIsLoading(false);
-    }
-  }, [appSessionId]);
-
-  useEffect(() => {
-    let eventSource: EventSource | null = null;
-
-    if (chatSessionId && typeof window !== 'undefined') {
-      eventSource = new EventSource(`/api/chat-stream?session_id=${chatSessionId}`);
-
+      const eventSource = new EventSource(`/api/schat?session_id=${appSessionId}`);
       eventSource.onmessage = (event) => {
         if (event.data === '[DONE]') {
           setIsLoading(false);
-          eventSource?.close();
-          setChatSessionId(null);
+          eventSource.close();
           return;
         }
-      
+        
         let parsed: Message;
         try {
           const parsedData = JSON.parse(event.data);
@@ -90,20 +74,17 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
           };
         } catch (e) {
           console.error('Error parsing SSE data:', e);
-          // 如果解析失败，将原始数据作为文本处理
           parsed = { type: 'text', content: event.data, isBot: true };
         }
-        
+
         setMessages(prevMessages => {
           const newMessages = [...prevMessages];
           const lastMessage = newMessages[newMessages.length - 1];
       
           if (lastMessage && lastMessage.isBot && lastMessage.type === parsed.type) {
-            // 如果最后一条消息是机器人的消息且类型相同，则更新该消息
             lastMessage.content += parsed.content;
             return [...newMessages.slice(0, -1), lastMessage];
           } else {
-            // 否则添加新消息
             return [...newMessages, parsed];
           }
         });
@@ -111,18 +92,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
 
       eventSource.onerror = (error) => {
         console.error('EventSource failed:', error);
-        eventSource?.close();
-        setIsLoading(false);
-        setChatSessionId(null);
-      };
-    }
-
-    return () => {
-      if (eventSource) {
         eventSource.close();
-      }
-    };
-  }, [chatSessionId]);
+        setIsLoading(false);
+      };
+    } catch (error) {
+      console.error('Error sending message:', error);
+      setMessages(prevMessages => [...prevMessages, { type: 'text', content: 'Error: Unable to get response from the server.', isBot: true }]);
+      setIsLoading(false);
+    }
+  }, [appSessionId]);
 
   return (
     <div className="flex flex-col h-full max-h-full">

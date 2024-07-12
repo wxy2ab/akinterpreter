@@ -77,23 +77,25 @@ class SimpleClaudeAwsClient(LLMApiClient):
             self.stat["total_tokens"] += response.usage.input_tokens + response.usage.output_tokens
 
     def text_chat(self, message: str, max_tokens: int = 10240, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.history.append({"role": "user", "content": message})
+        copy_history= self.history.copy()
+        copy_history.append({"role": "user", "content": message})
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens,
-            messages=self.history,
+            messages=copy_history,
             stream=is_stream
         )
         self._update_stats(response)
         self.stat["call_count"]["text_chat"] += 1
         if is_stream:
-            return self._handle_stream_response(response)
+            return self._handle_stream_response(response,message)
         else:
             assistant_message = response.content[0].text
+            self.history.append({"role": "user", "content": message})
             self.history.append({"role": "assistant", "content": assistant_message})
             return assistant_message
 
-    def _handle_stream_response(self, response):
+    def _handle_stream_response(self, response,message=None):
         full_response = ""
         for chunk in response:
             if chunk.type == 'content_block':
@@ -106,6 +108,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
                     text =  chunk.delta.text
                     full_response += text
                     yield text
+        self.history.append({"role": "user", "content": message})
         self.history.append({"role": "assistant", "content": full_response})
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: int = 1000, is_stream: bool = False) -> Union[str, Iterator[str]]:

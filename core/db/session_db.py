@@ -1,4 +1,3 @@
-# database/session_db.py
 import json
 import duckdb
 from datetime import datetime
@@ -22,6 +21,14 @@ class SessionDb(metaclass=Singleton):
             )
         """)
 
+    def _encode_json(self, data):
+        """Ensure the JSON data is properly encoded."""
+        return json.dumps(data, ensure_ascii=False).encode('utf-8')
+
+    def _decode_json(self, data):
+        """Decode the JSON data properly."""
+        return json.loads(data.decode('utf-8'))
+
     def add_session(self, session: UserSession):
         self.conn.execute(
             "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -30,10 +37,10 @@ class SessionDb(metaclass=Singleton):
                 session.created_at,
                 session.expires_at,
                 session.last_request_time,
-                json.dumps(session.chat_history),
-                json.dumps(session.current_plan),
-                json.dumps(session.step_codes),
-                json.dumps(session.data)
+                self._encode_json(session.chat_history),
+                self._encode_json(session.current_plan),
+                self._encode_json(session.step_codes),
+                self._encode_json(session.data)
             )
         )
 
@@ -49,17 +56,26 @@ class SessionDb(metaclass=Singleton):
                 created_at=result[1],
                 expires_at=result[2],
                 last_request_time=result[3],
-                chat_history=json.loads(result[4]),
-                current_plan=json.loads(result[5]),
-                step_codes=json.loads(result[6]),
-                data=json.loads(result[7])
+                chat_history=self._decode_json(result[4]),
+                current_plan=self._decode_json(result[5]),
+                step_codes=self._decode_json(result[6]),
+                data=self._decode_json(result[7])
             )
         return None
 
     def update_session(self, session: UserSession):
         self.conn.execute(
             "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, chat_history = ?, current_plan = ?, step_codes = ?, data = ? WHERE session_id = ?",
-            (session.created_at, session.expires_at, session.last_request_time, session.chat_history, session.current_plan, session.step_codes, session.data, session.session_id)
+            (
+                session.created_at, 
+                session.expires_at, 
+                session.last_request_time, 
+                self._encode_json(session.chat_history), 
+                self._encode_json(session.current_plan), 
+                self._encode_json(session.step_codes), 
+                self._encode_json(session.data), 
+                session.session_id
+            )
         )
 
     def update_last_request_time(self, session_id: str, last_request_time: datetime):
@@ -71,25 +87,25 @@ class SessionDb(metaclass=Singleton):
     def update_chat_history(self, session_id: str, chat_history: List[dict]):
         self.conn.execute(
             "UPDATE user_sessions SET chat_history = ? WHERE session_id = ?",
-            (json.dumps(chat_history), session_id)
+            (self._encode_json(chat_history), session_id)
         )
 
     def update_current_plan(self, session_id: str, current_plan: Dict):
         self.conn.execute(
             "UPDATE user_sessions SET current_plan = ? WHERE session_id = ?",
-            (json.dumps(current_plan), session_id)
+            (self._encode_json(current_plan), session_id)
         )
 
     def update_step_codes(self, session_id: str, step_codes: Dict):
         self.conn.execute(
             "UPDATE user_sessions SET step_codes = ? WHERE session_id = ?",
-            (json.dumps(step_codes), session_id)
+            (self._encode_json(step_codes), session_id)
         )
 
     def update_data(self, session_id: str, data: Dict):
         self.conn.execute(
             "UPDATE user_sessions SET data = ? WHERE session_id = ?",
-            (json.dumps(data), session_id)
+            (self._encode_json(data), session_id)
         )
 
     def delete_session(self, session_id: str):

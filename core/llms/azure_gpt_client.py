@@ -52,26 +52,30 @@ class AzureGPT4oClient(LLMApiClient):
             self.stat["total_output_tokens"] += usage.completion_tokens
             # Cost calculation would depend on your specific Azure pricing
 
-    def _handle_streaming_response(self, response) -> Iterator[str]:
+    def _handle_streaming_response(self, response,message=None) -> Iterator[str]:
         full_response = ""
         for chunk in response:
             text = chunk.choices[0].delta.content if  chunk.choices[0].delta.content else ''
             full_response += text
             yield text
-        self.history.append({"role": "assistant", "content": full_response})
+        if message:
+            self.history.append({"role": "user", "content": message})
+            self.history.append({"role": "assistant", "content": full_response})
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.history.append({"role": "user", "content": message})
+        copy_history= self.history.copy()
+        copy_history.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(
             model=self.deployment_name,
-            messages=self.history,
+            messages=copy_history,
             max_tokens=self.max_tokens,
             stream=is_stream
         )
         self._update_usage_stats(response)
         if is_stream:
-            return self._handle_streaming_response(response)
+            return self._handle_streaming_response(response,message)
         else:
+            self.history.append({"role": "user", "content": message})
             text_response = response['choices'][0]['text']
             self.history.append({"role": "assistant", "content": text_response})
             return text_response
