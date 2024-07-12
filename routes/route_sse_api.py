@@ -1,5 +1,6 @@
 # routers/session.py
 from datetime import datetime
+import json
 from typing import Dict, List
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -17,11 +18,12 @@ async def sse(request: Request, session_id: str = Query(...)):
             if await request.is_disconnected():
                 break
             message = await sse_queue.get(session_id)
-            yield f"data: {message}\n\n"
+            yield f"data: {json.dumps(message)}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @router.post("/send_message")
-async def send_message(session_id: str, message: str):
+async def send_message(session_id: str, plan: dict, step_codes: dict):
+    message = {"plan": plan, "step_codes": step_codes}
     await sse_queue.put(session_id, message)
     return {"message": "Message sent to queue"}

@@ -292,8 +292,9 @@ def test1_sse_planner():
     for response in planner.plan_chat(query):
         print(response)
 
-def test_session_api():
+def test1_session_api():
     import unittest
     suite = unittest.defaultTestLoader.loadTestsFromName('test.testsessionapi.TestSessionAPI')
     runner = unittest.TextTestRunner()
     runner.run(suite)
+

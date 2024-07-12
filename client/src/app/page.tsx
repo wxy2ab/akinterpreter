@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { getSession } from '../lib/api';
 
@@ -10,6 +10,8 @@ const SSEComponent = dynamic(() => import('../components/SSEComponent'), { ssr: 
 
 const Home: React.FC = () => {
     const [sessionData, setSessionData] = useState<any | null>(null);
+    const [plan, setPlan] = useState<any>({});
+    const [stepCodes, setStepCodes] = useState<{ [key: string]: string }>({});
 
     useEffect(() => {
         const fetchSession = async () => {
@@ -22,6 +24,11 @@ const Home: React.FC = () => {
         }
     }, []);
 
+    const handleSSEMessage = useCallback((data: { plan: any; step_codes: any }) => {
+        setPlan(data.plan);
+        setStepCodes(data.step_codes);
+    }, []);
+
     if (!sessionData) {
         return <div>Loading...</div>;
     }
@@ -30,10 +37,10 @@ const Home: React.FC = () => {
         <div style={{ display: 'flex', height: '100vh' }}>
             <div style={{ flex: 1, borderRight: '1px solid #ccc' }}>
                 <ChatWindow chatHistory={sessionData.chat_history} />
-                <SSEComponent sessionId={sessionData.session_id} />
+                <SSEComponent sessionId={sessionData.session_id} onMessage={handleSSEMessage} />
             </div>
             <div style={{ flex: 2, padding: '10px' }}>
-                <MainWindow currentPlan={sessionData.current_plan} stepCodes={sessionData.step_codes} />
+                <MainWindow currentPlan={plan} stepCodes={stepCodes} />
             </div>
         </div>
     );
