@@ -226,7 +226,7 @@ def test1_chat_pdf():
     response, reference_results = chatpdf.predict("文档主要内容是什么")
     print(response)
 
-def test_sse_data_interpreter():
+def test1_sse_data_interpreter():
     from core.interpreter.sse_data_interpreter import SSEDataInterpreter
     interpreter = SSEDataInterpreter()
     data = [3,4]
@@ -285,10 +285,15 @@ def test1_all_multi_chat():
             print(chunk, end='', flush=True)
         print("\n","="*50)
 
-
 def test1_sse_planner():
     from core.planner.akshare_sse_planner import AkshareSSEPlanner
     planner = AkshareSSEPlanner()
     query = "分析中国主要股指近一个月的走势，并与美国股市进行对比"
     for response in planner.plan_chat(query):
         print(response)
+
+def test_session_api():
+    import unittest
+    suite = unittest.defaultTestLoader.loadTestsFromName('test.testsessionapi.TestSessionAPI')
+    runner = unittest.TextTestRunner()
+    runner.run(suite)
