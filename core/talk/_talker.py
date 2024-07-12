@@ -37,3 +37,12 @@ class Talker(ABC):
         :param llm_client: LLMApiClient的实例
         """
         pass
+
+    @abstractmethod
+    def set_session_id(self, session_id: str) -> None:
+        """
+        设置当前对话的session_id。
+        
+        :param session_id: session_id
+        """
+        pass

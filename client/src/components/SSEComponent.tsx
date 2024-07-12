@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 
 interface SSEComponentProps {
     sessionId: string;
-    onMessage: (data: { plan: any; step_codes: any }) => void;
+    onMessage: (data: { type: string; plan?: any; step_codes?: any }) => void;
 }
 
 const SSEComponent: React.FC<SSEComponentProps> = ({ sessionId, onMessage }) => {

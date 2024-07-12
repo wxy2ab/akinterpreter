@@ -15,6 +15,10 @@ factory = TalkerFactory()
 chatbot = factory.get_instance("WebTalker")
 manager = ChatSessionManager()
 
+from core.session.chat_manager import ChatManager
+
+chat_manager = ChatManager()
+
 class ChatRequest(BaseModel):
     message: str
 
@@ -28,6 +32,25 @@ async def chat_endpoint(request: ChatRequest):
         return JSONResponse({"session_id": session_id})
     except Exception as e:
         logger.error(f"Error in chat endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/api/schat")
+async def schat_endpoint(request: ChatRequest):
+    try:
+        session_id = request.session_id
+        if not session_id:
+            raise HTTPException(status_code=400, detail="session_id is required")
+        
+        logger.info(f"Received chat request for session {session_id}: {request.message}")
+        chatbot = chat_manager.get_chatbot(session_id)
+        if not chatbot:
+            chatbot = chat_manager.create_chatbot(session_id)
+            logger.info(f"Created new chatbot instance for session ID: {session_id}")
+
+        generator = chatbot.chat(request.message)
+        return StreamingResponse(generator(), media_type="text/event-stream")
+    except Exception as e:
+        logger.error(f"Error in schat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/api/chat-stream")

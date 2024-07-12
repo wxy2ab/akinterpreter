@@ -10,6 +10,7 @@ class CliTalker(Talker):
         self.llm_client: LLMApiClient = factory.get_instance()
         self.akshare_planner = AkshareFunPlanner()
         self.use_akshare = False
+        self.session_id = ""
 
     def chat(self, message: str) -> Generator[Union[str, Dict[str, Any]], None, None]:
         if not self.use_akshare:
@@ -48,3 +49,6 @@ class CliTalker(Talker):
 
         response = self.llm_client.one_chat(prompt)
         return "是" in response.lower()
+    
+    def set_session_id(self, session_id: str) -> None:
+        self.session_id = session_id

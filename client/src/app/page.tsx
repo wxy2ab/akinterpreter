@@ -24,9 +24,12 @@ const Home: React.FC = () => {
         }
     }, []);
 
-    const handleSSEMessage = useCallback((data: { plan: any; step_codes: any }) => {
-        setPlan(data.plan);
-        setStepCodes(data.step_codes);
+    const handleSSEMessage = useCallback((data: { type: string; plan?: any; step_codes?: any }) => {
+        if (data.type === 'plan') {
+            setPlan(data.plan);
+        } else if (data.type === 'code') {
+            setStepCodes(data.step_codes);
+        }
     }, []);
 
     if (!sessionData) {

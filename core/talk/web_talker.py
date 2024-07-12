@@ -3,6 +3,7 @@ from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
 from ..planner.akshare_fun_planner import AkshareFunPlanner
 from ._talker import Talker
+from  core.sse.sse_message_queue import SSEMessageQueue
 
 class WebTalker(Talker):
     def __init__(self):
@@ -10,6 +11,7 @@ class WebTalker(Talker):
         self.llm_client: LLMApiClient = factory.get_instance()
         self.akshare_planner = AkshareFunPlanner()
         self.use_akshare = False
+        self.message_queue = SSEMessageQueue()
 
     def chat(self, message: str) -> Generator[Union[str, Dict[str, Any]], None, None]:
         if not self.use_akshare:
@@ -48,3 +50,14 @@ class WebTalker(Talker):
 
         response = self.llm_client.one_chat(prompt)
         return "是" in response.lower()
+
+    def set_session_id(self, session_id: str) -> None:
+        self.session_id = session_id
+        self.akshare_planner.add_plan_change_listener(self._on_plan_change)
+        self.akshare_planner.add_code_change_listener(self._on_code_change)
+    
+    def _on_plan_change(self, plan: dict) -> None:
+        self.message_queue.put(self.session_id , {"type":"plan", "plan":  plan})
+    
+    def _on_code_change(self,step_codes:dict) -> None:
+        self.message_queue.put(self.session_id,{"type":"code", "setp_codes": step_codes})

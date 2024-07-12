@@ -34,7 +34,7 @@ class AkshareFunPlanner(SSEPlanner):
         self.stop_every_step:bool = False
         self.command_parser = create_command_parser()
         self.plan_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
-        self.code_change_listeners: List[Callable[[int, str], None]] = []
+        self.code_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
 
     def add_plan_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
         """添加计划变更监听器"""
@@ -49,10 +49,10 @@ class AkshareFunPlanner(SSEPlanner):
         for listener in self.plan_change_listeners:
             listener(new_plan)
 
-    def _notify_code_change(self, step: int, new_code: str):
+    def _notify_code_change(self, step_codes: dict):
         """通知所有代码变更监听器"""
         for listener in self.code_change_listeners:
-            listener(step, new_code)
+            listener(step_codes)
 
     def set_max_retry(self, max_retry: int) -> Generator[Dict[str, Any], None, None]:
         self.plan_manager.max_retry = max_retry
@@ -79,7 +79,7 @@ class AkshareFunPlanner(SSEPlanner):
         yield from self.plan_manager.modify_step_code(step, query)
         new_code = self.plan_manager.get_step_code(step)
         if new_code:
-            self._notify_code_change(step, new_code)
+            self._notify_code_change(self.plan_manager.step_codes)
 
     def reset(self) -> Generator[Dict[str, Any], None, None]:
         self.task_saved_path = ""
@@ -88,7 +88,7 @@ class AkshareFunPlanner(SSEPlanner):
         self._notify_plan_change({})
         
         # 触发代码变更事件，传递 step=-1 和 空字符串 表示所有代码被删除
-        self._notify_code_change(-1, "")
+        self._notify_code_change(self.plan_manager.step_codes)
         yield send_message("所有数据已重置，可以重新开始。")
     
     def _parse_special_commands(self, query: str) -> Generator[Dict[str, Any], bool, None]:
@@ -156,7 +156,7 @@ class AkshareFunPlanner(SSEPlanner):
             current_step = self.plan_manager.current_step_number
             new_code = self.plan_manager.get_step_code(current_step)
             if new_code:
-                self._notify_code_change(current_step, new_code)
+                self._notify_code_change(self.plan_manager.step_codes)
         except Exception as e:
             yield send_message(f"执行步骤时发生错误: {str(e)}", "error")
             yield from self.handle_error(e)
