@@ -6,6 +6,7 @@ import { getSession } from '../lib/api';
 
 const ChatWindow = dynamic(() => import('../components/ChatWindow'), { ssr: false });
 const MainWindow = dynamic(() => import('../components/MainWindow'), { ssr: false });
+const SSEComponent = dynamic(() => import('../components/SSEComponent'), { ssr: false });
 
 const Home: React.FC = () => {
     const [sessionData, setSessionData] = useState<any | null>(null);
@@ -29,6 +30,7 @@ const Home: React.FC = () => {
         <div style={{ display: 'flex', height: '100vh' }}>
             <div style={{ flex: 1, borderRight: '1px solid #ccc' }}>
                 <ChatWindow chatHistory={sessionData.chat_history} />
+                <SSEComponent sessionId={sessionData.session_id} />
             </div>
             <div style={{ flex: 2, padding: '10px' }}>
                 <MainWindow currentPlan={sessionData.current_plan} stepCodes={sessionData.step_codes} />
