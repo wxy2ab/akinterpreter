@@ -12,6 +12,7 @@ from ..interpreter.data_summarizer import DataSummarizer
 from .akshare_prompts import AksharePrompts
 from ..llms.llm_factory import LLMFactory
 from .akshare_retrieval_provider import AkshareRetrievalProvider
+from .message import send_message
 
 
 class StepsPlanManager:
@@ -61,37 +62,34 @@ class StepsPlanManager:
             plan_text = ""
             for chunk in self.llm_client.text_chat(prompt, is_stream=True):
                 plan_text += chunk
-                yield {"type": "plan", "content": chunk}
+                yield send_message(chunk, "plan")
             
             try:
                 plan = json.loads(plan_text)
                 if self.validate_plan(plan):
                     self.current_plan = plan
-                    #yield {"type": "plan", "content": plan}
                     return
                 else:
-                    yield {"type": "error", "content": f"生成的计划格式不正确，正在重试（尝试 {attempt + 1}/{max_attempts}）"}
+                    yield send_message(f"生成的计划格式不正确，正在重试（尝试 {attempt + 1}/{max_attempts}）", "error")
             except json.JSONDecodeError:
-                yield {"type": "error", "content": f"生成的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{max_attempts}）"}
+                yield send_message(f"生成的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{max_attempts}）", "error")
         
-        yield {"type": "error", "content": "无法生成有效的计划，请重新尝试。"}
+        yield send_message("无法生成有效的计划，请重新尝试。", "error")
 
     def modify_plan(self, query: str) -> Generator[Dict[str, Any], None, None]:
         prompt = self._create_modify_plan_prompt(query)
         plan_text = ""
         for chunk in self.llm_client.text_chat(prompt, is_stream=True):
             plan_text += chunk
-            yield {"type": "plan", "content": chunk}
+            yield send_message(chunk, "plan")
         
         try:
             self.current_plan = self._extract_json_from_text(plan_text)
             if not self.validate_plan(self.current_plan):
-                yield {"type": "error", "content": "修改后的计划格式不正确。请重试。"}
+                yield send_message("修改后的计划格式不正确。请重试。", "error")
                 raise SyntaxError("Invalid plan format")
-            #yield {"type": "plan", "content": self.current_plan}
-            #yield {"type": "message", "content": "计划修改完毕。请检查修改后的计划并输入'确认计划'来开始执行，或继续修改计划。"}
         except json.JSONDecodeError:
-            yield {"type": "error", "content": "无法修改计划。请重试。"}
+            yield send_message("无法修改计划。请重试。", "error")
 
     def get_step_code(self, step: int) -> Optional[str]:
         return self.step_codes.get(step)
@@ -147,18 +145,18 @@ class StepsPlanManager:
     def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
         current_code = self.get_step_code(step)
         if not current_code:
-            yield {"type": "error", "content": f"步骤 {step} 的代码不存在。"}
+            yield send_message(f"步骤 {step} 的代码不存在。", "error")
             return
 
         prompt = self.prompts.modify_step_code_prompt(current_code, query)
         modified_code = ""
         for chunk in self.llm_client.text_chat(prompt, is_stream=True):
             modified_code += chunk
-            yield {"type": "code_modification_progress", "content": chunk}
+            yield send_message(chunk, "code")
 
         self.set_step_code(step, modified_code.strip())
-        yield {"type": "message", "content": f"步骤 {step} 的代码已更新。"}
-        yield {"type": "code", "content": f"更新后的代码：\n{modified_code.strip()}"}
+        yield send_message(f"步骤 {step} 的代码已更新。")
+        yield send_message(f"更新后的代码：\n{modified_code.strip()}", "code")
 
     def generate_step_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
         if step['type'] == 'data_retrieval':
@@ -166,21 +164,17 @@ class StepsPlanManager:
         elif step['type'] == 'data_analysis':
             yield from self._generate_data_analysis_code(step)
         else:
-            yield {"type": "error", "content": f"错误：未知的步骤类型 {step['type']}"}
+            yield send_message(f"错误：未知的步骤类型 {step['type']}", "error")
 
     def _generate_data_retrieval_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
         category = step['data_category']
-        
-        # 从选定类别中选择函数
         selected_functions = yield from self._select_functions_from_category(step, category)
-        
-        # 生成代码
         function_docs = self.retriever.get_specific_doc(selected_functions)
         code_prompt = self.prompts.generate_code_for_functions_prompt(step, function_docs)
 
         extracted_code = ""
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
-            yield {"type": "code_generation_progress", "content": chunk}
+            yield send_message(chunk, "code")
             extracted_code += chunk
 
         code = self._extract_code(extracted_code)
@@ -191,12 +185,11 @@ class StepsPlanManager:
             data_var: self.get_step_vars(f"{data_var}_summary") or "数据摘要不可用"
             for data_var in step['required_data']
         }
-        
         code_prompt = self.prompts.generate_data_analysis_code_prompt(step, data_summaries, self.allow_yfinance)
 
         full_code = ""
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
-            yield {"type": "code_generation_progress", "content": chunk}
+            yield send_message(chunk, "code")
             full_code += chunk
         
         code = self._extract_code(full_code)
@@ -204,21 +197,21 @@ class StepsPlanManager:
 
     def fix_code(self, step: int, code: str, error: str) -> Generator[Dict[str, Any], None, None]:
         if not code:
-            yield {"type": "error", "content": f"步骤 {step} 的代码不存在或为空。"}
+            yield send_message(f"步骤 {step} 的代码不存在或为空。", "error")
             return
 
         fix_prompt = self.prompts.fix_code_prompt(code, error)
         fixed_code = ""
         for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
-            yield {"type": "code_fix_progress", "content": chunk}
+            yield send_message(chunk, "code")
             fixed_code += chunk
         
         fixed_code = self._extract_code(fixed_code)
         if fixed_code:
-            yield {"type": "message", "content": f"步骤 {step} 的代码已修复。"}
-            yield {"type": "code", "content": fixed_code}
+            yield send_message(f"步骤 {step} 的代码已修复。")
+            yield send_message(fixed_code, "code")
         else:
-            yield {"type": "error", "content": "未能生成有效的修复代码。"}
+            yield send_message("未能生成有效的修复代码。", "error")
 
     def _select_functions_from_category(self, step: Dict[str, Any], category: str) -> Generator[List[str], None, None]:
         functions = self.retriever.get_functions([category])
@@ -227,10 +220,10 @@ class StepsPlanManager:
         full_response = ""
         for chunk in self.llm_client.text_chat(function_prompt, is_stream=True):
             full_response += chunk
-            yield {"type": "function_selection_progress", "content": chunk}
+            yield send_message(chunk, "message")
 
         selected_functions = [func.strip() for func in full_response.split(',')]
-        yield {"type": "function_selection", "content": f"已选择函数：{', '.join(selected_functions)}"}
+        yield send_message(f"已选择函数：{', '.join(selected_functions)}", "message")
         return selected_functions
 
     def _extract_code(self, content: str) -> str:
@@ -242,25 +235,23 @@ class StepsPlanManager:
         
     def step(self) -> Generator[Dict[str, Any], None, None]:
         if self.current_step_number >= self.total_steps:
-            yield {"type": "message", "content": "所有步骤已完成。"}
+            yield send_message("所有步骤已完成。")
             return
 
         current_step = self.get_current_step()
-        yield {"type": "message", "content": f"执行步骤 {self.current_step_number + 1}: {current_step['description']}"}
+        yield send_message(f"执行步骤 {self.current_step_number + 1}: {current_step['description']}")
 
-        # 生成代码
         code_generator = self.generate_step_code(current_step)
         full_code = "".join(chunk for chunk in code_generator if isinstance(chunk, str))
 
         if not full_code:
-            yield {"type": "error", "content": "未能生成有效的代码。"}
+            yield send_message("未能生成有效的代码。", "error")
             return
 
-        yield {"type": "code_generation", "content": full_code}
+        yield send_message(full_code, "code")
 
         self.set_step_code(self.current_step_number+1, full_code)
 
-        # 执行代码
         for attempt in range(self.max_retry):
             try:
                 if current_step['type'] == 'data_retrieval':
@@ -271,11 +262,11 @@ class StepsPlanManager:
                     raise Exception(f"未知的步骤类型: {current_step['type']}")
 
                 self.set_step_code(self.current_step_number+1, full_code)
-                yield {"type": "message", "content": f"步骤 {self.current_step_number + 1} 执行成功。"}
+                yield send_message(f"步骤 {self.current_step_number + 1} 执行成功。")
                 break
             except Exception as e:
                 if attempt < self.max_retry - 1:
-                    yield {"type": "code_fix", "content": f"第 {attempt + 1} 次尝试失败。错误：{str(e)}。正在尝试修复代码。"}
+                    yield send_message(f"第 {attempt + 1} 次尝试失败。错误：{str(e)}。正在尝试修复代码。", "code")
                     fix_generator = self.fix_code(self.current_step_number, full_code, str(e))
                     new_code = ""
                     for chunk in fix_generator:
@@ -286,20 +277,20 @@ class StepsPlanManager:
                         full_code = new_code
                         self.set_step_code(self.current_step_number+1, full_code)
                     else:
-                        yield {"type": "error", "content": "未能生成修复后的代码。"}
+                        yield send_message("未能生成修复后的代码。", "error")
                         break
                 else:
-                    yield {"type": "error", "content": f"在 {self.max_retry} 次尝试后仍无法执行代码。最后的错误：{str(e)}"}
+                    yield send_message(f"在 {self.max_retry} 次尝试后仍无法执行代码。最后的错误：{str(e)}", "error")
                     break
 
         self.current_step_number += 1
-        yield {"type": "debug", "content": f"当前步骤更新为: {self.current_step_number}"}
+        yield send_message(f"当前步骤更新为: {self.current_step_number}", "debug")
 
     def next_step(self):
         self.current_step_number += 1
 
     def execute_data_retrieval(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
-        yield {"type": "message", "content": "开始执行数据检索..."}
+        yield send_message("开始执行数据检索...")
 
         global_vars = self.step_vars.copy()
         self.set_global_vars(global_vars)
@@ -308,9 +299,9 @@ class StepsPlanManager:
             updated_vars = None
             for event in self.code_runner.run_sse(code, global_vars):
                 if event['type'] == 'output':
-                    yield {"type": "code_execution", "content": event['content']}
+                    yield send_message(event['content'], "result")
                 elif event['type'] == 'error':
-                    yield {"type": "error", "content": f"执行代码时发生错误: {event['content']}"}
+                    yield send_message(f"执行代码时发生错误: {event['content']}", "error")
                     raise Exception(event['content'])
                 elif event['type'] == 'variables':
                     updated_vars = event['content']
@@ -320,26 +311,26 @@ class StepsPlanManager:
                     data = updated_vars[step['save_data_to']]
                     self.set_step_vars(step['save_data_to'], data)
                     
-                    # 生成数据摘要
                     summary = self.data_summarizer.get_data_summary(data)
                     self.set_step_vars(f"{step['save_data_to']}_summary", summary)
                     
-                    yield {"type": "message", "content": f"数据已保存到 {step['save_data_to']}"}
-                    yield {"type": "summary", "content": f"数据摘要: {summary}"}
+                    yield send_message(f"数据已保存到 {step['save_data_to']}")
+                    yield send_message(f"数据摘要: {summary}", "result")
                 else:
                     error_msg = f"执行代码未产生预期的 '{step['save_data_to']}' 变量。可用变量: {list(updated_vars.keys())}"
-                    yield {"type": "error", "content": error_msg}
+                    yield send_message(error_msg, "error")
                     raise Exception(error_msg)
 
             self.add_execution_result(step['step_number'], "data_retrieval", f"数据已保存到 {step['save_data_to']}")
-            yield {"type": "message", "content": "数据检索成功完成。"}
+            yield send_message("数据检索成功完成。")
 
         except Exception as e:
-            yield {"type": "error", "content": f"数据检索失败: {str(e)}"}
+            yield send_message(f"数据检索失败: {str(e)}", "error")
             raise
 
+
     def execute_data_analysis(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
-        yield {"type": "message", "content": "开始执行数据分析..."}
+        yield send_message("开始执行数据分析...")
 
         global_vars = self.step_vars.copy()
         self.set_global_vars(global_vars)
@@ -349,9 +340,9 @@ class StepsPlanManager:
             
             for event in events:
                 if event['type'] == 'output':
-                    yield {"type": "code_execution", "content": event['content']}
+                    yield send_message(event['content'], "result")
                 elif event['type'] == 'error':
-                    yield {"type": "error", "content": f"执行代码时发生错误: {event['content']}"}
+                    yield send_message(f"执行代码时发生错误: {event['content']}", "error")
                     raise Exception(event['content'])
 
             updated_vars = next((event['content'] for event in events if event['type'] == 'variables'), None)
@@ -360,28 +351,27 @@ class StepsPlanManager:
                 if 'analysis_result' in updated_vars:
                     result = updated_vars['analysis_result']
                     
-                    # 严格检查结果类型
                     if not isinstance(result, str):
                         error_msg = f"分析结果必须是字符串类型，但得到了 {type(result).__name__} 类型"
-                        yield {"type": "error", "content": error_msg}
+                        yield send_message(error_msg, "error")
                         raise TypeError(error_msg)
 
                     self.set_step_vars(f"analysis_result_{step['step_number']}", result)
                     
-                    yield {"type": "message", "content": "分析结果已生成"}
-                    yield {"type": "analysis_result", "content": result}
+                    yield send_message("分析结果已生成")
+                    yield send_message(result, "analysis_result")
 
                     self.add_execution_result(step['step_number'], "data_analysis", result)
-                    yield {"type": "debug", "content": f"已添加执行结果: 步骤 {step['step_number']}, 类型 data_analysis"}
+                    yield send_message(f"已添加执行结果: 步骤 {step['step_number']}, 类型 data_analysis", "debug")
                 else:
                     error_msg = f"执行代码未产生预期的 'analysis_result' 变量。可用变量: {list(updated_vars.keys())}"
-                    yield {"type": "error", "content": error_msg}
+                    yield send_message(error_msg, "error")
                     raise Exception(error_msg)
 
-            yield {"type": "message", "content": "数据分析成功完成。"}
+            yield send_message("数据分析成功完成。")
 
         except Exception as e:
-            yield {"type": "error", "content": f"数据分析失败: {str(e)}"}
+            yield send_message(f"数据分析失败: {str(e)}", "error")
             raise
 
     def reset(self):
@@ -401,19 +391,19 @@ class StepsPlanManager:
 
     def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
         try:
-            yield {"type": "debug", "content": f"执行结果数量: {len(self.execution_results)}"}
+            yield send_message(f"执行结果数量: {len(self.execution_results)}", "debug")
             
             if not self.execution_results:
-                yield {"type": "message", "content": "没有可报告的结果。请检查执行过程是否出现错误。"}
+                yield send_message("没有可报告的结果。请检查执行过程是否出现错误。")
                 return
 
             analysis_results = []
             for result in self.execution_results:
-                yield {"type": "debug", "content": f"处理结果: {result}"}
+                yield send_message(f"处理结果: {result}", "debug")
                 if result['type'] == 'data_analysis':
                     step = result.get('step')
                     if step is None:
-                        yield {"type": "error", "content": f"结果中缺少步骤信息: {result}"}
+                        yield send_message(f"结果中缺少步骤信息: {result}", "error")
                         continue
 
                     step_description = "未知任务"
@@ -422,14 +412,13 @@ class StepsPlanManager:
                         if 0 <= step - 1 < len(steps):
                             step_description = steps[step - 1].get('description', "未知任务")
                         else:
-                            yield {"type": "error", "content": f"步骤索引 {step - 1} 超出范围，总步骤数: {len(steps)}"}
+                            yield send_message(f"步骤索引 {step - 1} 超出范围，总步骤数: {len(steps)}", "error")
                     except Exception as e:
-                        yield {"type": "error", "content": f"获取步骤 {step} 的描述时发生错误: {str(e)}"}
+                        yield send_message(f"获取步骤 {step} 的描述时发生错误: {str(e)}", "error")
 
                     result_content = result.get('result', '结果不可用')
                     if not isinstance(result_content, str):
-                        error_msg = f"分析结果必须是字符串类型，但得到了 {type(result_content).__name__} 类型"
-                        yield {"type": "error", "content": error_msg}
+                        yield send_message(f"分析结果必须是字符串类型，但得到了 {type(result_content).__name__} 类型", "error")
                         result_content = str(result_content)  # 尝试转换为字符串
 
                     analysis_results.append({
@@ -437,10 +426,10 @@ class StepsPlanManager:
                         "result": result_content
                     })
 
-            yield {"type": "debug", "content": f"分析结果数量: {len(analysis_results)}"}
+            yield send_message(f"分析结果数量: {len(analysis_results)}", "debug")
 
             if not analysis_results:
-                yield {"type": "message", "content": "未找到任何分析结果。请检查数据分析步骤是否正确执行。"}
+                yield send_message("未找到任何分析结果。请检查数据分析步骤是否正确执行。")
                 return
 
             initial_query = self.get_plan_summary()
@@ -449,20 +438,17 @@ class StepsPlanManager:
                 for result in analysis_results
             ])
 
-            yield {"type": "debug", "content": f"初始查询: {initial_query}"}
-            yield {"type": "debug", "content": f"结果摘要: {results_summary[:200]}..."}  # 只显示前200个字符
+            yield send_message(f"初始查询: {initial_query}", "debug")
+            yield send_message(f"结果摘要: {results_summary[:200]}...", "debug")  # 只显示前200个字符
 
-            yield {
-                "type": "report_data", 
-                "content": {
-                    "initial_query": initial_query,
-                    "results_summary": results_summary
-                }
-            }
+            yield send_message({
+                "initial_query": initial_query,
+                "results_summary": results_summary
+            }, "report_data")
 
         except Exception as e:
-            yield {"type": "error", "content": f"生成最终报告时发生错误: {str(e)}"}
-            yield {"type": "error", "content": f"错误详情: {traceback.format_exc()}"}
+            yield send_message(f"生成最终报告时发生错误: {str(e)}", "error")
+            yield send_message(f"错误详情: {traceback.format_exc()}", "error")
 
     def save_to_file(self, filename: str) -> None:
         """

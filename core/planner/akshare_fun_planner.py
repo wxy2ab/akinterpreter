@@ -6,7 +6,7 @@ import traceback
 
 from core.scheduler.schedule_manager import SchedulerManager
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
-from typing import List, Dict, Tuple, Union,Optional,Any
+from typing import Callable, List, Dict, Tuple, Union,Optional,Any
 import json
 from typing import Generator, Dict, Any, List, Optional
 from ..llms.llm_factory import LLMFactory
@@ -19,6 +19,7 @@ from ..llms.llm_factory import LLMFactory
 from .akshare_retrieval_provider import AkshareRetrievalProvider
 from .steps_plan_manager import StepsPlanManager
 from .parse_query_as_command import create_command_parser
+from .message import send_message
 
 class AkshareFunPlanner(SSEPlanner):
     def __init__(self, max_retry=8, allow_yfinance: bool = False):
@@ -32,14 +33,34 @@ class AkshareFunPlanner(SSEPlanner):
         self.task_saved_path:str = ""
         self.stop_every_step:bool = False
         self.command_parser = create_command_parser()
-    
+        self.plan_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
+        self.code_change_listeners: List[Callable[[int, str], None]] = []
+
+    def add_plan_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
+        """添加计划变更监听器"""
+        self.plan_change_listeners.append(listener)
+
+    def add_code_change_listener(self, listener: Callable[[int, str], None]):
+        """添加代码变更监听器"""
+        self.code_change_listeners.append(listener)
+
+    def _notify_plan_change(self, new_plan: Dict[str, Any]):
+        """通知所有计划变更监听器"""
+        for listener in self.plan_change_listeners:
+            listener(new_plan)
+
+    def _notify_code_change(self, step: int, new_code: str):
+        """通知所有代码变更监听器"""
+        for listener in self.code_change_listeners:
+            listener(step, new_code)
+
     def set_max_retry(self, max_retry: int) -> Generator[Dict[str, Any], None, None]:
         self.plan_manager.max_retry = max_retry
-        yield {"type": "message", "content": f"最大重试次数已设置为 {max_retry}"}
+        yield send_message(f"最大重试次数已设置为 {max_retry}")
 
     def set_allow_yfinance(self, allow_yfinance: bool) -> Generator[Dict[str, Any], None, None]:
         self.plan_manager.allow_yfinance = allow_yfinance
-        yield {"type": "message", "content": f"允许使用 yfinance: {allow_yfinance}"}
+        yield send_message(f"允许使用 yfinance: {allow_yfinance}")
 
     def get_allow_yfinance(self) -> bool:
         return self.plan_manager.allow_yfinance
@@ -50,17 +71,25 @@ class AkshareFunPlanner(SSEPlanner):
     def show_step_code(self, step: int) -> Generator[Dict[str, Any], None, None]:
         code = self.plan_manager.get_step_code(step)
         if code:
-            yield {"type": "code", "content": f"步骤 {step} 的代码：\n{code}"}
+            yield send_message(f"步骤 {step} 的代码：\n{code}", "code")
         else:
-            yield {"type": "error", "content": f"步骤 {step} 的代码不存在"}
+            yield send_message(f"步骤 {step} 的代码不存在", "error")
 
     def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
         yield from self.plan_manager.modify_step_code(step, query)
+        new_code = self.plan_manager.get_step_code(step)
+        if new_code:
+            self._notify_code_change(step, new_code)
 
     def reset(self) -> Generator[Dict[str, Any], None, None]:
         self.task_saved_path = ""
         self.plan_manager.reset()
-        yield {"type": "message", "content": "所有数据已重置，可以重新开始。"}
+        # 触发计划变更事件，传递空字典表示计划被清空
+        self._notify_plan_change({})
+        
+        # 触发代码变更事件，传递 step=-1 和 空字符串 表示所有代码被删除
+        self._notify_code_change(-1, "")
+        yield send_message("所有数据已重置，可以重新开始。")
     
     def _parse_special_commands(self, query: str) -> Generator[Dict[str, Any], bool, None]:
         return self.command_parser.parse(query, self)
@@ -71,48 +100,32 @@ class AkshareFunPlanner(SSEPlanner):
             print(f"{cmd}: {help_text}")
 
     def plan_chat(self, query: str) -> Generator[Dict[str, Any], None, None]:
-        # 首先尝试解析特殊命令
         command_handled = yield from self._parse_special_commands(query)
         if command_handled:
             return
 
-        # 如果不是特殊命令，则继续原有的计划创建或修改逻辑
         if self.plan_manager.current_plan == {}:
             yield from self.plan_manager.create_plan(query)
+            if self.plan_manager.current_plan:
+                self._notify_plan_change(self.plan_manager.current_plan)
         else:
             yield from self.plan_manager.modify_plan(query)
+            if self.plan_manager.current_plan:
+                self._notify_plan_change(self.plan_manager.current_plan)
 
-        # 计划创建或修改完成后，提示用户确认
         if self.plan_manager.current_plan:
-            #yield {"type": "plan", "content": self.plan_manager.current_plan}
-            yield {"type": "message", "content": "计划生成完毕。请检查计划并输入'确认计划'来开始执行，或继续修改计划。"}
+            yield send_message("计划生成完毕。请检查计划并输入'确认计划'来开始执行，或继续修改计划。")
 
-        # 如果计划已确认，开始执行
         if self.plan_manager.is_plan_confirmed:
-            progress_generator = self.stream_progress()
-            while True:
-                try:
-                    progress_info = next(progress_generator)
-                    yield progress_info
-                    if progress_info['type'] == 'pause':
-                        user_input = yield {"type": "input_required"}
-                        if user_input.lower() != "continue":
-                            command_handled = yield from self._parse_special_commands(user_input)
-                            if command_handled:
-                                continue
-                        else:
-                            yield {"type": "message", "content": "继续执行下一步。"}
-                            progress_generator = self.stream_progress()
-                except StopIteration:
-                    break  # 所有步骤已完成
-
+            yield from self.stream_progress()
+        
     def handle_confirm_plan(self) -> Generator[Dict[str, Any], None, None]:
         if not self.plan_manager.current_plan:
-            yield {"type": "error", "content": "没有可确认的计划。请先创建一个计划。"}
+            yield send_message("没有可确认的计划。请先创建一个计划。", "error")
             return
 
         self.plan_manager.is_plan_confirmed = True
-        yield {"type": "message", "content": "计划已确认。开始执行计划。"}
+        yield send_message("计划已确认。开始执行计划。")
         yield from self.stream_progress()
 
     def stream_progress(self) -> Generator[Dict[str, Any], None, None]:
@@ -121,44 +134,43 @@ class AkshareFunPlanner(SSEPlanner):
             total_steps = self.plan_manager.total_steps
             step_number = self.plan_manager.current_step_number + 1
 
-            yield {
-                "type": "progress",
-                "content": {
-                    "step": step_number,
-                    "total_steps": total_steps,
-                    "description": current_step['description'],
-                    "progress": step_number / total_steps
-                }
-            }
+            yield send_message({
+                "step": step_number,
+                "total_steps": total_steps,
+                "description": current_step['description'],
+                "progress": step_number / total_steps
+            }, "progress")
 
             yield from self.step()
 
             if self.stop_every_step:
-                yield {"type": "pause", "content": "步骤执行完成。等待用户确认继续。"}
-                return  # 暂停执行，返回控制权给 plan_chat
+                yield send_message("步骤执行完成。等待用户确认继续。", "pause")
+                return
 
-        # 所有步骤完成后，生成最终报告
-        yield {"type": "message", "content": "所有步骤已完成。正在生成最终报告..."}
+        yield send_message("所有步骤已完成。正在生成最终报告...")
         yield from self.get_final_report()
 
     def step(self) -> Generator[Dict[str, Any], None, None]:
         try:
             yield from self.plan_manager.step()
+            current_step = self.plan_manager.current_step_number
+            new_code = self.plan_manager.get_step_code(current_step)
+            if new_code:
+                self._notify_code_change(current_step, new_code)
         except Exception as e:
-            yield {"type": "error", "content": f"执行步骤时发生错误: {str(e)}"}
+            yield send_message(f"执行步骤时发生错误: {str(e)}", "error")
             yield from self.handle_error(e)
 
     def handle_error(self, error: Exception) -> Generator[Dict[str, Any], None, None]:
         error_message = str(error)
-        yield {"type": "error", "content": error_message}
+        yield send_message(error_message, "error")
         
         fix_prompt = f"发生了一个错误：{error_message}。请提供解决方案或下一步建议。"
         for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
-            yield {"type": "solution", "content": chunk}
+            yield send_message(chunk, "plan")
 
     def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
         try:
-            # 调用 StepsPlanManager 的 get_final_report 方法
             report_generator = self.plan_manager.get_final_report()
             report_data = None
 
@@ -166,26 +178,25 @@ class AkshareFunPlanner(SSEPlanner):
                 if item['type'] == 'report_data':
                     report_data = item['content']
                 else:
-                    yield item
+                    yield send_message(item['content'], item['type'])
 
             if report_data is None:
-                yield {"type": "error", "content": "无法获取报告所需的数据。"}
+                yield send_message("无法获取报告所需的数据。", "error")
                 return
 
-            # 使用 LLM 生成最终报告
             report_prompt = self.prompts.create_report_prompt(
                 report_data['initial_query'], 
                 report_data['results_summary']
             )
             for chunk in self.llm_client.text_chat(report_prompt, is_stream=True):
-                yield {"type": "report", "content": chunk}
+                yield send_message(chunk, "report")
 
             self._save_task()
-            yield {"type": "finished", "content": "报告已生成，任务已完成。"}
+            yield send_message("报告已生成，任务已完成。", "finished")
 
         except Exception as e:
-            yield {"type": "error", "content": f"生成最终报告时发生错误: {str(e)}"}
-            yield {"type": "error", "content": f"错误详情: {traceback.format_exc()}"}
+            yield send_message(f"生成最终报告时发生错误: {str(e)}", "error")
+            yield send_message(f"错误详情: {traceback.format_exc()}", "error")
 
     def _save_task(self):
         os.makedirs("output/succeed", exist_ok=True)
@@ -206,13 +217,13 @@ class AkshareFunPlanner(SSEPlanner):
 
     def _handle_schedule_run(self, query: str) -> Generator[Dict[str, Any], None, None]:
         if not self.task_saved_path:
-            yield {"type": "error", "content": "计划尚未执行完毕，无法添加计划任务。"}
+            yield send_message("计划尚未执行完毕，无法添加计划任务。", "error")
             return
 
         try:
             saved_plan = StepsPlanManager.load_from_file(self.task_saved_path)
         except Exception as e:
-            yield {"type": "error", "content": f"无法加载保存的计划：{str(e)}"}
+            yield send_message(f"无法加载保存的计划：{str(e)}", "error")
             return
 
         schedule_prompt = self.prompts.schedule_run_prompt(query, datetime.now().isoformat())
@@ -223,23 +234,22 @@ class AkshareFunPlanner(SSEPlanner):
             trigger = schedule_params.get('trigger')
             trigger_args = schedule_params.get('trigger_args', {})
         except json.JSONDecodeError:
-            yield {"type": "error", "content": "无法解析调度参数。"}
+            yield send_message("无法解析调度参数。", "error")
             return
 
         if not trigger or not isinstance(trigger_args, dict):
-            yield {"type": "error", "content": "无效的调度参数。"}
+            yield send_message("无效的调度参数。", "error")
             return
 
         schedule = SchedulerManager()
         def sync_wrapper():
-            """将异步函数包装为同步函数"""
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             task = loop.create_task(saved_plan.replay())
             return loop.run_until_complete(task) 
         try:
             job = schedule.add_job(func=sync_wrapper, trigger=trigger, **trigger_args)
-            yield {"type": "message", "content": f"成功添加计划任务。任务ID: {job.id}"}
+            yield send_message(f"成功添加计划任务。任务ID: {job.id}")
         except Exception as e:
-            yield {"type": "error", "content": f"添加计划任务失败：{str(e)}"}
+            yield send_message(f"添加计划任务失败：{str(e)}", "error")
 
