@@ -33,27 +33,31 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
       );
     }
 
-    const parts = content.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
-    return parts.map((part: string, index: number) => {
-      if (part.startsWith('![')) {
-        // 图片
-        const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
-        if (match) {
-          return (
-            <div key={index} className="my-2">
-              <Image src={match[2]} alt={match[1]} layout="responsive" width={600} height={400} />
-            </div>
-          );
+    if (typeof content === 'string') {
+      const parts = content.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
+      return parts.map((part: string, index: number) => {
+        if (part.startsWith('![')) {
+          // 图片
+          const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
+          if (match) {
+            return (
+              <div key={index} className="my-2">
+                <Image src={match[2]} alt={match[1]} layout="responsive" width={600} height={400} />
+              </div>
+            );
+          }
+        } else if (part.startsWith('[')) {
+          // 链接
+          const match = part.match(/\[(.*?)\]\((.*?)\)/);
+          if (match) {
+            return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
+          }
         }
-      } else if (part.startsWith('[')) {
-        // 链接
-        const match = part.match(/\[(.*?)\]\((.*?)\)/);
-        if (match) {
-          return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
-        }
-      }
-      return <span key={index}>{part}</span>;
-    });
+        return <span key={index}>{part}</span>;
+      });
+    }
+
+    return <p className="break-words whitespace-pre-wrap">{String(content)}</p>;
   };
 
   return (

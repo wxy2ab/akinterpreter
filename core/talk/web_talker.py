@@ -90,14 +90,14 @@ class WebTalker(Talker):
             self.use_akshare = setting["use_akshare"]
 
         if session_dat is not None and session_dat:
-            if "chat_history" in session_dat and session_dat["chat_history"]:
-                self.chat_history = session_dat["chat_history"]
-            if "current_plan" in session_dat and session_dat["current_plan"]:
-                self.akshare_planner.set_current_plan(session_dat["current_plan"])
-            if "step_codes" in session_dat and session_dat["step_codes"]:
-                self.akshare_planner.set_setp_codes(session_dat["step_codes"])
-            if "data" in session_dat and session_dat["data"]:
-                self.akshare_planner._set_from_setting_data(session_dat["data"])
+            if session_dat.chat_history:
+                self.chat_history = session_dat.chat_history
+            if session_dat.current_plan:
+                self.akshare_planner.set_current_plan(session_dat.current_plan)
+            if session_dat.step_codes:
+                self.akshare_planner.set_setp_codes(session_dat.step_codes)
+            if session_dat.data:
+                self.akshare_planner._set_from_setting_data(session_dat.data)
 
     def _get_or_create_event_loop(self):
         try:

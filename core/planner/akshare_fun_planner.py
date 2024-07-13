@@ -101,20 +101,17 @@ class AkshareFunPlanner(SSEPlanner):
         self.plan_manager.allow_yfinance = setting_data.get("allow_yfinance", False)
         self.stop_every_step = setting_data.get("stop_every_step", False)
 
-    def set_current_plan(self, plan: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+    def set_current_plan(self, plan: Dict[str, Any]) -> None:
         self.plan_manager.current_plan = plan
-        yield send_message("当前计划已设置。")
     
     def get_current_plan(self) -> Dict[str, Any]:
         return self.plan_manager.current_plan
     
-    def set_setp_codes(self, step_codes: Dict[str, str]) -> Generator[Dict[str, Any], None, None]:
+    def set_setp_codes(self, step_codes: Dict[str, str]) -> None:
         self.plan_manager.step_codes = step_codes
-        yield send_message("步骤代码已设置。")
-
-    def set_allow_yfinance(self, allow_yfinance: bool) -> Generator[Dict[str, Any], None, None]:
+        
+    def set_allow_yfinance(self, allow_yfinance: bool) -> None:
         self.plan_manager.allow_yfinance = allow_yfinance
-        yield send_message(f"允许使用 yfinance: {allow_yfinance}")
         data = self._get_setting_data()
         self._notify_setting_change(data)
 

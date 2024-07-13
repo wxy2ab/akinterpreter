@@ -13,23 +13,35 @@ class UserSession(BaseModel):
     step_codes: Optional[Dict] = Field(default_factory=dict)
     data: Optional[Dict] = Field(default_factory=dict)
     def get(self, key: str, default: Any = None) -> Any:
-        """
-        从 UserSession 模型中获取值，支持嵌套字典。
-
-        Args:
-            key: 要获取的键。可以是点分隔的路径，表示嵌套字典中的键。
-            default: 如果键不存在时的默认返回值。默认为 None。
-
-        Returns:
-            键对应的值，如果不存在则返回 default。
-        """
-        keys = key.split(".")  # 处理嵌套键
-        value = self
+        keys = key.split(".")
+        value = self.__dict__  # 获取属性字典，从 data 开始查找
 
         for k in keys:
             if isinstance(value, dict) and k in value:
                 value = value[k]
             else:
-                return default  # 键不存在，返回默认值
+                return default
 
         return value
+    def has(self, key: str) -> bool:
+        """
+        检查 UserSession 模型中是否存在指定的键，并且值不为 None。
+
+        Args:
+            key: 要检查的键。可以是点分隔的路径，表示嵌套字典中的键。
+
+        Returns:
+            如果键存在且值不为 None 则返回 True，否则返回 False。
+        """
+        keys = key.split(".")
+        value = self
+
+        for k in keys:
+            if hasattr(value, k):  # 检查属性是否存在
+                value = getattr(value, k)  # 获取属性值
+                if value is None:  # 判断是否为 None
+                    return False
+            else:
+                return False
+
+        return True

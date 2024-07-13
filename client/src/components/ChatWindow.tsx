@@ -22,6 +22,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
   const messageBufferRef = useRef<Message | null>(null);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const currentTypeRef = useRef<string | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -67,24 +68,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
         eventSourceRef.current = eventSource;
 
         eventSource.onmessage = (event) => {
-          const parsedData = JSON.parse(event.data);
-
-          if (parsedData.type === 'text') {
-            setMessages((prevMessages) => [
-              ...prevMessages,
-              { type: 'text', content: parsedData.content, isBot: true },
-            ]);
-          } else if (parsedData.type === 'error') {
-            console.error(`Error: ${parsedData.content}`);
-          } else if (parsedData.type === '[DONE]') {
+          if (event.data === '[DONE]') {
             setIsLoading(false);
             eventSource.close();
-          } else {
-            setMessages((prevMessages) => [
-              ...prevMessages,
-              { type: 'unknown', content: parsedData.content, isBot: true },
-            ]);
+            currentTypeRef.current = null;
+            return;
           }
+
+          const parsedData = JSON.parse(event.data);
+
+          setMessages((prevMessages) => {
+            const newMessages = [...prevMessages];
+            const lastMessage = newMessages[newMessages.length - 1];
+
+            if (lastMessage && lastMessage.isBot && lastMessage.type === parsedData.type) {
+              lastMessage.content += parsedData.content;
+              return [...newMessages.slice(0, -1), lastMessage];
+            } else {
+              return [...newMessages, { type: parsedData.type, content: parsedData.content, isBot: true }];
+            }
+          });
         };
 
         eventSource.onerror = (error) => {
