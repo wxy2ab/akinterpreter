@@ -1,6 +1,6 @@
 # session_manager.py
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import uuid
 from ..model.user_session_model import UserSession
 from ..db.session_db import SessionDb
@@ -56,13 +56,6 @@ class UserSessionManager(metaclass= Singleton):
         session.step_codes = step_codes
         self.save_session(session)
 
-    def update_data(self, session_id: str, data: Dict):
-        session = self.get_session(session_id)
-        if not session:
-            raise ValueError("Session does not exist")
-        session.data = data
-        self.save_session(session)
-
     def update_chat_history(self, session_id: str, chat_history: List[dict]):
         if not self.session_exists(session_id):
             raise ValueError("Session does not exist")
@@ -83,6 +76,11 @@ class UserSessionManager(metaclass= Singleton):
             raise ValueError("Session does not exist")
         self.db.update_data(session_id, data)
 
+    def get_setting_data(self, session_id: str) -> Dict[str, Any]:
+        if not self.session_exists(session_id):
+            raise ValueError("Session does not exist")
+        return self.db.get_data(session_id)
+    
     def get_chat_history(self, session_id: str) -> List[dict]:
         if not self.session_exists(session_id):
             raise ValueError("Session does not exist")
@@ -97,3 +95,15 @@ class UserSessionManager(metaclass= Singleton):
     def cleanup_sessions(self):
         self.db.cleanup_sessions()
 
+    def get_setting_value(self, session_id: str, key: str) -> Any:
+        if not self.session_exists(session_id):
+            raise ValueError("Session does not exist")
+        setting_data = self.db.get_data(session_id)
+        return setting_data.get(key)
+
+    def save_setting_value(self, session_id: str, key: str, value: Any) -> None:
+        if not self.session_exists(session_id):
+            raise ValueError("Session does not exist")
+        setting_data = self.db.get_data(session_id)
+        setting_data[key] = value
+        self.db.update_data(session_id, setting_data)

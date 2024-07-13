@@ -17,63 +17,43 @@ interface MessageProps {
 
 const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
   const renderContent = () => {
-    if (typeof content === 'object') {
+    if (type === 'json') {
       return (
         <SyntaxHighlighter language="json" style={dracula}>
-          {JSON.stringify(content, null, 2)}
+          {content}
         </SyntaxHighlighter>
       );
     }
 
-    if (typeof content === 'string') {
-      const cleanContent = content.replace(/^```(json|python)?\s*|\s*```$/g, '');
-      
-      // 尝试解析 JSON
-      try {
-        const jsonContent = JSON.parse(cleanContent);
-        return (
-          <SyntaxHighlighter language="json" style={dracula}>
-            {JSON.stringify(jsonContent, null, 2)}
-          </SyntaxHighlighter>
-        );
-      } catch (e) {
-        // 如果不是 JSON，继续处理
-      }
-
-      // 检查是否是 Python 代码
-      if (cleanContent.includes('def ') || cleanContent.includes('import ') || cleanContent.includes('print(')) {
-        return (
-          <SyntaxHighlighter language="python" style={dracula}>
-            {cleanContent}
-          </SyntaxHighlighter>
-        );
-      }
-
-      // 处理图片和链接
-      const parts = cleanContent.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
-      return parts.map((part, index) => {
-        if (part.startsWith('![')) {
-          // 图片
-          const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
-          if (match) {
-            return (
-              <div key={index} className="my-2">
-                <Image src={match[2]} alt={match[1]} layout="responsive" width={600} height={400} />
-              </div>
-            );
-          }
-        } else if (part.startsWith('[')) {
-          // 链接
-          const match = part.match(/\[(.*?)\]\((.*?)\)/);
-          if (match) {
-            return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
-          }
-        }
-        return <span key={index}>{part}</span>;
-      });
+    if (type === 'python') {
+      return (
+        <SyntaxHighlighter language="python" style={dracula}>
+          {content}
+        </SyntaxHighlighter>
+      );
     }
 
-    return <p className="break-words whitespace-pre-wrap">{String(content)}</p>;
+    const parts = content.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
+    return parts.map((part: string, index: number) => {
+      if (part.startsWith('![')) {
+        // 图片
+        const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
+        if (match) {
+          return (
+            <div key={index} className="my-2">
+              <Image src={match[2]} alt={match[1]} layout="responsive" width={600} height={400} />
+            </div>
+          );
+        }
+      } else if (part.startsWith('[')) {
+        // 链接
+        const match = part.match(/\[(.*?)\]\((.*?)\)/);
+        if (match) {
+          return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
+        }
+      }
+      return <span key={index}>{part}</span>;
+    });
   };
 
   return (

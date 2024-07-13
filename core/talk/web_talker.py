@@ -26,9 +26,12 @@ class WebTalker(Talker):
         self.chat_history.append({"role":"user","content":message})
         self.sessions.update_chat_history(self.session_id, self.chat_history)
         self.sessions.update_last_request_time(self.session_id)
+        
         if not self.use_akshare:
             # 只在第一次判断是否是金融数据查询
             self.use_akshare = self._is_financial_data_query(message)
+            if self.use_akshare:
+                self.sessions.save_setting_value(self.session_id, "use_akshare", True)
         generator = None
         if self.use_akshare:
             # 如果已经确定使用AkshareSSEPlanner，就继续使用它
@@ -82,6 +85,9 @@ class WebTalker(Talker):
         self.akshare_planner.add_setting_change_listener(self._on_setting_change)
         self.akshare_planner.add_command_send_listener(self._on_command_send)
         session_dat = self.sessions.get_session(self.session_id)
+        setting = session_dat.get("data", {})
+        if "use_akshare" in setting:
+            self.use_akshare = setting["use_akshare"]
 
         if session_dat is not None and session_dat:
             if "chat_history" in session_dat and session_dat["chat_history"]:
@@ -129,5 +135,7 @@ class WebTalker(Talker):
             self.message_queue.put(self.session_id, {"type": "chat_history", "chat_history": []}),
             self.loop
         )
+    
+    
 
         

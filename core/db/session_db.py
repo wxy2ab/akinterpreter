@@ -1,7 +1,7 @@
 import json
 import duckdb
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 from ..model.user_session_model import UserSession
 from ..utils.single_ton import Singleton
 
@@ -108,6 +108,16 @@ class SessionDb(metaclass=Singleton):
             (self._encode_json(data), session_id)
         )
 
+    def get_data(self, session_id: str) -> Dict[str, Any]:
+        result = self.conn.execute(
+            "SELECT data FROM user_sessions WHERE session_id = ?",
+            (session_id,)
+        ).fetchone()
+
+        if result:
+            return self._decode_json(result[0])
+        return {}
+    
     def delete_session(self, session_id: str):
         self.conn.execute("DELETE FROM user_sessions WHERE session_id = ?", (session_id,))
 
