@@ -51,7 +51,7 @@ class APIService:
             module_name = os.path.splitext(route_file)[0]
             module = importlib.import_module(f"modules.{module_name}")
             self.modules.append(module)
-    
+
     def load_directory(self):
         html_directory = os.path.abspath("static")
         if not os.path.exists(html_directory):
@@ -69,6 +69,7 @@ class APIService:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
     def read_args(self):
         from core.utils.config_setting import Config
         import sys

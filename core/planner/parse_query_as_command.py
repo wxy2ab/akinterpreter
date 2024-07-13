@@ -93,7 +93,7 @@ def create_command_parser():
         use_regex=False
     )
     parser.add_command("show_config", 
-        lambda ctx, args: (yield {"type": "message", "content": f"当前配置：\nmax_retry: {ctx.get_max_retry()}\nallow_yfinance: {ctx.get_allow_yfinance()}"}),
+        lambda ctx, args: (yield {"type": "message", "content": f"当前配置：\nmax_retry: {ctx.get_max_retry()}\nallow_yfinance: {ctx.get_allow_yfinance()}\nstop_every_step: {ctx.get_stop_every_step()}"}),
         "显示当前配置",
         use_regex=False
     )
@@ -119,13 +119,20 @@ def create_command_parser():
         "设置是否在每个步骤后停止（true/false）",
         use_regex=False
     )
+
+    # Add the new show_plan command
+    parser.add_command("show_plan", 
+        lambda ctx, args: handle_show_plan(ctx),
+        "显示当前计划",
+        use_regex=False
+    )
     return parser
 
 def handle_set_stop_every_step(ctx, args):
     value = args.lower()
     if value in ["true", "false"]:
-        ctx.stop_every_step = value == "true"
-        yield {"type": "message", "content": f"已将 stop_every_step 设置为 {ctx.stop_every_step}"}
+        new_value = value == "true"
+        yield from ctx.set_stop_every_step(new_value)
     else:
         yield {"type": "error", "content": "无效的 stop_every_step 值。请使用 true 或 false。"}
 
@@ -151,3 +158,10 @@ def handle_set_allow_yfinance(ctx, args):
             yield message
     else:
         yield {"type": "error", "content": "无效的 allow_yfinance 值。请使用 true 或 false。"}
+
+def handle_show_plan(ctx):
+    current_plan = ctx.get_current_plan()
+    if current_plan:
+        yield {"type": "plan", "content": current_plan}
+    else:
+        yield {"type": "message", "content": "当前没有计划。"}

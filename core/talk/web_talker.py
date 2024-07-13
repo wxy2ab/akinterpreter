@@ -79,6 +79,15 @@ class WebTalker(Talker):
         self.session_id = session_id
         self.akshare_planner.add_plan_change_listener(self._on_plan_change)
         self.akshare_planner.add_code_change_listener(self._on_code_change)
+        self.akshare_planner.add_setting_change_listener(self._on_setting_change)
+        session_dat = self.sessions.get_session(self.session_id)
+        if session_dat is not None and session_dat:
+            if "current_plan" in session_dat and session_dat["current_plan"]:
+                self.akshare_planner.set_current_plan(session_dat["current_plan"])
+            if "step_codes" in session_dat and session_dat["step_codes"]:
+                self.akshare_planner.set_setp_codes(session_dat["step_codes"])
+            if "data" in session_dat and session_dat["data"]:
+                self.akshare_planner._set_from_setting_data(session_dat["data"])
 
     def _get_or_create_event_loop(self):
         try:
@@ -103,3 +112,7 @@ class WebTalker(Talker):
             self.loop
         )
         self.sessions.update_step_codes(self.session_id,step_codes=step_codes)
+    
+    def _on_setting_change(self,setting:dict) -> None:
+
+        self.sessions.update_data(self.session_id,setting=setting)

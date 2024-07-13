@@ -3,6 +3,12 @@ from core.talk._talker import Talker
 from core.talk.talker_factory import TalkerFactory
 
 class ChatManager:
+    """
+    为每个session创建一个chatbot
+    因为目前session存续时间极长
+    所以暂时没有考虑销毁机制
+    回头补上
+    """
     def __init__(self):
         self.factory = TalkerFactory()
         self.sessions = {}

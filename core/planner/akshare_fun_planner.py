@@ -35,6 +35,7 @@ class AkshareFunPlanner(SSEPlanner):
         self.command_parser = create_command_parser()
         self.plan_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self.code_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
+        self.setting_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
 
     def add_plan_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
         """添加计划变更监听器"""
@@ -43,6 +44,10 @@ class AkshareFunPlanner(SSEPlanner):
     def add_code_change_listener(self, listener: Callable[[int, str], None]):
         """添加代码变更监听器"""
         self.code_change_listeners.append(listener)
+
+    def add_setting_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
+        """添加设置变更监听器"""
+        self.setting_change_listeners.append(listener)
 
     def _notify_plan_change(self, new_plan: Dict[str, Any]):
         """通知所有计划变更监听器"""
@@ -54,13 +59,54 @@ class AkshareFunPlanner(SSEPlanner):
         for listener in self.code_change_listeners:
             listener(step_codes)
 
+    def _notify_setting_change(self, setting_data: Dict[str, Any]):
+        """通知所有设置变更监听器"""
+        for listener in self.setting_change_listeners:
+            listener(setting_data)
+
     def set_max_retry(self, max_retry: int) -> Generator[Dict[str, Any], None, None]:
         self.plan_manager.max_retry = max_retry
         yield send_message(f"最大重试次数已设置为 {max_retry}")
+        data = self._get_setting_data()
+        self._notify_setting_change(data)
+
+    def get_stop_every_step(self) -> bool:
+        return self.stop_every_step
+
+    def set_stop_every_step(self, stop_every_step: bool) -> Generator[Dict[str, Any], None, None]:
+        self.stop_every_step = stop_every_step
+        yield send_message(f"设置为每步停顿: {stop_every_step}")
+        data = self._get_setting_data()
+        self._notify_setting_change(data)
+
+    def _get_setting_data(self)->Dict[str, Any]:
+        return {
+            "max_retry": self.plan_manager.max_retry,
+            "allow_yfinance": self.plan_manager.allow_yfinance,
+            "stop_every_step": self.stop_every_step
+        }
+    
+    def _set_from_setting_data(self, setting_data: Dict[str, Any]):
+        self.plan_manager.max_retry = setting_data.get("max_retry", 8)
+        self.plan_manager.allow_yfinance = setting_data.get("allow_yfinance", False)
+        self.stop_every_step = setting_data.get("stop_every_step", False)
+
+    def set_current_plan(self, plan: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
+        self.plan_manager.current_plan = plan
+        yield send_message("当前计划已设置。")
+    
+    def get_current_plan(self) -> Dict[str, Any]:
+        return self.plan_manager.current_plan
+    
+    def set_setp_codes(self, step_codes: Dict[str, str]) -> Generator[Dict[str, Any], None, None]:
+        self.plan_manager.step_codes = step_codes
+        yield send_message("步骤代码已设置。")
 
     def set_allow_yfinance(self, allow_yfinance: bool) -> Generator[Dict[str, Any], None, None]:
         self.plan_manager.allow_yfinance = allow_yfinance
         yield send_message(f"允许使用 yfinance: {allow_yfinance}")
+        data = self._get_setting_data()
+        self._notify_setting_change(data)
 
     def get_allow_yfinance(self) -> bool:
         return self.plan_manager.allow_yfinance
@@ -118,7 +164,7 @@ class AkshareFunPlanner(SSEPlanner):
 
         if self.plan_manager.is_plan_confirmed:
             yield from self.stream_progress()
-        
+
     def handle_confirm_plan(self) -> Generator[Dict[str, Any], None, None]:
         if not self.plan_manager.current_plan:
             yield send_message("没有可确认的计划。请先创建一个计划。", "error")
