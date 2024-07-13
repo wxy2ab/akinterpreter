@@ -132,6 +132,12 @@ def create_command_parser():
         "清除聊天历史",
         use_regex=False
     )
+    # Add the new clear_all command
+    parser.add_command("clear_all", 
+        lambda ctx, args: handle_clear_all(ctx),
+        "清除所有数据",
+        use_regex=False
+    )
     return parser
 
 def handle_set_stop_every_step(ctx, args):
@@ -175,3 +181,8 @@ def handle_show_plan(ctx):
 def handle_clear_history(ctx):
     ctx._notify_command_send("clear_history")
     yield {"type": "message", "content": "聊天历史已清除。"}
+
+# New handler function for clear_all command
+def handle_clear_all(ctx):
+    ctx._notify_command_send("clear_all")
+    yield {"type": "message", "content": "所有数据已清除。"}

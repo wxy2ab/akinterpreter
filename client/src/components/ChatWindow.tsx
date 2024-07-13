@@ -16,7 +16,7 @@ interface ChatWindowProps {
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
-  const [messages, setMessages] = useState<Message[]>(chatHistory);
+  const [messages, setMessages] = useState<Message[]>(chatHistory || []);
   const [isLoading, setIsLoading] = useState(false);
   const [appSessionId, setAppSessionId] = useState<string | null>(null);
   const messageBufferRef = useRef<Message | null>(null);
@@ -110,7 +110,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
   return (
     <div className="flex flex-col h-full max-h-full" style={{ backgroundColor: '#282a36', color: '#f8f8f2' }}>
       <div className="flex-grow overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, index) => (
+        {messages && messages.map((msg, index) => (
           <ChatMessage key={index} type={msg.type} content={msg.content} isBot={msg.isBot} />
         ))}
         {isLoading && <p className="italic text-gray-500">🤖在努力思考。。。</p>}

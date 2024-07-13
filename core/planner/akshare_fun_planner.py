@@ -187,12 +187,12 @@ class AkshareFunPlanner(SSEPlanner):
             total_steps = self.plan_manager.total_steps
             step_number = self.plan_manager.current_step_number + 1
 
-            yield send_message({
+            yield send_message(json.dumps({
                 "step": step_number,
                 "total_steps": total_steps,
                 "description": current_step['description'],
                 "progress": step_number / total_steps
-            }, "progress")
+            },ensure_ascii=False), "progress")
 
             yield from self.step()
 
@@ -212,7 +212,7 @@ class AkshareFunPlanner(SSEPlanner):
                 self._notify_code_change(self.plan_manager.step_codes)
         except Exception as e:
             yield send_message(f"执行步骤时发生错误: {str(e)}", "error")
-            yield from self.handle_error(e)
+            #yield from self.handle_error(e)
 
     def handle_error(self, error: Exception) -> Generator[Dict[str, Any], None, None]:
         error_message = str(error)

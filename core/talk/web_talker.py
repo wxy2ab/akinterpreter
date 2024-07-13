@@ -135,6 +135,8 @@ class WebTalker(Talker):
             self.message_queue.put(self.session_id, {"type": "chat_history", "chat_history": []}),
             self.loop
         )
+        if command=="clear_all":
+            self.sessions.clear_all()
     
     
 

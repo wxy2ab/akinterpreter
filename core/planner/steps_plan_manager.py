@@ -172,13 +172,7 @@ class StepsPlanManager:
         function_docs = self.retriever.get_specific_doc(selected_functions)
         code_prompt = self.prompts.generate_code_for_functions_prompt(step, function_docs)
 
-        extracted_code = ""
-        for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
-            yield send_message(chunk, "code")
-            extracted_code += chunk
-
-        code = self._extract_code(extracted_code)
-        yield code
+        yield from self._extract_code_from_chunks(code_prompt)
 
     def _generate_data_analysis_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
         data_summaries = {
@@ -187,13 +181,24 @@ class StepsPlanManager:
         }
         code_prompt = self.prompts.generate_data_analysis_code_prompt(step, data_summaries, self.allow_yfinance)
 
-        full_code = ""
+        yield from self._extract_code_from_chunks(code_prompt)
+
+    def _extract_code_from_chunks(self, code_prompt: str) -> Generator[Union[Dict[str, Any], str], None, None]:
+        extracted_code = ""
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
             yield send_message(chunk, "code")
-            full_code += chunk
+            if isinstance(chunk, dict):
+                if "content" in chunk:
+                    extracted_code += chunk["content"]
+                yield chunk
+            elif isinstance(chunk, str):
+                extracted_code += chunk
+                yield send_message(chunk, "code")
+            else:
+                raise TypeError(f"无法处理 {type(chunk).__name__} 类型的 chunk")
         
-        code = self._extract_code(full_code)
-        yield code
+        code = self._extract_code(extracted_code)
+        yield send_message(code, "full_code")
 
     def fix_code(self, step: int, code: str, error: str) -> Generator[Dict[str, Any], None, None]:
         if not code:
@@ -215,6 +220,9 @@ class StepsPlanManager:
 
     def _select_functions_from_category(self, step: Dict[str, Any], category: str) -> Generator[List[str], None, None]:
         functions = self.retriever.get_functions([category])
+        if len(functions)==0:
+            yield send_message(f"未找到类别 '{category}' 的函数。请重新生成计划。", "error")
+            raise ValueError(f"未找到类别 '{category}' 的函数")
         function_prompt = self.prompts.select_functions_from_category_prompt(step, functions[category])
         
         full_response = ""
@@ -242,13 +250,18 @@ class StepsPlanManager:
         yield send_message(f"执行步骤 {self.current_step_number + 1}: {current_step['description']}")
 
         code_generator = self.generate_step_code(current_step)
-        full_code = "".join(chunk for chunk in code_generator if isinstance(chunk, str))
+        full_code = ""
+        for chunk in code_generator:
+            if chunk['type'] == 'full_code':
+                full_code = chunk['content']
+            else:
+                yield chunk
 
         if not full_code:
             yield send_message("未能生成有效的代码。", "error")
             return
 
-        yield send_message(full_code, "code")
+        #yield send_message(full_code, "code")
 
         self.set_step_code(self.current_step_number+1, full_code)
 

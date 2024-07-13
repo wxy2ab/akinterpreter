@@ -43,6 +43,7 @@ class AksharePrompts:
         4. 每个 data_analysis 步骤的 required_data 列表包含了它需要的所有数据的变量名。
         5. 变量名应该是描述性的，易于理解的，如 china_stock_index_data, us_market_sentiment 等。
         6. 计划包括所有必要的数据检索步骤，以及后续的数据分析步骤。
+        7. data_category 必须是"可用的数据类别"存在的
 
         请提供完整的JSON格式计划，确保其可以被直接解析为Python字典。
         """

@@ -1,30 +1,26 @@
-// src/components/CodeEditor.tsx
 import React from 'react';
-import { Controlled as CodeMirror } from 'react-codemirror2';
-import 'codemirror/lib/codemirror.css';
-import 'codemirror/theme/material.css';
-import 'codemirror/mode/python/python';
+import CodeMirror from '@uiw/react-codemirror';
+import { python } from '@codemirror/lang-python';
+import { dracula } from '@uiw/codemirror-theme-dracula';
 
 interface CodeEditorProps {
-    value: string;
-    onChange: (value: string) => void;
+  value: string;
+  onChange: (value: string) => void;
 }
 
 const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange }) => {
-    return (
-        <CodeMirror
-            value={value}
-            options={{
-                mode: 'python',
-                theme: 'material',
-                lineNumbers: true,
-                readOnly: true,
-            }}
-            onBeforeChange={(editor, data, value) => {
-                onChange(value);
-            }}
-        />
-    );
+  return (
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+      <CodeMirror
+        value={value}
+        height="100%"
+        extensions={[python()]}
+        theme={dracula}
+        onChange={(value) => onChange(value)}
+        basicSetup={{ lineNumbers: true }}
+      />
+    </div>
+  );
 };
 
 export default CodeEditor;

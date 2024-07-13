@@ -22,8 +22,23 @@ class UserSessionManager(metaclass= Singleton):
         self.db.add_session(session)
         return session_id
 
+    def add_session(self,session_id:str) -> str:
+        now = datetime.now()
+        session = UserSession(
+            session_id=session_id,
+            created_at=now,
+            expires_at=now + timedelta(hours=1),
+            last_request_time=now
+        )
+        self.db.add_session(session)
+        return session_id
+
     def get_session(self, session_id: str) -> Optional[UserSession]:
-        return self.db.get_session(session_id)
+        session = self.db.get_session(session_id)
+        if session is None:
+            self.add_session(session_id)
+            session= self.db.get_session(session_id)
+        return session
 
     def save_session(self, session: UserSession):
         if not self.session_exists(session.session_id):
@@ -107,3 +122,7 @@ class UserSessionManager(metaclass= Singleton):
         setting_data = self.db.get_data(session_id)
         setting_data[key] = value
         self.db.update_data(session_id, setting_data)
+
+    def clear_all(self):
+        """Clear all sessions from the database."""
+        self.db.delete_all_sessions()

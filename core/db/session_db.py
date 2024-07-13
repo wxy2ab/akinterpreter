@@ -138,3 +138,7 @@ class SessionDb(metaclass=Singleton):
         if result:
             return self._decode_json(result[0])
         return []
+
+    def delete_all_sessions(self):
+        """Delete all sessions from the database."""
+        self.conn.execute("DELETE FROM user_sessions")
