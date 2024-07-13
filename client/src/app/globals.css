@@ -1,35 +1,140 @@
 @tailwind base;
-  @tailwind components;
-  @tailwind utilities;
-/* 全局样式 */
-body {
+@tailwind components;
+@tailwind utilities;
+.react-tabs__tab-list {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
-  background-color: #282a36;
-  color: #f8f8f2;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: row;
 }
 
-/* 可选：自定义 PanelResizeHandle 样式 */
-.PanelResizeHandle {
-  background-color: #44475a;
-  width: 5px;
-  cursor: col-resize;
-  z-index: 1;
-}
-.SplitPane {
-  position: relative !important;
-}
-
-.SplitPane .Pane {
-  height: 100% !important;
-  overflow: auto !important;
+.react-tabs__tab {
+  display: inline-block;
+  border: none;
+  bottom: -1px;
+  position: relative;
+  list-style: none;
+  padding: 6px 12px;
+  cursor: pointer;
 }
 
-.SplitPane .Resizer {
-  background: #44475a;
-  width: 5px;
-  cursor: col-resize;
-  margin: 0 -2px;
-  z-index: 1;
-  box-sizing: border-box;
+.react-tabs__tab--selected {
+  background: #fff;
+  border-color: #aaa;
+  color: black;
+  border-radius: 5px 5px 0 0;
+}
+
+.react-tabs__tab-panel {
+  display: none;
+}
+
+.react-tabs__tab-panel--selected {
+  display: block;
+}
+
+/* 其他全局样式 */
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+:root {
+  --foreground-rgb: 255, 255, 255;
+  --background-start-rgb: 0, 0, 0;
+  --background-end-rgb: 0, 0, 0;
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: linear-gradient(
+      to bottom,
+      transparent,
+      rgb(var(--background-end-rgb))
+    )
+    rgb(var(--background-start-rgb));
+}
+
+@layer base {
+  body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold mb-2;
+  }
+
+  h1 {
+    @apply text-3xl;
+  }
+
+  h2 {
+    @apply text-2xl;
+  }
+
+  h3 {
+    @apply text-xl;
+  }
+
+  a {
+    @apply text-blue-400 hover:text-blue-300;
+  }
+
+  button {
+    @apply bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded;
+  }
+
+  input, textarea {
+    @apply bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-gray-800 rounded-lg shadow-lg p-6;
+  }
+
+  .btn-primary {
+    @apply bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded;
+  }
+}
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: #1a202c;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #4a5568;
+  border-radius: 6px;
+  border: 3px solid #1a202c;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #718096;
+}
+
+/* Ensure full height for app container */
+#__next {
+  height: 100vh;
 }

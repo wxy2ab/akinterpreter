@@ -5,7 +5,9 @@ const nextConfig = {
   distDir: '../static/.next',
   images: {
     unoptimized: true
-  }
+  },
+  reactStrictMode: true,
+  transpilePackages: ['@/components/ui'],
 }
 
   

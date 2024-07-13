@@ -1,71 +1,92 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { getSession } from '../lib/api';
-import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
+import { getSession, updateCurrentPlan, updateStepCodes } from '@/lib/api';
+import '../styles/custom-tabs.css';
 
-const ChatWindow = dynamic(() => import('../components/ChatWindow'), { ssr: false });
-const MainWindow = dynamic(() => import('../components/MainWindow'), { ssr: false });
-const SSEComponent = dynamic(() => import('../components/SSEComponent'), { ssr: false });
+const ChatWindow = dynamic(() => import('@/components/ChatWindow'), { ssr: false });
+const MainWindow = dynamic(() => import('@/components/MainWindow'), { ssr: false });
+
+interface SessionData {
+  session_id: string;
+  chat_history: any[];
+  current_plan: any;
+  step_codes: { [key: string]: string };
+}
 
 const Home: React.FC = () => {
-    const [sessionData, setSessionData] = useState<any | null>(null);
-    const [plan, setPlan] = useState<any>({});
-    const [stepCodes, setStepCodes] = useState<{ [key: string]: string }>({});
-    const [chatHistory, setChatHistory] = useState<any[]>([]);
+  const [sessionData, setSessionData] = useState<SessionData | null>(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        const fetchSession = async () => {
-            const session = await getSession();
-            console.log('Session data:', session);
-            setSessionData(session);
-            setChatHistory(session.chat_history);
-            setPlan(session.current_plan);
-            setStepCodes(session.step_codes);
-        };
+  useEffect(() => {
+    const fetchSessionData = async () => {
+      try {
+        const data = await getSession();
+        setSessionData(data);
+      } catch (error) {
+        console.error('Failed to fetch session data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-        fetchSession();
-    }, []);
+    fetchSessionData();
+  }, []);
 
-    const handleSSEMessage = useCallback((data: { type: string; plan?: any; step_codes?: any; chat_history?: any }) => {
-        console.log('SSE Message:', data);
-        if (data.type === 'plan') {
-            setPlan(data.plan);
-        } else if (data.type === 'code') {
-            setStepCodes(data.step_codes);
-        } else if (data.type === 'chat_history') {
-            setChatHistory(data.chat_history);
-        }
-    }, []);
-
-    if (!sessionData) {
-        return <div>Loading...</div>;
+  const handlePlanUpdate = async (newPlan: any) => {
+    if (!sessionData) return;
+    try {
+      await updateCurrentPlan(newPlan);
+      setSessionData(prevData => ({
+        ...prevData!,
+        current_plan: newPlan
+      }));
+    } catch (error) {
+      console.error('Failed to update plan:', error);
     }
+  };
 
-    return (
-        <div
-            style={{
-                height: '100vh',
-                overflow: 'hidden',
-                backgroundColor: '#282a36', // 背景颜色与 Dracula 主题一致
-                color: '#f8f8f2', // 文本颜色与 Dracula 主题一致
-            }}
-        >
-            <PanelGroup direction="horizontal">
-                <Panel style={{ height: '100%', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', overflowY: 'auto' }}>
-                        <ChatWindow chatHistory={chatHistory} />
-                        <SSEComponent sessionId={sessionData.session_id} onMessage={handleSSEMessage} />
-                    </div>
-                </Panel>
-                <PanelResizeHandle style={{ backgroundColor: '#44475a', width: '5px', cursor: 'col-resize' }} />
-                <Panel style={{ height: '100%', overflow: 'hidden' }}>
-                    <MainWindow currentPlan={plan} stepCodes={stepCodes} />
-                </Panel>
-            </PanelGroup>
-        </div>
-    );
+  const handleCodeUpdate = async (step: string, newCode: string) => {
+    if (!sessionData) return;
+    try {
+      const updatedStepCodes = {
+        ...sessionData.step_codes,
+        [step]: newCode
+      };
+      await updateStepCodes(updatedStepCodes);
+      setSessionData(prevData => ({
+        ...prevData!,
+        step_codes: updatedStepCodes
+      }));
+    } catch (error) {
+      console.error('Failed to update code:', error);
+    }
+  };
+
+  if (loading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>Loading...</div>;
+  }
+
+  if (!sessionData) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>No session data available.</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>
+      <div style={{ width: '30%', borderRight: '1px solid #4a5568' }}>
+        <ChatWindow initialMessages={sessionData.chat_history} />
+      </div>
+      <div style={{ width: '70%' }}>
+        <MainWindow
+          currentPlan={sessionData.current_plan}
+          stepCodes={sessionData.step_codes}
+          onPlanUpdate={handlePlanUpdate}
+          onCodeUpdate={handleCodeUpdate}
+        />
+      </div>
+    </div>
+  );
 };
 
 export default Home;

@@ -1,26 +1,48 @@
-import React from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { json } from '@codemirror/lang-json';
-import { dracula } from '@uiw/codemirror-theme-dracula';
+import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { JSONInputProps } from 'react-json-editor-ajrm';
+import locale from 'react-json-editor-ajrm/locale/en';
 
-interface JsonCodeEditorProps {
-  value: any;
-  onChange: (value: any) => void;
+const JSONEditor = dynamic<JSONInputProps>(
+  () => import('react-json-editor-ajrm').then((mod) => mod.default),
+  { ssr: false }
+);
+
+interface JsonEditorProps {
+  initialJson: any;
+  onJsonChange: (updatedJson: any) => void;
 }
 
-const JsonCodeEditor: React.FC<JsonCodeEditorProps> = ({ value, onChange }) => {
+const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
+  const [json, setJson] = useState(initialJson);
+
+  useEffect(() => {
+    setJson(initialJson);
+  }, [initialJson]);
+
+  const handleJsonChange = (data: { jsObject: any } | { error: boolean }) => {
+    if ('jsObject' in data) {
+      setJson(data.jsObject);
+      onJsonChange(data.jsObject);
+    }
+  };
+
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
-      <CodeMirror
-        value={JSON.stringify(value, null, 2)}
+    <div style={{ height: '100%', width: '100%', fontSize: '16px'  }}>
+      <JSONEditor
+        id="json-editor"
+        placeholder={json}
+        onChange={handleJsonChange}
+        locale={locale}
         height="100%"
-        extensions={[json()]}
-        theme={dracula}
-        onChange={(value) => onChange(JSON.parse(value))}
-        basicSetup={{ lineNumbers: true }}
+        width="100%"
+        colors={{
+          background: '#1a202c',
+          default: '#d4d4d4',
+        }}
       />
     </div>
   );
 };
 
-export default JsonCodeEditor;
+export default JsonEditor;

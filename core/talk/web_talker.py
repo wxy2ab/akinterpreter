@@ -44,12 +44,22 @@ class WebTalker(Talker):
 
     def _process_generator(self, generator) -> Generator[str, None, None]:
         replies = []
+        prev_type = None
         for chunk in generator:
-            if "content" in chunk:
-                replies.append(chunk["content"])
+            if "type" in chunk:
+                curr_type = chunk["type"]
+                if curr_type == prev_type:
+                    replies.append(chunk["content"])
+                else:
+                    reply = ''.join(replies)
+                    if reply:
+                        self.chat_history.append({"role": "assistant", "content": reply})
+                    replies = [chunk["content"]]
+                    prev_type = curr_type
             yield chunk
         reply = ''.join(replies)
-        self.chat_history.append({"role": "assistant", "content": reply})
+        if reply:
+            self.chat_history.append({"role": "assistant", "content": reply})
         self.sessions.update_chat_history(self.session_id, self.chat_history)
 
     def clear(self) -> None:

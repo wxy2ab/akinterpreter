@@ -1,63 +1,60 @@
-'use client';
-
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import ChatMessage from './ChatMessage';
-import ChatInput from './ChatInput';
-import { getSession, getSessionId } from '../lib/api';
+import React, { useState, useEffect, useRef } from 'react';
+import { getSessionId } from '@/lib/api';
 
 interface Message {
-  type: string;
-  content: any;
-  isBot: boolean;
+  role: 'user' | 'assistant';
+  content: string;
 }
 
 interface ChatWindowProps {
-  chatHistory: Message[];
+  initialMessages?: Message[];
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
-  const [messages, setMessages] = useState<Message[]>(chatHistory);
+const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages = [] }) => {
+  const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [appSessionId, setAppSessionId] = useState<string | null>(null);
-  const messagesEndRef = useRef<null | HTMLDivElement>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
-  const currentMessageRef = useRef<Message | null>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(scrollToBottom, [messages]);
 
   useEffect(() => {
-    const fetchAppSessionId = async () => {
-      const sessionId = await getSessionId();
-      setAppSessionId(sessionId);
-    };
-
-    fetchAppSessionId();
+    getSessionId().then(setSessionId);
   }, []);
 
-  const addOrUpdateMessage = useCallback((newMessage: Message) => {
-    setMessages(prevMessages => {
-      const updatedMessages = [...prevMessages];
-      const lastMessage = updatedMessages[updatedMessages.length - 1];
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
-      if (lastMessage && lastMessage.type === newMessage.type && lastMessage.isBot === newMessage.isBot) {
-        // Update existing message of the same type
-        lastMessage.content += newMessage.content;
-        return updatedMessages;
-      } else {
-        // Add new message
-        return [...updatedMessages, newMessage];
-      }
-    });
-  }, []);
+  useEffect(() => {
+    if (sessionId) {
+      eventSourceRef.current = new EventSource(`/api/sse?session_id=${sessionId}`);
+      
+      eventSourceRef.current.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.type === 'chat_history') {
+          // Handle special updates like resetting or clearing history
+          setMessages(data.chat_history);
+        }
+      };
 
-  const handleSendMessage = useCallback(async (message: string) => {
-    addOrUpdateMessage({ type: 'message', content: message, isBot: false });
+      eventSourceRef.current.onerror = (error) => {
+        console.error('EventSource failed:', error);
+      };
+
+      return () => {
+        eventSourceRef.current?.close();
+      };
+    }
+  }, [sessionId]);
+
+  const sendMessage = async (message: string) => {
+    if (!message.trim() || !sessionId) return;
+
+    const newUserMessage: Message = { role: 'user', content: message };
+    setMessages(prev => [...prev, newUserMessage]);
+    setInput('');
     setIsLoading(true);
-    currentMessageRef.current = null;
 
     try {
       const response = await fetch('/api/schat', {
@@ -65,64 +62,103 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ session_id: appSessionId, message }),
+        body: JSON.stringify({ session_id: sessionId, message }),
       });
 
       if (!response.ok) {
-        throw new Error('Network response was not ok');
+        throw new Error('Failed to send message');
       }
 
-      const { session_id: chatSessionId } = await response.json();
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No reader available');
 
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
+      let assistantMessage: Message = { role: 'assistant', content: '' };
 
-      const eventSource = new EventSource(`/api/chat-stream?session_id=${chatSessionId}`);
-      eventSourceRef.current = eventSource;
-
-      eventSource.onmessage = (event) => {
-        const parsedData = JSON.parse(event.data);
-
-        if (parsedData.type === 'finish') {
-          setIsLoading(false);
-          eventSource.close();
-          return;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        
+        const chunk = new TextDecoder().decode(value);
+        const lines = chunk.split('\n').filter(line => line.trim() !== '');
+        
+        for (const line of lines) {
+          const data = JSON.parse(line);
+          if (data.type === 'text') {
+            assistantMessage.content += data.content;
+            setMessages(prev => [
+              ...prev.slice(0, -1),
+              { ...prev[prev.length - 1] },
+              { ...assistantMessage }
+            ]);
+          }
         }
-
-        const newMessage: Message = {
-          type: parsedData.type,
-          content: parsedData.content,
-          isBot: true
-        };
-
-        addOrUpdateMessage(newMessage);
-      };
-
-      eventSource.onerror = (error) => {
-        console.error('EventSource failed:', error);
-        eventSource.close();
-        setIsLoading(false);
-        addOrUpdateMessage({ type: 'error', content: 'Error: Connection to server lost.', isBot: true });
-      };
+      }
     } catch (error) {
       console.error('Error sending message:', error);
-      addOrUpdateMessage({ type: 'error', content: 'Error: Unable to get response from the server.', isBot: true });
+      setMessages(prev => [...prev, { role: 'assistant', content: 'Error: Unable to get response from the server.' }]);
+    } finally {
       setIsLoading(false);
     }
-  }, [appSessionId, addOrUpdateMessage]);
+  };
+
+  const renderMessages = () => {
+    return messages.map((message, index) => (
+      <div
+        key={index}
+        style={{
+          marginBottom: '10px',
+          padding: '10px',
+          borderRadius: '5px',
+          backgroundColor: message.role === 'assistant' ? '#4a5568' : '#3182ce',
+          color: 'white',
+          maxWidth: '80%',
+          alignSelf: message.role === 'assistant' ? 'flex-start' : 'flex-end'
+        }}
+      >
+        {message.content}
+      </div>
+    ));
+  };
 
   return (
-    <div className="flex flex-col h-full max-h-full">
-      <div className="flex-grow overflow-y-auto p-4 space-y-4">
-        {messages.map((msg, index) => (
-          <ChatMessage key={index} type={msg.type} content={msg.content} isBot={msg.isBot} />
-        ))}
-        {isLoading && <p className="italic text-gray-500">🤖在努力思考。。。</p>}
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: '100vh', backgroundColor: '#1a202c', color: 'white' }}>
+      <div style={{ flexGrow: 1, overflowY: 'auto', padding: '20px' }}>
+        {renderMessages()}
+        {isLoading && <div style={{ color: '#a0aec0', fontStyle: 'italic' }}>AI is thinking...</div>}
         <div ref={messagesEndRef} />
       </div>
-      <div className="flex-shrink-0 p-4 border-t">
-        <ChatInput onSendMessage={handleSendMessage} disabled={isLoading} />
+      <div style={{ padding: '20px', borderTop: '1px solid #4a5568', display: 'flex' }}>
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && sendMessage(input)}
+          style={{
+            flexGrow: 1,
+            padding: '10px',
+            borderRadius: '5px 0 0 5px',
+            border: '1px solid #4a5568',
+            backgroundColor: '#2d3748',
+            color: 'white'
+          }}
+          placeholder="Type your message..."
+          disabled={isLoading}
+        />
+        <button
+          onClick={() => sendMessage(input)}
+          disabled={isLoading}
+          style={{
+            padding: '10px 20px',
+            borderRadius: '0 5px 5px 0',
+            border: '1px solid #4a5568',
+            backgroundColor: '#3182ce',
+            color: 'white',
+            cursor: 'pointer',
+            opacity: isLoading ? 0.5 : 1
+          }}
+        >
+          Send
+        </button>
       </div>
     </div>
   );
