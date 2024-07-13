@@ -19,9 +19,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
   const [messages, setMessages] = useState<Message[]>(chatHistory);
   const [isLoading, setIsLoading] = useState(false);
   const [appSessionId, setAppSessionId] = useState<string | null>(null);
-  const messageBufferRef = useRef<Message | null>(null);
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const currentMessageRef = useRef<Message | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -38,10 +38,26 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
     fetchAppSessionId();
   }, []);
 
+  const addOrUpdateMessage = useCallback((newMessage: Message) => {
+    setMessages(prevMessages => {
+      const updatedMessages = [...prevMessages];
+      const lastMessage = updatedMessages[updatedMessages.length - 1];
+
+      if (lastMessage && lastMessage.type === newMessage.type && lastMessage.isBot === newMessage.isBot) {
+        // Update existing message of the same type
+        lastMessage.content += newMessage.content;
+        return updatedMessages;
+      } else {
+        // Add new message
+        return [...updatedMessages, newMessage];
+      }
+    });
+  }, []);
+
   const handleSendMessage = useCallback(async (message: string) => {
-    setMessages(prevMessages => [...prevMessages, { type: 'text', content: message, isBot: false }]);
+    addOrUpdateMessage({ type: 'message', content: message, isBot: false });
     setIsLoading(true);
-    messageBufferRef.current = null;
+    currentMessageRef.current = null;
 
     try {
       const response = await fetch('/api/schat', {
@@ -68,44 +84,33 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ chatHistory }) => {
       eventSource.onmessage = (event) => {
         const parsedData = JSON.parse(event.data);
 
-        if (parsedData.type === 'text') {
-          setMessages(prevMessages => {
-            const newMessages = [...prevMessages];
-            const lastMessage = newMessages[newMessages.length - 1];
-            if (lastMessage && lastMessage.isBot && lastMessage.type === 'text') {
-              lastMessage.content += parsedData.content;
-              return [...newMessages.slice(0, -1), lastMessage];
-            } else {
-              return [...newMessages, { type: 'text', content: parsedData.content, isBot: true }];
-            }
-          });
-        } else if (parsedData.type === 'error') {
-          console.error(`Error: ${parsedData.content}`);
-        } else if (parsedData.type === '[DONE]') {
+        if (parsedData.type === 'finish') {
           setIsLoading(false);
           eventSource.close();
-        } else {
-          setMessages(prevMessages => [
-            ...prevMessages,
-            { type: parsedData.type, content: parsedData.content, isBot: true }
-          ]);
+          return;
         }
+
+        const newMessage: Message = {
+          type: parsedData.type,
+          content: parsedData.content,
+          isBot: true
+        };
+
+        addOrUpdateMessage(newMessage);
       };
 
       eventSource.onerror = (error) => {
         console.error('EventSource failed:', error);
         eventSource.close();
         setIsLoading(false);
+        addOrUpdateMessage({ type: 'error', content: 'Error: Connection to server lost.', isBot: true });
       };
     } catch (error) {
       console.error('Error sending message:', error);
-      setMessages(prevMessages => [
-        ...prevMessages,
-        { type: 'text', content: 'Error: Unable to get response from the server.', isBot: true }
-      ]);
+      addOrUpdateMessage({ type: 'error', content: 'Error: Unable to get response from the server.', isBot: true });
       setIsLoading(false);
     }
-  }, [appSessionId]);
+  }, [appSessionId, addOrUpdateMessage]);
 
   return (
     <div className="flex flex-col h-full max-h-full">

@@ -65,7 +65,7 @@ class SSECodeRunner:
                 else:
                     raise
             except Exception as e:
-                raise Exception(f"执行代码时发生错误:\n{e}")
+                raise Exception(f"执行代码时发生错误:\n{traceback.format_exc()}")
 
     def handle_import_error(self, error_message: str) -> bool:
         module_name = error_message.split("'")[1] if "'" in error_message else ""

@@ -1,4 +1,5 @@
 import React from 'react';
+import Image from 'next/image';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
@@ -50,13 +51,14 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
           const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
           if (match) {
             return (
-              <img
-                key={index}
-                src={match[2]}
-                alt={match[1]}
-                className="max-w-full h-auto my-2"
-                style={{ maxWidth: '100%', height: 'auto' }}
-              />
+              <div key={index} className="relative w-full h-64 my-2">
+                <Image
+                  src={match[2]}
+                  alt={match[1]}
+                  layout="fill"
+                  objectFit="contain"
+                />
+              </div>
             );
           }
         } else if (part.startsWith('[')) {
