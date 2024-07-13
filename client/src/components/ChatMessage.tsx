@@ -1,5 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/hljs';
 
@@ -22,6 +21,7 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
     if (typeof content === 'string') {
       const cleanContent = content.replace(/^```(json|python)?\s*|\s*```$/g, '');
 
+      // 尝试解析 JSON
       try {
         const jsonContent = JSON.parse(cleanContent);
         return (
@@ -30,9 +30,10 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
           </SyntaxHighlighter>
         );
       } catch (e) {
-        // Ignore JSON parse error
+        // 如果不是 JSON，继续处理
       }
 
+      // 检查是否是 Python 代码
       if (cleanContent.includes('def ') || cleanContent.includes('import ') || cleanContent.includes('print(')) {
         return (
           <SyntaxHighlighter language="python" style={dracula}>
@@ -41,21 +42,32 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
         );
       }
 
+      // 处理图片和链接
       const parts = cleanContent.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
-      return parts.map((part, index) => {
+      return parts.map((part: string, index: number) => {
         if (part.startsWith('![')) {
+          // 图片
           const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
           if (match) {
             return (
-              <div key={index} className="max-w-full h-auto my-2">
-                <Image src={match[2]} alt={match[1]} width={500} height={300} layout="responsive" />
-              </div>
+              <img
+                key={index}
+                src={match[2]}
+                alt={match[1]}
+                className="max-w-full h-auto my-2"
+                style={{ maxWidth: '100%', height: 'auto' }}
+              />
             );
           }
         } else if (part.startsWith('[')) {
+          // 链接
           const match = part.match(/\[(.*?)\]\((.*?)\)/);
           if (match) {
-            return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
+            return (
+              <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                {match[1]}
+              </a>
+            );
           }
         }
         return <span key={index}>{part}</span>;

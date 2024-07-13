@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 
 interface SSEComponentProps {
     sessionId: string;
-    onMessage: (data: { type: string; plan?: any; step_codes?: any }) => void;
+    onMessage: (data: { type: string; plan?: any; step_codes?: any; chat_history?: any }) => void;
 }
 
 const SSEComponent: React.FC<SSEComponentProps> = ({ sessionId, onMessage }) => {
@@ -10,12 +10,8 @@ const SSEComponent: React.FC<SSEComponentProps> = ({ sessionId, onMessage }) => 
         const eventSource = new EventSource(`/api/sse?session_id=${sessionId}`);
 
         eventSource.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                onMessage(data);
-            } catch (error) {
-                console.error('Error parsing SSE data:', error);
-            }
+            const data = JSON.parse(event.data);
+            onMessage(data);
         };
 
         eventSource.onerror = (error) => {
