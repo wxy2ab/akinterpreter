@@ -126,6 +126,12 @@ def create_command_parser():
         "显示当前计划",
         use_regex=False
     )
+    # Add the new clear_history command
+    parser.add_command("clear_history", 
+        lambda ctx, args: handle_clear_history(ctx),
+        "清除聊天历史",
+        use_regex=False
+    )
     return parser
 
 def handle_set_stop_every_step(ctx, args):
@@ -165,3 +171,7 @@ def handle_show_plan(ctx):
         yield {"type": "plan", "content": current_plan}
     else:
         yield {"type": "message", "content": "当前没有计划。"}
+
+def handle_clear_history(ctx):
+    ctx._notify_command_send("clear_history")
+    yield {"type": "message", "content": "聊天历史已清除。"}

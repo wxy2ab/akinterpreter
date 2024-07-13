@@ -36,6 +36,7 @@ class AkshareFunPlanner(SSEPlanner):
         self.plan_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self.code_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
         self.setting_change_listeners: List[Callable[[Dict[str, Any]], None]] = []
+        self.command_send_listeners: List[Callable[[str,Optional[ Union[Dict[str, Any],str] ] ], None]] = []
 
     def add_plan_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
         """添加计划变更监听器"""
@@ -48,6 +49,15 @@ class AkshareFunPlanner(SSEPlanner):
     def add_setting_change_listener(self, listener: Callable[[Dict[str, Any]], None]):
         """添加设置变更监听器"""
         self.setting_change_listeners.append(listener)
+
+    def add_command_send_listener(self, listener: Callable[[str,Optional[ Union[Dict[str, Any],str] ] ], None]):
+        """添加命令发送监听器"""
+        self.command_send_listeners.append(listener)
+
+    def _notify_command_send(self, command: str, data:Optional[ Union[Dict[str, Any],str] ] = None):
+        """通知所有命令发送监听器"""
+        for listener in self.command_send_listeners:
+            listener(command, data)
 
     def _notify_plan_change(self, new_plan: Dict[str, Any]):
         """通知所有计划变更监听器"""

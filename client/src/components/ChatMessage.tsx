@@ -1,6 +1,13 @@
 import React from 'react';
-import SyntaxHighlighter from 'react-syntax-highlighter';
+import { Light as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/hljs';
+import python from 'react-syntax-highlighter/dist/esm/languages/hljs/python';
+import json from 'react-syntax-highlighter/dist/esm/languages/hljs/json';
+import Image from 'next/image';
+
+// 注册语言
+SyntaxHighlighter.registerLanguage('python', python);
+SyntaxHighlighter.registerLanguage('json', json);
 
 interface MessageProps {
   type: string;
@@ -49,11 +56,15 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
           // 图片
           const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
           if (match) {
-            return <img key={index} src={match[2]} alt={match[1]} className="max-w-full h-auto my-2" />;
+            return (
+              <div key={index} className="my-2">
+                <Image src={match[2]} alt={match[1]} layout="responsive" width={600} height={400} />
+              </div>
+            );
           }
         } else if (part.startsWith('[')) {
           // 链接
-          const match = part.match(/\[(.*?)\)\((.*?)\)/);
+          const match = part.match(/\[(.*?)\]\((.*?)\)/);
           if (match) {
             return <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">{match[1]}</a>;
           }

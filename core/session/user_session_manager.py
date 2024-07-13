@@ -83,6 +83,11 @@ class UserSessionManager(metaclass= Singleton):
             raise ValueError("Session does not exist")
         self.db.update_data(session_id, data)
 
+    def get_chat_history(self, session_id: str) -> List[dict]:
+        if not self.session_exists(session_id):
+            raise ValueError("Session does not exist")
+        return self.db.get_chat_history(session_id)
+
     def delete_session(self, session_id: str):
         self.db.delete_session(session_id)
 

@@ -28,12 +28,14 @@ const Home: React.FC = () => {
         fetchSession();
     }, []);
 
-    const handleSSEMessage = useCallback((data: { type: string; plan?: any; step_codes?: any }) => {
+    const handleSSEMessage = useCallback((data: { type: string; plan?: any; step_codes?: any; chat_history?: any }) => {
         console.log('SSE Message:', data);
         if (data.type === 'plan') {
             setPlan(data.plan);
         } else if (data.type === 'code') {
             setStepCodes(data.step_codes);
+        } else if (data.type === 'chat_history') {
+            setChatHistory(data.chat_history);
         }
     }, []);
 

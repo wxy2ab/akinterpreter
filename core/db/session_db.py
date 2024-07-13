@@ -118,3 +118,13 @@ class SessionDb(metaclass=Singleton):
     def cleanup_sessions(self):
         now = datetime.now()
         self.conn.execute("DELETE FROM user_sessions WHERE expires_at < ?", (now,))
+
+    def get_chat_history(self, session_id: str) -> List[dict]:
+        result = self.conn.execute(
+            "SELECT chat_history FROM user_sessions WHERE session_id = ?",
+            (session_id,)
+        ).fetchone()
+
+        if result:
+            return self._decode_json(result[0])
+        return []

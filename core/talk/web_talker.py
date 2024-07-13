@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime
 import json
-from typing import Generator, Union, Dict, Any
+from typing import Generator, Optional, Union, Dict, Any
 
 
 from ..llms.llm_factory import LLMFactory
@@ -80,8 +80,12 @@ class WebTalker(Talker):
         self.akshare_planner.add_plan_change_listener(self._on_plan_change)
         self.akshare_planner.add_code_change_listener(self._on_code_change)
         self.akshare_planner.add_setting_change_listener(self._on_setting_change)
+        self.akshare_planner.add_command_send_listener(self._on_command_send)
         session_dat = self.sessions.get_session(self.session_id)
+
         if session_dat is not None and session_dat:
+            if "chat_history" in session_dat and session_dat["chat_history"]:
+                self.chat_history = session_dat["chat_history"]
             if "current_plan" in session_dat and session_dat["current_plan"]:
                 self.akshare_planner.set_current_plan(session_dat["current_plan"])
             if "step_codes" in session_dat and session_dat["step_codes"]:
@@ -116,3 +120,14 @@ class WebTalker(Talker):
     def _on_setting_change(self,setting:dict) -> None:
 
         self.sessions.update_data(self.session_id,setting=setting)
+    
+    def _on_command_send(self,command:str,data:Optional[Union[Dict[str,Any],str]]) -> None:
+        if command=="clear_history":
+            self.chat_history = []
+            self.sessions.update_chat_history(self.session_id, [])
+        asyncio.run_coroutine_threadsafe(
+            self.message_queue.put(self.session_id, {"type": "chat_history", "chat_history": []}),
+            self.loop
+        )
+
+        
