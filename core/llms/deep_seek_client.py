@@ -5,7 +5,11 @@ from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 
 class DeepSeekClient(LLMApiClient):
-    def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-chat"):
+    def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-chat"
+                 , temperature: float = 0.7,
+                 top_p: float = 1.0, frequency_penalty: float = 0, presence_penalty: float = 0,
+                 stop: Optional[Union[str, List[str]]] = None
+                 ):
         config = Config()
         if api_key is None and config.has_key("deep_seek_api_key"):
             api_key = config.get("deep_seek_api_key")
@@ -13,8 +17,12 @@ class DeepSeekClient(LLMApiClient):
         self.messages = []
         self.task = "通用对话"
         self.model = model
-        self.temperature = 1.0
+        self.temperature = temperature
         self.max_tokens = max_tokens
+        self.top_p = top_p
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.stop = stop
         self.stats = {
             "total_tokens": 0,
             "completion_tokens": 0,
@@ -34,8 +42,13 @@ class DeepSeekClient(LLMApiClient):
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=message if isinstance(message,list) else [{"role": "user", "content": message}],
+            messages=message if isinstance(message, list) else [{"role": "user", "content": message}],
             max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop,
             stream=is_stream
         )
         self._update_stats(response)
@@ -50,6 +63,11 @@ class DeepSeekClient(LLMApiClient):
             model=self.model,
             messages=self.messages,
             max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop,
             stream=is_stream
         )
         self._update_stats(response)
@@ -70,12 +88,16 @@ class DeepSeekClient(LLMApiClient):
 
     def _send_tool_request(self, messages, tools):
         return self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            functions=tools,
-            function_call="auto",
-            temperature=self.temperature,
-        )
+                    model=self.model,
+                    messages=messages,
+                    functions=tools,
+                    function_call="auto",
+                    temperature=self.temperature,
+                    top_p=self.top_p,
+                    frequency_penalty=self.frequency_penalty,
+                    presence_penalty=self.presence_penalty,
+                    stop=self.stop,
+                )
 
     def set_task(self, task: str, model: Optional[str] = None) -> None:
         if task == "代码":
@@ -126,12 +148,18 @@ class DeepSeekClient(LLMApiClient):
     
 
 class ContinuousStreamIterator:
-    def __init__(self, client, initial_message, tools, function_module, max_tokens, is_stream):
+    def __init__(self, client, initial_message, tools, function_module, max_tokens, temperature, top_p, frequency_penalty,
+                 presence_penalty, stop, is_stream):
         self.client = client
         self.history = [{"role": "user", "content": initial_message}]
         self.tools = tools
         self.function_module = function_module
         self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.stop = stop
         self.is_stream = is_stream
         self.current_response = None
         self.tool_uses = []
@@ -166,6 +194,11 @@ class ContinuousStreamIterator:
                 max_tokens=self.max_tokens,
                 messages=self.history,
                 tools=self.tools,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
+                stop=self.stop,
                 stream=self.is_stream
             )
         
@@ -196,7 +229,7 @@ class ContinuousStreamIterator:
     def _handle_tool_calls(self):
         if self.tool_uses:
             tool_call = self.tool_uses.pop(0)
-            function_args=None
+            function_args = None
             function_name = tool_call.name
             try:
                 if not tool_call.input:
@@ -229,6 +262,11 @@ class ContinuousStreamIterator:
                 model=self.client.model,
                 max_tokens=self.max_tokens,
                 messages=self.history,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                frequency_penalty=self.frequency_penalty,
+                presence_penalty=self.presence_penalty,
+                stop=self.stop,
                 stream=self.is_stream
             )
         

@@ -20,13 +20,24 @@ class ClaudeAwsClient(LLMApiClient):
                  aws_secret_access_key: Optional[str] = None,
                  aws_session_token: Optional[str] = None,
                  aws_region: str = "us-east-1",
-                 model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0"):
+                 model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                temperature: float = 0.5,
+                top_p: float = 1.0,
+                top_k: int = 250,
+                max_tokens: int = 5120,
+                stop_sequences: Optional[List[str]] = None,
+                 ):
         self.aws_region = aws_region
         self.model = model
         self.aws_access_key_id = aws_access_key_id
         self.aws_secret_access_key = aws_secret_access_key
         self.aws_session_token = aws_session_token
         self.client = self._create_client()
+        self.temperature = temperature
+        self.top_p = top_p
+        self.top_k = top_k
+        self.max_tokens = max_tokens
+        self.stop_sequences = stop_sequences or []
         self.history: List[dict] = []
         self.stat: Dict[str, Any] = {
             "call_count": {
@@ -92,11 +103,17 @@ class ClaudeAwsClient(LLMApiClient):
             aws_region=self.aws_region)
 
     def _stream_response(self, message: str,
-                         max_tokens: int) -> Generator[str, None, None]:
+                         max_tokens: Optional[int]=None) -> Generator[str, None, None]:
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens,
-                                               messages=self.history,
-                                               stream=True)
+                                            max_tokens=max_tokens,
+                                            messages=self.history,
+                                            model=self.model,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences,
+                                            stream=True)
         full_response = ""
         for event in response:
             if isinstance(event, ContentBlockDeltaEvent) and event.delta.text:
@@ -115,7 +132,7 @@ class ClaudeAwsClient(LLMApiClient):
 
     def text_chat(self,
                   message: str,
-                  max_tokens: int = 10240,
+                  max_tokens: Optional[ int] = None,
                   is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
 
@@ -124,7 +141,13 @@ class ClaudeAwsClient(LLMApiClient):
         else:
             response = self.client.messages.create(model=self.model,
                                                    max_tokens=max_tokens,
-                                                   messages=self.history)
+                                                   messages=self.history,
+                                                max_tokens=max_tokens or self.max_tokens,
+                                                temperature=self.temperature,
+                                                top_p=self.top_p,
+                                                top_k=self.top_k,
+                                                stop_sequences=self.stop_sequences,
+                                                   )
             assistant_message = response.content[0].text
             self.history.append({
                 "role": "assistant",
@@ -136,7 +159,7 @@ class ClaudeAwsClient(LLMApiClient):
 
     def one_chat(self,
                  message: Union[str, List[Union[str, Any]]],
-                 max_tokens: int = 10240,
+                 max_tokens: Optional[ int] = None,
                  is_stream: bool = False) -> Union[str, Iterator[str]]:
         msg = None
         if isinstance(message, list):
@@ -152,7 +175,13 @@ class ClaudeAwsClient(LLMApiClient):
             def send_message():
                 response = self.client.messages.create(model=self.model,
                                                        max_tokens=max_tokens,
-                                                       messages=msg)
+                                                       messages=msg,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences
+                                                       )
                 return response
 
             response = send_message()
@@ -166,6 +195,11 @@ class ClaudeAwsClient(LLMApiClient):
         response = self.client.messages.create(model=self.model,
                                                max_tokens=max_tokens,
                                                messages=msg,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences,
                                                stream=True)
         for event in response:
             if isinstance(event, ContentBlockDeltaEvent) and event.delta.text:
@@ -194,7 +228,13 @@ class ClaudeAwsClient(LLMApiClient):
         self.history.append(image_message)
         response = self.client.messages.create(model=self.model,
                                                max_tokens=max_tokens,
-                                               messages=self.history)
+                                               messages=self.history,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences,
+                                               )
         assistant_message = response.content[0].text
         self.history.append({
             "role": "assistant",
@@ -240,7 +280,13 @@ class ClaudeAwsClient(LLMApiClient):
         # 调用 Claude API
         response = self.client.messages.create(model=self.model,
                                                max_tokens=max_tokens,
-                                               messages=self.history)
+                                               messages=self.history,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences,
+                                               )
 
         assistant_message = response.content[0].text
         self.history.append({
@@ -318,6 +364,11 @@ class ClaudeAwsClient(LLMApiClient):
         response = self.client.messages.create(model=self.model,
                                                max_tokens=max_tokens,
                                                messages=history,
+                                            max_tokens=max_tokens or self.max_tokens,
+                                            temperature=self.temperature,
+                                            top_p=self.top_p,
+                                            top_k=self.top_k,
+                                            stop_sequences=self.stop_sequences,
                                                tools=tools)
 
         assistant_message = ""
@@ -464,6 +515,10 @@ class ContinuousStreamIterator:
                 max_tokens=self.max_tokens,
                 messages=self.history,
                 tools=self.tools,
+                temperature=self.client.temperature,
+                top_p=self.client.top_p,
+                top_k=self.client.top_k,
+                stop_sequences=self.client.stop_sequences,
                 stream=self.is_stream)
 
         if self.is_stream:
@@ -540,6 +595,10 @@ class ContinuousStreamIterator:
                 model=self.client.model,
                 max_tokens=self.max_tokens,
                 messages=self.history,
+            temperature=self.client.temperature,
+            top_p=self.client.top_p,
+            top_k=self.client.top_k,
+            stop_sequences=self.client.stop_sequences,
                 stream=self.is_stream)
 
         if self.is_stream:

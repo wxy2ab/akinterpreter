@@ -6,12 +6,21 @@ from ..utils.config_setting import Config
 from typing import Literal
 
 class ErnieApiClient(LLMApiClient):
-    def __init__(self, api_key: str = None, secret_key: str = None, api_name: Literal["ernie-4.0-8k-latest","ernie-4.0-turbo-8k"] = "ernie-4.0-turbo-8k"):
+    def __init__(self, 
+                 api_key: str = None, 
+                 secret_key: str = None, 
+                 api_name: Literal["ernie-4.0-8k-latest", "ernie-4.0-turbo-8k"] = "ernie-4.0-turbo-8k",
+                 temperature: float = 0.8,
+                 top_p: float = 0.8,
+                 penalty_score: float = 1.0,
+                 stop: Optional[List[str]] = None,
+                 max_output_tokens: int = 2048):
         config = Config()
         if config.has_key("ERNIE_API_KEY"):
             api_key = config.get("ERNIE_API_KEY")
         if config.has_key("ERNIE_SERCRET_KEY"):
             secret_key = config.get("ERNIE_SERCRET_KEY")
+        
         self.api_key = api_key
         self.secret_key = secret_key
         self.api_name = api_name
@@ -20,9 +29,11 @@ class ErnieApiClient(LLMApiClient):
         self.chat_statistics = {'total_tokens': 0, "call_times": 0}
         self.chat_history = []
         self.system = None
-        self.temperature = 0.8
-        self.top_p = 1
-        self.max_output_tokens = 1024
+        self.temperature = temperature
+        self.top_p = top_p
+        self.penalty_score = penalty_score
+        self.stop = stop
+        self.max_output_tokens = max_output_tokens
 
     def get_access_token(self):
         url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={self.api_key}&client_secret={self.secret_key}"
@@ -46,6 +57,8 @@ class ErnieApiClient(LLMApiClient):
             "messages": full_messages,
             "temperature": self.temperature,
             "top_p": self.top_p,
+            "penalty_score": self.penalty_score,
+            "stop": self.stop,
             "max_output_tokens": self.max_output_tokens,
             "stream": stream
         }

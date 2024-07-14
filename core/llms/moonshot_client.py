@@ -5,7 +5,9 @@ from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 
 class MoonShotClient(LLMApiClient):
-    def __init__(self, api_key: str = "", base_url: str = "https://api.moonshot.cn/v1"):
+    def __init__(self, api_key: str = "", base_url: str = "https://api.moonshot.cn/v1",
+                 max_tokens: int = 4000, temperature: float = 0.3, top_p: float = 1,
+                 presence_penalty: float = 0, frequency_penalty: float = 0, stop: Union[str, List[str]] = None):
         config = Config()
         if api_key == "" and config.has_key("moonshot_api_key"):
             api_key = config.get("moonshot_api_key")
@@ -15,6 +17,12 @@ class MoonShotClient(LLMApiClient):
         self.messages = []
         self._model_list = ["moonshot-v1-128k", "moonshot-v1-8k", "moonshot-v1-32k"]
         self.model = self._model_list[0]
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.presence_penalty = presence_penalty
+        self.frequency_penalty = frequency_penalty
+        self.stop = stop
 
     def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
         self.messages = [{"role": "system", "content": system_message}]
@@ -103,7 +111,12 @@ class MoonShotClient(LLMApiClient):
         kwargs = {
             "model": self.model,
             "messages": messages,
-            "temperature": 0.3,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "presence_penalty": self.presence_penalty,
+            "frequency_penalty": self.frequency_penalty,
+            "stop": self.stop,
             "stream": is_stream
         }
         if tools:
@@ -139,7 +152,7 @@ class MoonShotClient(LLMApiClient):
             if hasattr(chunk, 'choices') and chunk.choices:
                 delta = chunk.choices[0].delta
                 if hasattr(delta, 'content') and delta.content:
-                    full_response+= delta.content
+                    full_response += delta.content
                     yield delta.content
         self.messages.append({"role": "assistant", "content": full_response})
 

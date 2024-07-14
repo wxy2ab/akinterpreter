@@ -18,19 +18,34 @@ class DoubaoApiClient(LLMApiClient):
             "call_count": {"text_chat": 0, "image_chat": 0, "tool_chat": 0},
             "total_tokens": 0
         }
+        
+        # 设置默认参数
+        self.max_tokens = 5000
+        self.stop = None
+        self.temperature = 1
+        self.top_p = 1
+        self.frequency_penalty = 1
 
-    def text_chat(self, message: str, max_tokens: int = 1000) -> str:
+    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-            max_tokens=max_tokens
-        )
-        assistant_message = response.choices[0].message.content
-        self.history.append({"role": "assistant", "content": assistant_message})
-        self.stats["call_count"]["text_chat"] += 1
-        self.stats["total_tokens"] += response.usage.total_tokens
-        return assistant_message
+        
+        if is_stream:
+            return self._stream_response(self.history)
+        else:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=self.history,
+                max_tokens=self.max_tokens,
+                stop=self.stop,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                frequency_penalty=self.frequency_penalty
+            )
+            assistant_message = response.choices[0].message.content
+            self.history.append({"role": "assistant", "content": assistant_message})
+            self.stats["call_count"]["text_chat"] += 1
+            self.stats["total_tokens"] += response.usage.total_tokens
+            return assistant_message
 
     def image_chat(self, message: str, image_path: str) -> str:
         import base64
@@ -44,29 +59,18 @@ class DoubaoApiClient(LLMApiClient):
         self.history.append({"role": "user", "content": content})
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.history
+            messages=self.history,
+            max_tokens=self.max_tokens,
+            stop=self.stop,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty
         )
         assistant_message = response.choices[0].message.content
         self.history.append({"role": "assistant", "content": assistant_message})
         self.stats["call_count"]["image_chat"] += 1
         self.stats["total_tokens"] += response.usage.total_tokens
         return assistant_message
-
-    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.history.append({"role": "user", "content": message})
-        
-        if is_stream:
-            return self._stream_response(self.history)
-        else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=self.history
-            )
-            assistant_message = response.choices[0].message.content
-            self.history.append({"role": "assistant", "content": assistant_message})
-            self.stats["call_count"]["text_chat"] += 1
-            self.stats["total_tokens"] += response.usage.total_tokens
-            return assistant_message
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
@@ -76,7 +80,12 @@ class DoubaoApiClient(LLMApiClient):
         else:
             response = self.client.chat.completions.create(
                 model=self.model,
-                messages=messages
+                messages=messages,
+                max_tokens=self.max_tokens,
+                stop=self.stop,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                frequency_penalty=self.frequency_penalty
             )
             assistant_message = response.choices[0].message.content
             self.stats["call_count"]["text_chat"] += 1
@@ -87,7 +96,12 @@ class DoubaoApiClient(LLMApiClient):
         stream = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
-            stream=True
+            stream=True,
+            max_tokens=self.max_tokens,
+            stop=self.stop,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty
         )
         full_response = ""
         for chunk in stream:
@@ -99,6 +113,8 @@ class DoubaoApiClient(LLMApiClient):
         self.history.append({"role": "assistant", "content": full_response})
         
         self.stats["call_count"]["text_chat"] += 1
+        self.stats["total_tokens"] += sum(chunk.usage.total_tokens for chunk in stream)
+
     def clear_chat(self):
         self.history.clear()
 
@@ -120,7 +136,12 @@ class DoubaoApiClient(LLMApiClient):
         request = {
             "model": self.model,
             "messages": self.history,
-            "tools": tools
+            "tools": tools,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty
         }
 
         completion = self.client.chat.completions.create(**request)

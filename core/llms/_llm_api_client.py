@@ -45,7 +45,9 @@ class LLMApiClient(ABC):
         pass
     
     def set_parameters(self, **kwargs):
-        valid_params = ["temperature", "top_p", "frequency_penalty", "presence_penalty", "max_tokens", "stop", "model"]
+        valid_params = ["temperature", "top_p", "frequency_penalty", "presence_penalty",
+                         "max_tokens", "stop", "model","stop_sequences","logit_bias",
+                         "logprobs","top_logprobs","penalty_score","max_output_tokens","do_sample","enable_search"]
         for key, value in kwargs.items():
             if key in valid_params:
                 self.parameters[key] = value

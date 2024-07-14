@@ -15,7 +15,12 @@ class AzureGPT4oClient(LLMApiClient):
                  azure_endpoint: Optional[str] = None,
                  max_tokens: int = 4000,
                  deployment_name: str = "gpt-4o",
-                 api_version: str = "2023-05-15"):
+                 api_version: str = "2023-05-15",
+                 temperature: float = 0.7,
+                 top_p: float = 1.0,
+                 frequency_penalty: float = 0,
+                 presence_penalty: float = 0,
+                 stop: Optional[Union[str, List[str]]] = None):
         from ..utils.config_setting import Config
         config  =   Config()
 
@@ -24,6 +29,11 @@ class AzureGPT4oClient(LLMApiClient):
         self.deployment_name = deployment_name
         self.api_version = api_version
         self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.top_p = top_p
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
+        self.stop = stop
         self.client = self._create_client()
         self.history: List[dict] = []
         self.stat: Dict[str, Any] = {
@@ -69,7 +79,12 @@ class AzureGPT4oClient(LLMApiClient):
             model=self.deployment_name,
             messages=copy_history,
             max_tokens=self.max_tokens,
-            stream=is_stream
+            stream=is_stream,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop
         )
         self._update_usage_stats(response)
         if is_stream:
@@ -85,7 +100,12 @@ class AzureGPT4oClient(LLMApiClient):
             model=self.deployment_name,
             messages=message if isinstance(message,list) else [{"role": "user", "content": message}],
             max_tokens=self.max_tokens,
-            stream=is_stream
+            stream=is_stream,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop
         )
         self._update_usage_stats(response)
         if is_stream:
@@ -112,7 +132,12 @@ class AzureGPT4oClient(LLMApiClient):
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=self.history,
-            max_tokens=max_tokens
+            max_tokens=max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop
         )
 
         assistant_message = response.choices[0].message.content
@@ -173,7 +198,12 @@ class AzureGPT4oClient(LLMApiClient):
             model=self.deployment_name,
             messages=[{"role": "user", "content": user_message}],
             max_tokens=max_tokens,
-            functions=tools
+            functions=tools,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop
         )
 
         assistant_message = response.choices[0].message.content or ""
@@ -289,7 +319,12 @@ class ContinuousStreamIterator:
                 max_tokens=self.max_tokens,
                 messages=self.history,
                 tools=self.tools,
-                stream=self.is_stream
+                stream=self.is_stream,
+                temperature=self.client.temperature,
+                top_p=self.client.top_p,
+                frequency_penalty=self.client.frequency_penalty,
+                presence_penalty=self.client.presence_penalty,
+                stop=self.client.stop
             )
         
         if self.is_stream:
@@ -352,7 +387,12 @@ class ContinuousStreamIterator:
                 model=self.client.deployment_name,
                 max_tokens=self.max_tokens,
                 messages=self.history,
-                stream=self.is_stream
+                stream=self.is_stream,
+            temperature=self.client.temperature,
+            top_p=self.client.top_p,
+            frequency_penalty=self.client.frequency_penalty,
+            presence_penalty=self.client.presence_penalty,
+            stop=self.client.stop
             )
         
         if self.is_stream:

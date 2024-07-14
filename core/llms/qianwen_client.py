@@ -6,9 +6,11 @@ from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 
 class QianWenClient(LLMApiClient):
-    def __init__(self ,api_key:str=""):
+    def __init__(self, api_key: str = "", max_tokens: int = 2000, top_p: float = 0.8, 
+                 repetition_penalty: float = 1, temperature: float = 1, 
+                 stop: Union[str, List[str], None] = None, enable_search: bool = False):
         import dashscope
-        config  = Config()
+        config = Config()
         if api_key == "" and config.has_key("DASHSCOPE_API_KEY"):
             api_key = config.get("DASHSCOPE_API_KEY")
         dashscope.api_key = api_key
@@ -19,7 +21,12 @@ class QianWenClient(LLMApiClient):
         self.failed_requests = 0
         self.models = ['qwen-max', 'qwen-plus', 'qwen-max-longcontext']
         self.model = self.models[0]
-
+        self.max_tokens = max_tokens
+        self.top_p = top_p
+        self.repetition_penalty = repetition_penalty
+        self.temperature = temperature
+        self.stop = stop
+        self.enable_search = enable_search
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.messages.append({'role': 'user', 'content': message})
@@ -162,12 +169,38 @@ class QianWenClient(LLMApiClient):
             tools=tools,
             result_format='message',
             stream=stream,
-            incremental_output=stream
+            incremental_output=stream,
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            repetition_penalty=self.repetition_penalty,
+            temperature=self.temperature,
+            stop=self.stop,
+            enable_search=self.enable_search
         )
         if not stream and response.status_code == HTTPStatus.OK:
             self.successful_requests += 1
             self.total_tokens += response.usage['total_tokens']
         elif not stream:
+            self.failed_requests += 1
+        return response
+
+    def _send_request(self, messages, model="qwen-max"):
+        self.request_count += 1
+        response = Generation.call(
+            model=model, 
+            messages=messages,
+            result_format='message',
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            repetition_penalty=self.repetition_penalty,
+            temperature=self.temperature,
+            stop=self.stop,
+            enable_search=self.enable_search
+        )
+        if response.status_code == HTTPStatus.OK:
+            self.successful_requests += 1
+            self.total_tokens += response.usage['total_tokens']
+        else:
             self.failed_requests += 1
         return response
 
@@ -177,7 +210,13 @@ class QianWenClient(LLMApiClient):
             messages=messages,
             result_format='message',
             stream=True,
-            incremental_output=True
+            incremental_output=True,
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            repetition_penalty=self.repetition_penalty,
+            temperature=self.temperature,
+            stop=self.stop,
+            enable_search=self.enable_search
         )
         full_response = ""
         for response in responses:
@@ -198,7 +237,13 @@ class QianWenClient(LLMApiClient):
             tools=tools,
             result_format='message',
             stream=True,
-            incremental_output=True
+            incremental_output=True,
+            max_tokens=self.max_tokens,
+            top_p=self.top_p,
+            repetition_penalty=self.repetition_penalty,
+            temperature=self.temperature,
+            stop=self.stop,
+            enable_search=self.enable_search
         )
         assistant_message = ""
         for response in responses:
@@ -263,18 +308,6 @@ class QianWenClient(LLMApiClient):
         else:
             self.messages.pop()
             return "Error: Failed to get response from the model."
-
-    def _send_request(self, messages, model="qwen-max"):
-        self.request_count += 1
-        response = Generation.call(model=model, 
-                                   messages=messages,
-                                   result_format='message')
-        if response.status_code == HTTPStatus.OK:
-            self.successful_requests += 1
-            self.total_tokens += response.usage['total_tokens']
-        else:
-            self.failed_requests += 1
-        return response
 
     def get_stats(self) -> Dict[str, Any]:
         return {

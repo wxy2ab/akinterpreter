@@ -5,15 +5,19 @@ from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 
 class GLMClient(LLMApiClient):
-    def __init__(self, api_key: str = "", model: Literal["glm-4-0520", "glm-4", "glm-4-air", "glm-4-airx", "glm-4-flash"] = "glm-4-0520"):
+    def __init__(self, api_key: str = "", model: Literal["glm-4-0520", "glm-4", "glm-4-air", "glm-4-airx", "glm-4-flash"] = "glm-4-0520",
+                 do_sample: bool = False, temperature: float = 0.95, top_p: float = 0.7, max_tokens: int = 4000, stop: Union[str, List[str], None] = None):
         config = Config()
         if api_key == "" and config.has_key("glm_api_key"):
             api_key = config.get("glm_api_key")
         self.client = ZhipuAI(api_key=api_key)
         self.model = model
         self.messages = []
-        self.top_p = 0.7
-        self.temperature = 0.5
+        self.do_sample = do_sample
+        self.temperature = temperature
+        self.top_p = top_p
+        self.max_tokens = max_tokens
+        self.stop = stop
 
     def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
         self.messages = [{"role": "system", "content": system_message}]
@@ -26,8 +30,11 @@ class GLMClient(LLMApiClient):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=self.messages,
+            do_sample=self.do_sample,
             temperature=self.temperature,
             top_p=self.top_p,
+            max_tokens=self.max_tokens,
+            stop=self.stop,
             stream=is_stream
         )
         
@@ -63,8 +70,11 @@ class GLMClient(LLMApiClient):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=messages,
+            do_sample=self.do_sample,
             temperature=self.temperature,
             top_p=self.top_p,
+            max_tokens=self.max_tokens,
+            stop=self.stop,
             stream=is_stream
         )
         
@@ -86,8 +96,11 @@ class GLMClient(LLMApiClient):
             messages=self.messages,
             tools=tools,
             tool_choice="auto",
+            do_sample=self.do_sample,
             temperature=self.temperature,
             top_p=self.top_p,
+            max_tokens=self.max_tokens,
+            stop=self.stop,
             stream=is_stream
         )
         
@@ -160,8 +173,11 @@ class GLMClient(LLMApiClient):
             final_response = self.client.chat.completions.create(
                 model=self.model,
                 messages=self.messages,
+                do_sample=self.do_sample,
                 temperature=self.temperature,
                 top_p=self.top_p,
+                max_tokens=self.max_tokens,
+                stop=self.stop,
                 stream=True
             )
             
@@ -217,8 +233,11 @@ class GLMClient(LLMApiClient):
             final_response = self.client.chat.completions.create(
                 model=self.model,
                 messages=self.messages,
+                do_sample=self.do_sample,
                 temperature=self.temperature,
-                top_p=self.top_p
+                top_p=self.top_p,
+                max_tokens=self.max_tokens,
+                stop=self.stop
             )
             final_output = final_response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": final_output})
