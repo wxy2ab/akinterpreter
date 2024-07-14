@@ -10,7 +10,7 @@ class UserSessionManager(metaclass= Singleton):
     def __init__(self):
         self.db = SessionDb()
 
-    def add_session(self) -> str:
+    def add_new_session(self) -> str:
         session_id = str(uuid.uuid4())
         now = datetime.now()
         session = UserSession(
@@ -22,7 +22,9 @@ class UserSessionManager(metaclass= Singleton):
         self.db.add_session(session)
         return session_id
 
-    def add_session(self,session_id:str) -> str:
+    def add_session(self,session_id:str=None) -> str:
+        if not session_id:
+            return self.add_new_session()
         now = datetime.now()
         session = UserSession(
             session_id=session_id,
