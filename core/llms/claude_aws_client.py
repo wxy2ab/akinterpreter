@@ -105,9 +105,7 @@ class ClaudeAwsClient(LLMApiClient):
     def _stream_response(self, message: str,
                          max_tokens: Optional[int]=None) -> Generator[str, None, None]:
         response = self.client.messages.create(model=self.model,
-                                            max_tokens=max_tokens,
                                             messages=self.history,
-                                            model=self.model,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
                                             top_p=self.top_p,
@@ -140,7 +138,6 @@ class ClaudeAwsClient(LLMApiClient):
             return self._stream_response(message, max_tokens)
         else:
             response = self.client.messages.create(model=self.model,
-                                                   max_tokens=max_tokens,
                                                    messages=self.history,
                                                 max_tokens=max_tokens or self.max_tokens,
                                                 temperature=self.temperature,
@@ -174,7 +171,6 @@ class ClaudeAwsClient(LLMApiClient):
             @retry(3)
             def send_message():
                 response = self.client.messages.create(model=self.model,
-                                                       max_tokens=max_tokens,
                                                        messages=msg,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
@@ -193,7 +189,6 @@ class ClaudeAwsClient(LLMApiClient):
     def _stream_one_response(self, msg: List[Dict[str, str]],
                              max_tokens: int) -> Generator[str, None, None]:
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens,
                                                messages=msg,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
@@ -227,7 +222,6 @@ class ClaudeAwsClient(LLMApiClient):
         }
         self.history.append(image_message)
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens,
                                                messages=self.history,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
@@ -279,7 +273,6 @@ class ClaudeAwsClient(LLMApiClient):
 
         # 调用 Claude API
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens or self.max_tokens,
                                                messages=self.history,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
@@ -362,7 +355,6 @@ class ClaudeAwsClient(LLMApiClient):
         history = []
         history.append({"role": "user", "content": user_message})
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens,
                                                messages=history,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,
