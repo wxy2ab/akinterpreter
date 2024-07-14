@@ -28,11 +28,10 @@ class SessionDb(metaclass=Singleton):
 
     def _encode_json(self, data):
         """Ensure the JSON data is properly encoded."""
-        return json.dumps(data, ensure_ascii=False).encode('utf-8')
+        return json.dumps(data, ensure_ascii=False)
 
     def _decode_json(self, data):
-        """Decode the JSON data properly."""
-        return json.loads(data.decode('utf-8'))
+        return json.loads(data)
 
     def add_session(self, session: UserSession):
         self.conn.execute(
@@ -61,10 +60,10 @@ class SessionDb(metaclass=Singleton):
                 created_at=result[1],
                 expires_at=result[2],
                 last_request_time=result[3],
-                chat_history=self._decode_json(result[4]),
-                current_plan=self._decode_json(result[5]),
-                step_codes=self._decode_json(result[6]),
-                data=self._decode_json(result[7])
+                chat_history=self._decode_json(result[4]),  # 解码 JSON 字符串
+                current_plan=self._decode_json(result[5]),  # 解码 JSON 字符串
+                step_codes=self._decode_json(result[6]),  # 解码 JSON 字符串
+                data=self._decode_json(result[7])  # 解码 JSON 字符串
             )
         return None
 
