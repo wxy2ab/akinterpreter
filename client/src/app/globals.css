@@ -1,55 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-.react-tabs__tab-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: row;
-}
-
-.react-tabs__tab {
-  display: inline-block;
-  border: none;
-  bottom: -1px;
-  position: relative;
-  list-style: none;
-  padding: 6px 12px;
-  cursor: pointer;
-}
-
-.react-tabs__tab--selected {
-  background: #fff;
-  border-color: #aaa;
-  color: black;
-  border-radius: 5px 5px 0 0;
-}
-
-.react-tabs__tab-panel {
-  display: none;
-}
-
-.react-tabs__tab-panel--selected {
-  display: block;
-}
-
-/* 其他全局样式 */
-:root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
-}
-
-body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
-}
 
 :root {
   --foreground-rgb: 255, 255, 255;
@@ -113,6 +64,27 @@ body {
   .btn-secondary {
     @apply bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded;
   }
+}
+
+/* React Tabs Styles */
+.react-tabs__tab-list {
+  @apply m-0 p-0 list-none flex flex-row;
+}
+
+.react-tabs__tab {
+  @apply inline-block border-none relative list-none py-1 px-3 cursor-pointer;
+}
+
+.react-tabs__tab--selected {
+  @apply bg-blue-600 text-white rounded-t;
+}
+
+.react-tabs__tab-panel {
+  @apply hidden;
+}
+
+.react-tabs__tab-panel--selected {
+  @apply block;
 }
 
 /* Custom scrollbar styles */

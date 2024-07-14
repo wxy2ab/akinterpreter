@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
-import { getSession, updateCurrentPlan, updateStepCodes } from '@/lib/api';
+import { getSession, updateCurrentPlan, updateStepCodes, getSSEStream } from '@/lib/api';
 import '../styles/custom-tabs.css';
 
 const ChatWindow = dynamic(() => import('@/components/ChatWindow'), { ssr: false });
@@ -24,6 +24,31 @@ const Home: React.FC = () => {
       try {
         const data = await getSession();
         setSessionData(data);
+        // Open SSE connection
+        const eventSource = getSSEStream(data.session_id);
+        eventSource.onmessage = (event) => {
+          const parsedData = JSON.parse(event.data);
+          if (parsedData.type === 'chat_history') {
+            setSessionData(prevData => ({
+              ...prevData!,
+              chat_history: parsedData.chat_history
+            }));
+          } else if (parsedData.type === 'plan') {
+            setSessionData(prevData => ({
+              ...prevData!,
+              current_plan: parsedData.plan
+            }));
+          } else if (parsedData.type === 'code') {
+            setSessionData(prevData => ({
+              ...prevData!,
+              step_codes: parsedData.step_codes
+            }));
+          }
+        };
+        eventSource.onerror = (error) => {
+          console.error('EventSource failed:', error);
+          eventSource.close();
+        };
       } catch (error) {
         console.error('Failed to fetch session data:', error);
       } finally {
@@ -65,19 +90,19 @@ const Home: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>Loading...</div>;
+    return <div className="flex justify-center items-center h-screen bg-background text-foreground">Loading...</div>;
   }
 
   if (!sessionData) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>No session data available.</div>;
+    return <div className="flex justify-center items-center h-screen bg-background text-foreground">No session data available.</div>;
   }
 
   return (
-    <div style={{ display: 'flex', height: '100vh', backgroundColor: '#1a202c', color: 'white' }}>
-      <div style={{ width: '30%', borderRight: '1px solid #4a5568' }}>
+    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
+      <div className="w-1/4 border-r border-border overflow-hidden">
         <ChatWindow initialMessages={sessionData.chat_history} />
       </div>
-      <div style={{ width: '70%' }}>
+      <div className="w-3/4 overflow-hidden">
         <MainWindow
           currentPlan={sessionData.current_plan}
           stepCodes={sessionData.step_codes}

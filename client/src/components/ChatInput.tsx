@@ -10,11 +10,16 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled }) => {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
+  const adjustTextareaHeight = () => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
+      const newHeight = Math.min(textareaRef.current.scrollHeight, 5 * 24); // 假设每行高度为 24px
+      textareaRef.current.style.height = `${newHeight}px`;
     }
-  }, [input]);
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,34 +37,27 @@ const ChatInput: React.FC<ChatInputProps> = ({ onSendMessage, disabled }) => {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex items-end" style={{ backgroundColor: '#282a36' }}>
+    <form onSubmit={handleSubmit} className="flex items-end w-full">
       <textarea
         ref={textareaRef}
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        className="flex-grow p-2 border-none rounded-l resize-none overflow-hidden"
-        placeholder="Type your message..."
+        className="flex-grow p-2 bg-gray-800 text-white border border-gray-700 rounded-l-md resize-none"
+        placeholder="输入消息... (Shift+Enter 换行)"
         disabled={disabled}
         rows={1}
         style={{
-          maxHeight: '150px',
-          backgroundColor: '#44475a',
-          color: '#f8f8f2',
-          border: '1px solid #6272a4',
+          minHeight: '38px',
+          maxHeight: '120px', // 5行的大约高度
         }}
       />
       <button
         type="submit"
-        className="p-2 text-white rounded-r h-full"
+        className="p-2 bg-blue-600 text-white rounded-r-md h-full"
         disabled={disabled}
-        style={{
-          backgroundColor: '#6272a4',
-          border: '1px solid #6272a4',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-        }}
       >
-        Send
+        发送
       </button>
     </form>
   );

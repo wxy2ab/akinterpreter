@@ -8,7 +8,8 @@ import json
 from typing import Generator, Dict, Any, List, Optional
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
-from ..interpreter.sse_code_runner import SSECodeRunner
+#from ..interpreter.sse_code_runner import SSECodeRunner
+from ..interpreter.ast_code_runner import ASTCodeRunner
 from ..interpreter.data_summarizer import DataSummarizer
 from ..interpreter._sse_planner import SSEPlanner, RetrievalProvider
 from .akshare_prompts import AksharePrompts
@@ -19,7 +20,7 @@ class AkshareSSEPlanner(SSEPlanner):
     def __init__(self, max_retry=8, allow_yfinance: bool = False):
         self.llm_factory = LLMFactory()
         self.llm_client: LLMApiClient = self.llm_factory.get_instance()
-        self.code_runner = SSECodeRunner()
+        self.code_runner = ASTCodeRunner()
         self.data_summarizer = DataSummarizer()
         self.retriever = self.get_retrieval_provider()
         self.reset()
