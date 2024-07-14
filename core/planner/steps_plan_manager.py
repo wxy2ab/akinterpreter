@@ -51,6 +51,9 @@ class StepsPlanManager:
                 return False
             if step["type"] == "data_analysis" and "required_data" not in step:
                 return False
+            if step["type"] == "data_retrieval" and "data_category" in step:
+                if step["data_category"] not in self.retriever.category_summaries.keys():
+                    return False
         return True
 
     def create_plan(self, query: str) -> Generator[Dict[str, Any], None, None]:
