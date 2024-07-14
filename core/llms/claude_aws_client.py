@@ -22,7 +22,7 @@ class ClaudeAwsClient(LLMApiClient):
                  aws_region: str = "us-east-1",
                  model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
                 temperature: float = 0.5,
-                top_p: float = 1.0,
+                top_p: float = 0.9,
                 top_k: int = 250,
                 max_tokens: int = 4096,
                 stop_sequences: Optional[List[str]] = None,
