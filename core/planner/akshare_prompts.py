@@ -64,6 +64,60 @@ class AksharePrompts:
         """
 
     @staticmethod
+    def fix_plan_prompt(plan: Dict[str, Any], error_message: str, categories: Dict[str, str]) -> str:
+        return f"""
+        以下是一个需要修复的计划：
+        {json.dumps(plan, indent=2, ensure_ascii=False)}
+
+        修复这个计划中的以下错误：
+        {error_message}
+
+        可用的数据类别有：
+        {json.dumps(categories, indent=2, ensure_ascii=False)}
+
+        请参考以下示例，提供修复后的完整计划：
+
+        示例查询: "分析阿里巴巴的财务状况和市场表现"
+        示例计划:
+        {{
+            "query_summary": "分析阿里巴巴的财务状况和市场表现",
+            "steps": [
+                {{
+                    "step_number": 1,
+                    "description": "获取阿里巴巴的财务数据",
+                    "type": "data_retrieval",
+                    "data_category": "股票数据",
+                    "save_data_to": "alibaba_financial_data"
+                }},
+                {{
+                    "step_number": 2,
+                    "description": "获取阿里巴巴的业绩报告数据",
+                    "type": "data_retrieval",
+                    "data_category": "公司数据",
+                    "save_data_to": "alibaba_report_data"
+                }},
+                {{
+                    "step_number": 3,
+                    "description": "分析阿里巴巴的财务状况和市场表现",
+                    "type": "data_analysis",
+                    "required_data": ["alibaba_financial_data", "alibaba_report_data"]
+                }}
+            ]
+        }}
+
+        上面的例子中，query要求找市场数据，但是没有这个类别，所从公司数据中选择了业绩报告
+
+        请确保修复后的计划：
+        1. 包含完整的查询总结（query_summary）。
+        2. 包含所有必要的步骤，每个步骤都有正确的步骤编号（step_number）。
+        3. 数据检索步骤（data_retrieval）必须包含有效的数据类别（data_category）和保存数据的变量名（save_data_to）。
+        4. 数据分析步骤（data_analysis）必须包含所需数据的列表（required_data）。
+        5. 所有步骤都有清晰、详细的描述（description）。
+        6. 如果没有完全匹配的数据类别，选择最接近的类别。
+
+        请提供修复后的完整计划，确保其符合所有要求并可以被直接解析为Python字典。
+        """
+    @staticmethod
     def modify_plan_prompt(query: str, current_plan: Dict[str, Any]) -> str:
         return f"""
         基于用户的新要求："{query}"

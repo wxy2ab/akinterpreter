@@ -1,10 +1,11 @@
+
 import asyncio
 import json
 import os
 import re
 import pickle
 import traceback
-from typing import Dict, Any, List, Generator, Optional, Union
+from typing import Dict, Any, List, Generator, Optional, Tuple, Union
 from core.interpreter.sse_code_runner import SSECodeRunner
 from core.planner.replay_event_bus import ReplayEventBus
 from core.scheduler.replay_message_queue import ReplayMessageQueue
@@ -39,61 +40,118 @@ class StepsPlanManager:
             return 0
         return len(self.current_plan.get("steps", []))
 
-    def validate_plan(self, plan: Dict[str, Any]) -> bool:
-        if "query_summary" not in plan or "steps" not in plan:
-            return False
+    def validate_plan(self, plan: Dict[str, Any]) -> Tuple[str, bool]:
+        if "query_summary" not in plan:
+            return "缺少 query_summary", False
+        if "steps" not in plan:
+            return "缺少 steps", False
         for step in plan["steps"]:
             if any(key not in step for key in ["step_number", "description", "type"]):
-                return False
+                return f"步骤 {step.get('step_number', '未知')} 缺少必要的键", False
             if step["type"] not in ["data_retrieval", "data_analysis"]:
-                return False
-            if step["type"] == "data_retrieval" and "save_data_to" not in step:
-                return False
-            if step["type"] == "data_analysis" and "required_data" not in step:
-                return False
-            if step["type"] == "data_retrieval" and "data_category" in step:
+                return f"步骤 {step.get('step_number', '未知')} 的类型无效", False
+            if step["type"] == "data_retrieval":
+                if "save_data_to" not in step:
+                    return f"数据检索步骤 {step.get('step_number', '未知')} 缺少 save_data_to", False
+                if "data_category" not in step:
+                    return f"数据检索步骤 {step.get('step_number', '未知')} 缺少 data_category", False
                 if step["data_category"] not in self.retriever.category_summaries.keys():
-                    return False
-        return True
+                    return f"步骤 {step.get('step_number', '未知')} 的 data_category '{step['data_category']}' 无效", False
+            if step["type"] == "data_analysis" and "required_data" not in step:
+                return f"数据分析步骤 {step.get('step_number', '未知')} 缺少 required_data", False
+        return "", True
 
     def create_plan(self, query: str) -> Generator[Dict[str, Any], None, None]:
         categories = self.retriever.get_categories()
         prompt = self.prompts.create_plan_prompt(query, categories)
         
-        max_attempts = self.max_retry
-        for attempt in range(max_attempts):
+        for attempt in range(self.max_retry):
             plan_text = ""
             for chunk in self.llm_client.text_chat(prompt, is_stream=True):
                 plan_text += chunk
-                yield send_message(chunk, "plan")
+                yield {"type": "plan", "content": chunk}
             
             try:
                 plan = json.loads(plan_text)
-                if self.validate_plan(plan):
+                error_message, is_valid = self.validate_plan(plan)
+                if is_valid:
                     self.current_plan = plan
+                    yield {"type": "message", "content": "计划创建成功。"}
                     return
                 else:
-                    yield send_message(f"生成的计划格式不正确，正在重试（尝试 {attempt + 1}/{max_attempts}）", "error")
+                    yield {"type": "message", "content": f"生成的计划有误（尝试 {attempt + 1}/{self.max_retry}）: {error_message}"}
+                    fixed_plan = yield from self.fix_plan(plan, error_message)
+                    if fixed_plan:
+                        error_message, is_valid = self.validate_plan(fixed_plan)
+                        if is_valid:
+                            self.current_plan = fixed_plan
+                            yield {"type": "message", "content": "计划修复成功。"}
+                            return
+                        else:
+                            yield {"type": "message", "content": f"修复后的计划仍有误: {error_message}"}
+                    else:
+                        yield {"type": "message", "content": "无法修复计划。"}
             except json.JSONDecodeError:
-                yield send_message(f"生成的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{max_attempts}）", "error")
+                yield {"type": "error", "content": f"生成的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{self.max_retry}）"}
         
-        yield send_message("无法生成有效的计划，请重新尝试。", "error")
+        yield {"type": "error", "content": "无法生成有效的计划，请重新尝试。"}
+
+
 
     def modify_plan(self, query: str) -> Generator[Dict[str, Any], None, None]:
         prompt = self._create_modify_plan_prompt(query)
-        plan_text = ""
-        for chunk in self.llm_client.text_chat(prompt, is_stream=True):
-            plan_text += chunk
-            yield send_message(chunk, "plan")
         
-        try:
-            self.current_plan = self._extract_json_from_text(plan_text)
-            if not self.validate_plan(self.current_plan):
-                yield send_message("修改后的计划格式不正确。请重试。", "error")
-                raise SyntaxError("Invalid plan format")
-        except json.JSONDecodeError:
-            yield send_message("无法修改计划。请重试。", "error")
+        for attempt in range(self.max_retry):
+            plan_text = ""
+            for chunk in self.llm_client.text_chat(prompt, is_stream=True):
+                plan_text += chunk
+                yield {"type": "plan", "content": chunk}
+            
+            try:
+                modified_plan = self._extract_json_from_text(plan_text)
+                error_message, is_valid = self.validate_plan(modified_plan)
+                
+                if is_valid:
+                    self.current_plan = modified_plan
+                    yield {"type": "message", "content": "计划修改成功。"}
+                    return
+                else:
+                    yield {"type": "message", "content": f"修改后的计划有误（尝试 {attempt + 1}/{self.max_retry}）: {error_message}"}
+                    fixed_plan = yield from self.fix_plan(modified_plan, error_message)
+                    
+                    if fixed_plan:
+                        error_message, is_valid = self.validate_plan(fixed_plan)
+                        if is_valid:
+                            self.current_plan = fixed_plan
+                            yield {"type": "message", "content": "计划修复成功。"}
+                            return
+                        else:
+                            yield {"type": "message", "content": f"修复后的计划仍有误: {error_message}"}
+                    else:
+                        yield {"type": "message", "content": "无法修复计划。"}
+                        
+            except json.JSONDecodeError:
+                yield {"type": "error", "content": f"修改后的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{self.max_retry}）"}
+        
+        yield {"type": "error", "content": "无法修改计划。请重新尝试。"}
 
+
+    def fix_plan(self, plan: Dict[str, Any], error_message: str) -> Generator[Dict[str, Any], None, None]:
+        categories = self.retriever.get_categories()
+        fix_prompt = self.prompts.fix_plan_prompt(plan, error_message, categories)
+
+        fixed_plan_text = ""
+        for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+            fixed_plan_text += chunk
+            yield {"type": "plan", "content": chunk}
+
+        try:
+            fixed_plan = json.loads(fixed_plan_text)
+            return fixed_plan
+        except json.JSONDecodeError:
+            yield {"type": "error", "content": "无法解析修复后的计划。请重试。"}
+            return None
+        
     def get_step_code(self, step: int) -> Optional[str]:
         return self.step_codes.get(step)
 
