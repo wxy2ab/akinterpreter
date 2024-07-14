@@ -5,15 +5,31 @@ from typing import Any, Dict, List
 class AksharePrompts:
     @staticmethod
     def create_plan_prompt(query: str, categories: Dict[str, str]) -> str:
+        category_descriptions = "\n".join([f"- {cat}: {desc}" for cat, desc in categories.items()])
+        category_list = ", ".join([f'"{cat}"' for cat in categories.keys()])
+        
         return f"""
+        你是一个严格遵循指令的 AI 助手。你的任务是基于给定的查询创建一个数据检索和分析计划。
+        请仔细阅读以下说明，并确保你的回答完全符合要求。
+
         基于用户查询："{query}"
-        以及可用的数据类别：
-        {json.dumps(categories, indent=2, ensure_ascii=False)}
+
+        创建一个数据检索和分析计划。
+
+        检索计划中，data_category的值应该从以下列表中选择：{category_list}。
+        下面是检索计划之中可用的data_category数据类别及其详细说明：
+
+        {category_descriptions}
+
 
         创建一个详细的计划来检索和分析数据。请注意以下要点：
         1. 不同类型的数据可能需要通过不同的步骤分别获取。
         2. 每个数据检索步骤应该专注于获取一种特定类型的数据。
         3. 在所有必要的数据都获取之后，再进行数据分析步骤。
+        4. 仔细匹配数据需求与类别说明，确保选择最合适的data_category。
+        例如：
+        - 如需财务数据，应选择"股票数据"类别。
+        - 如需基本面数据，应选择"公司数据"类别（包含公司概况、财务报表等）。
 
         该计划应采用JSON格式，具有以下结构：
         {{
@@ -23,8 +39,8 @@ class AksharePrompts:
                     "step_number": 1,
                     "description": "步骤描述，详细而明确",
                     "type": "data_retrieval",
-                    "data_category": "相关数据类别",
-                    "save_data_to": "描述性的变量名，如 china_stock_index_data"
+                    "data_category": "必须从给定类别中精确选择",
+                    "save_data_to": "描述性的变量名，如 stock_financial_data"
                 }},
                 // 可能有多个数据检索步骤
                 {{
@@ -41,9 +57,8 @@ class AksharePrompts:
         2. 每个步骤都有一个唯一的 step_number。
         3. 每个 data_retrieval 步骤都有一个描述性的 save_data_to 变量名。
         4. 每个 data_analysis 步骤的 required_data 列表包含了它需要的所有数据的变量名。
-        5. 变量名应该是描述性的，易于理解的，如 china_stock_index_data, us_market_sentiment 等。
+        5. 变量名应该是描述性的，易于理解的，如 stock_financial_data, company_fundamental_data 等。
         6. 计划包括所有必要的数据检索步骤，以及后续的数据分析步骤。
-        7. data_category 必须是"可用的数据类别"里面的一个。
 
         请提供完整的JSON格式计划，确保其可以被直接解析为Python字典。
         """

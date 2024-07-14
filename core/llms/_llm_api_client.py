@@ -43,3 +43,11 @@ class LLMApiClient(ABC):
     def get_stats(self) -> Dict[str, Any]:
         """返回使用情况统计信息（例如，token使用情况、API调用计数）。"""
         pass
+    
+    def set_parameters(self, **kwargs):
+        valid_params = ["temperature", "top_p", "frequency_penalty", "presence_penalty", "max_tokens", "stop", "model"]
+        for key, value in kwargs.items():
+            if key in valid_params:
+                self.parameters[key] = value
+            else:
+                print(f"Warning: {key} is not a valid parameter and will be ignored.")

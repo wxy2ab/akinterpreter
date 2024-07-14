@@ -2,7 +2,7 @@ import ast
 import contextlib
 import io
 import json
-from typing import Any, Dict, List, Union, Iterator
+from typing import Any, Dict, List, Optional, Union, Iterator
 from openai import AzureOpenAI
 import os
 from ._llm_api_client import LLMApiClient
@@ -17,14 +17,24 @@ class SimpleAzureClient(LLMApiClient):
                  azure_endpoint: str = None,
                  max_tokens: int = 4000,
                  deployment_name: str = "gpt-4o",
-                 api_version: str = "2023-05-15"):
+                 api_version: str = "2023-05-15",
+                 temperature: float = 0.7,
+                 top_p: float = 1.0,
+                 frequency_penalty: float = 0,
+                 presence_penalty: float = 0,
+                 stop: Optional[Union[str, List[str]]] = None):
         config = Config()
         
         self.api_key = api_key or config.get("AZURE_OPENAI_API_KEY")
         self.azure_endpoint = azure_endpoint or config.get("AZURE_OPENAI_ENDPOINT")
         self.deployment_name = deployment_name
         self.api_version = api_version
+        self.temperature = temperature
+        self.top_p = top_p
+        self.frequency_penalty = frequency_penalty
+        self.presence_penalty = presence_penalty
         self.max_tokens = max_tokens
+        self.stop = stop
         self.client = self._create_client()
         self.history: List[dict] = []
         self.stat: Dict[str, Any] = {
@@ -60,12 +70,17 @@ class SimpleAzureClient(LLMApiClient):
         self.history.append({"role": "assistant", "content": full_response})
 
 
-    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def text_chat(self, message: str,  max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=self.history,
-            max_tokens=self.max_tokens,
+            max_tokens=max_tokens or self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop,
             stream=is_stream
         )
         self._update_usage_stats(response)
@@ -76,11 +91,16 @@ class SimpleAzureClient(LLMApiClient):
             self.history.append({"role": "assistant", "content": text_response})
             return text_response
 
-    def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def one_chat(self, message: Union[str, List[Union[str, Any]]], max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         response = self.client.chat.completions.create(
             model=self.deployment_name,
             messages=message if isinstance(message, list) else [{"role": "user", "content": message}],
-            max_tokens=self.max_tokens,
+            max_tokens=max_tokens or self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop,
             stream=is_stream
         )
         self._update_usage_stats(response)
@@ -276,3 +296,11 @@ class SimpleAzureClient(LLMApiClient):
 
     def image_chat(self, message: str, image_path: str) -> str:
         raise NotImplementedError("Image chat is not implemented for SimpleAzureClient.")
+
+    def set_parameters(self, **kwargs):
+        valid_params = ["temperature", "top_p", "frequency_penalty", "presence_penalty", "max_tokens", "stop", "model"]
+        for key, value in kwargs.items():
+            if key in valid_params:
+                setattr(self, key, value)
+            else:
+                print(f"Warning: {key} is not a valid parameter and will be ignored.")
