@@ -4,9 +4,14 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from ..model.user_session_model import UserSession
 from ..utils.single_ton import Singleton
+import os
 
 class SessionDb(metaclass=Singleton):
     def __init__(self):
+        # Check if the database directory exists, if not, create it
+        database_dir = './database'
+        if not os.path.exists(database_dir):
+            os.makedirs(database_dir)
         self.conn = duckdb.connect(database='./database/sessions.db', read_only=False)
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS user_sessions (
