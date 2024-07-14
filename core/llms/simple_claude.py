@@ -21,7 +21,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
                 temperature: float = 0.5,
                 top_p: float = 1.0,
                 top_k: int = 250,
-                max_tokens: int = 5120,
+                max_tokens: int = 4096,
                 stop_sequences: Optional[List[str]] = None,
                 anthropic_version: str = "2023-06-01"):
         self.aws_region = aws_region
@@ -279,7 +279,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
         else:
             return assistant_message
 
-    def one_chat(self, message: Union[str, List[Union[str, Any]]], max_tokens: Optional[ int ]= 5120, is_stream: bool = False) -> Union[str, Iterator[str]]:
+    def one_chat(self, message: Union[str, List[Union[str, Any]]], max_tokens: Optional[ int ]= None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
         response = self.client.messages.create(
             model=self.model,
@@ -298,7 +298,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
         else:
             return response.content[0].text
 
-    def image_chat(self, message: str, image_path: str, max_tokens: int = 10240) -> str:
+    def image_chat(self, message: str, image_path: str, max_tokens:Optional[int] = None) -> str:
         with Image.open(image_path) as img:
             buffered = io.BytesIO()
             img.save(buffered, format=img.format)
@@ -315,7 +315,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=max_tokens,
+            max_tokens=max_tokens or self.max_tokens,
             messages=self.history
         )
 

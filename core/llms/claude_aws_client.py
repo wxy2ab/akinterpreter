@@ -24,7 +24,7 @@ class ClaudeAwsClient(LLMApiClient):
                 temperature: float = 0.5,
                 top_p: float = 1.0,
                 top_k: int = 250,
-                max_tokens: int = 5120,
+                max_tokens: int = 4096,
                 stop_sequences: Optional[List[str]] = None,
                  ):
         self.aws_region = aws_region
@@ -210,7 +210,7 @@ class ClaudeAwsClient(LLMApiClient):
     def image_chat(self,
                    message: str,
                    image_url: str,
-                   max_tokens: int = 10240) -> str:
+                   max_tokens: Optional[int] = None) -> str:
         image_message = {
             "role":
             "user",
@@ -247,7 +247,7 @@ class ClaudeAwsClient(LLMApiClient):
     def image64_chat(self,
                      message: str,
                      image_path: str,
-                     max_tokens: int = 10240) -> str:
+                     max_tokens: Optional[int] = None) -> str:
         # 读取并调整图片大小
         with Image.open(image_path) as img:
             resized_img = self._resize_image(img)
@@ -279,7 +279,7 @@ class ClaudeAwsClient(LLMApiClient):
 
         # 调用 Claude API
         response = self.client.messages.create(model=self.model,
-                                               max_tokens=max_tokens,
+                                               max_tokens=max_tokens or self.max_tokens,
                                                messages=self.history,
                                             max_tokens=max_tokens or self.max_tokens,
                                             temperature=self.temperature,

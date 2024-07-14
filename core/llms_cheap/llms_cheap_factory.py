@@ -4,16 +4,16 @@ import importlib
 from typing import Dict, Type
 from ..utils.single_ton import Singleton
 from ..utils.config_setting import Config
-from ._llm_api_client import LLMApiClient
+from ..llms._llm_api_client import LLMApiClient
 
-class LLMFactory(metaclass=Singleton):
+class LLMCheapFactory(metaclass=Singleton):
     def __init__(self):
         self.llm_classes: Dict[str, str] = {}  # 存储类名和文件名的映射
         self._discover_llm_classes()
 
     def _discover_llm_classes(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        llm_api_client_pattern = re.compile(r'class\s+(\w+)\s*\([^)]*LLMApiClient[^)]*\):')
+        llm_api_client_pattern = re.compile(r'class\s+(\w+)\s*\([^)]*?(\w+Client)\):')
         
         for filename in os.listdir(current_dir):
             if filename.endswith('.py') and not filename.startswith('_'):
@@ -26,8 +26,8 @@ class LLMFactory(metaclass=Singleton):
 
     def get_instance(self, name: str = "",**kwargs) -> LLMApiClient:
         config = Config()
-        if name == "" and config.has_key("llm_api"):
-            name = config.get("llm_api")
+        if name == "" and config.has_key("llm_cheap_api"):
+            name = config.get("llm_cheap_api")
             
         module_name = self.llm_classes.get(name.lower())
         if module_name is None:
