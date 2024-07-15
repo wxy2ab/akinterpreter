@@ -337,3 +337,11 @@ class SimpleClaudeAwsClient(LLMApiClient):
     def video_chat(self, message: str, video_path: str) -> str:
         raise NotImplementedError("Video chat is not supported in this version of Claude API client.")
     
+    @property
+    def stop(self):
+        return self._stop_sequences
+
+    @stop.setter
+    def stop(self, value):
+        self._stop_sequences = value
+    

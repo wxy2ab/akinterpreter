@@ -636,5 +636,11 @@ class ContinuousStreamIterator:
             if not self.initial_response_complete:
                 self._finalize_initial_response()
 
+    @property
+    def stop(self):
+        return self._stop_sequences
 
+    @stop.setter
+    def stop(self, value):
+        self._stop_sequences = value
 

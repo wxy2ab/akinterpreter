@@ -34,6 +34,8 @@ class StepsPlanManager:
         self.is_plan_confirmed = False
         self.code_runner = SSECodeRunner()
         self.code_enhancer = CodeEnhancementSystem()
+        self.llm_code = LLMFactory().get_instance()
+        self.llm_code.stop = ["```"]
 
     @property
     def total_steps(self) -> int:
@@ -209,7 +211,7 @@ class StepsPlanManager:
 
         prompt = self.prompts.modify_step_code_prompt(current_code, query)
         modified_code = ""
-        for chunk in self.llm_client.text_chat(prompt, is_stream=True):
+        for chunk in self.llm_code.text_chat(prompt, is_stream=True):
             modified_code += chunk
             yield send_message(chunk, "code")
 
@@ -260,7 +262,7 @@ class StepsPlanManager:
 
     def _extract_code_from_chunks(self, code_prompt: str, step_type: str, step_description: str) -> Generator[Union[Dict[str, Any], str], None, None]:
         extracted_code = ""
-        for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
+        for chunk in self.llm_code.text_chat(code_prompt, is_stream=True):
             #yield send_message(chunk, "code")
             if isinstance(chunk, dict):
                 if "content" in chunk:
@@ -310,7 +312,7 @@ class StepsPlanManager:
         fix_prompt = self.prompts.fix_code_prompt(code, error)
         
         fixed_code = ""
-        for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+        for chunk in self.llm_code.text_chat(fix_prompt, is_stream=True):
             yield send_message(chunk, "code")
             fixed_code += chunk
         

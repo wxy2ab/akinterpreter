@@ -5,26 +5,38 @@
             "content": "新闻数据尽量避免使用cctv数据，因为cctv数据加载很慢，需要很长时间。"
         },
         {
+            "applyto": "读取数据",
+            "content": "读取数据不要做任何处理，直接把原始值保存到返回变量中"
+        },
+        {
             "applyto":"股票数据",
             "content":"中国股票有5000多支，如果一次性获取时间跨度较长的全部数据，会导致数据量过大，加载时间过长，建议分批获取数据"
         }
     ],
     "data_analysis": [
         {
-            "applyto": "绘图",
-            "content": "使用matplotlib绘图时，注意使用中文字体，否则中文无法显示,如果是linux可以用rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']，如果是windows可以用rcParams['font.sans-serif'] = ['C:\\Windows\\Fonts\\msyh.ttc']  ，如果是mac rcParams['font.sans-serif'] = ['/System/Library/Fonts/PingFang.ttc'] 来设置字体解决中文显示问题"
+            "applyto": "图表分析",
+            "content": "使用matplotlib绘图时，注意使用中文字体，否则中文无法显示,如果是linux可以用plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']，如果是windows可以用plt.rcParams['font.sans-serif'] = ['msyh.ttc']  ，如果是mac ply.rcParams['font.sans-serif'] = ['/System/Library/Fonts/PingFang.ttc'] 来设置字体解决中文显示问题"
         },
         {
             "applyto": "词频统计",
-            "content": "用LLM API筛选有意义的关键词，然后统计词频"
+            "content": "过滤掉标点符号，数字，副词。词频高于60都过滤掉。"
         },
         {
             "applyto": "词云",
-            "content": "过滤标点符号，过滤单个字的词，用LLM API筛选有意义的关键词，然后生成词云图,使用LLM API时注意过滤LLM API的额外解释和说明"
+            "content": "过滤掉标点符号，数字，副词。过滤掉出词频高于60的词，再生成词云图"
         },
         {
             "applyto": "词云",
             "content": "生成词云时，为了支持中文，需要设置font_path ，windows msyh.ttc, mac /System/Library/Fonts/PingFang.ttc ,linux wqy-zenhei.ttc"
+        },
+        {
+            "applyto": "新闻分析",
+            "content": "用LLM API分析新闻，每次不要超过10000字。超过就分批次进行分析。分批次不能按10000个字来分，会打断文本内容。逐条累加新闻内容，直到差不多接近10000字就分段。"
+        },
+        {
+            "applyto": "新闻分析",
+            "content": "新闻分析的要点包括：1、总结和提炼对市场影响比较大的内容；2、金融市场动态总结；3、市场情绪的走向和判断；4、市场热点和异常；5、其他的市场重点要点信息。"
         }
     ]
 }
