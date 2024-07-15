@@ -11,6 +11,8 @@ from ._talker import Talker
 from  ..sse.sse_message_queue import SSEMessageQueue
 from  ..session.user_session_manager import UserSessionManager
 
+from ..utils.log import logger
+
 class WebTalker(Talker):
     def __init__(self):
         factory = LLMFactory()
@@ -42,23 +44,31 @@ class WebTalker(Talker):
         
         yield from self._process_generator(generator)
 
-    def _process_generator(self, generator) -> Generator[str, None, None]:
+    def _process_generator(self, generator) -> Generator[Union[str, Dict[str, Any]], None, None]:
         replies = []
         prev_type = None
         for chunk in generator:
-            if "type" in chunk:
-                curr_type = chunk["type"]
-                if curr_type == prev_type:
-                    replies.append(chunk["content"])
-                else:
-                    reply = ''.join(replies)
-                    if reply:
-                        self.chat_history.append({"role": "assistant", "content": reply})
-                    replies = [chunk["content"]]
-                    prev_type = curr_type
-            yield chunk
-        reply = ''.join(replies)
-        if reply:
+            if isinstance(chunk, dict):
+                if "type" in chunk:
+                    curr_type = chunk["type"]
+                    if curr_type != prev_type:
+                        if replies:
+                            reply = ''.join(replies)
+                            self.chat_history.append({"role": "assistant", "content": reply})
+                            replies = []
+                        prev_type = curr_type
+                    if "content" in chunk and isinstance(chunk["content"], str):
+                        replies.append(chunk["content"])
+                yield chunk
+            elif isinstance(chunk, str):
+                replies.append(chunk)
+                yield chunk
+            else:
+                # Log unexpected chunk types
+                logger.error(f"Unexpected chunk type: {type(chunk)}")
+
+        if replies:
+            reply = ''.join(replies)
             self.chat_history.append({"role": "assistant", "content": reply})
         self.sessions.update_chat_history(self.session_id, self.chat_history)
 
