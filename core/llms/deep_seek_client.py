@@ -55,7 +55,7 @@ class DeepSeekClient(LLMApiClient):
         if is_stream:
             return self._handle_streaming_response(response)
         else:
-            return response['choices'][0]['text']
+            return response.choices[0].message.content
 
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.messages.append({"role": "user", "content": message})
@@ -74,7 +74,7 @@ class DeepSeekClient(LLMApiClient):
         if is_stream:
             return self._handle_streaming_response(response)
         else:
-            text_response = response['choices'][0]['text']
+            text_response =  response.choices[0].message.content
             self.messages.append({"role": "assistant", "content": text_response})
             return text_response
 
