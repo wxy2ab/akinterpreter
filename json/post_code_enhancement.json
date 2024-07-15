@@ -1,4 +1,9 @@
 {
     "data_retrieval":[],
-    "data_analysis":[]
+    "data_analysis":[
+        {
+            "applyto": "wordcloud",
+            "content": "生成词云时，为了支持中文，需要设置font_path ，windows msyh.ttc, mac /System/Library/Fonts/PingFang.ttc ,linux wqy-zenhei.ttc"
+        }
+    ]
 }
