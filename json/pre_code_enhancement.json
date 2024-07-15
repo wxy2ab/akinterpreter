@@ -2,7 +2,7 @@
     "data_retrieval": [
         {
             "applyto": "读取新闻数据",
-            "content": "新闻数据尽量避免使用cctv数据，因为cctv数据加载很慢，需要很长时间。财联社：ak.stock_info_global_cls() 返回300条数据，东方财富ak.stock_info_global_em() #200条,新浪财经ak.stock_info_global_sina() #20条，同花顺ak.stock_info_global_ths()  #80条,富途牛牛ak.stock_info_global_futu() #20条 这几个函数没有参数，调用不要加参数"
+            "content": "新闻数据尽量避免使用cctv数据，因为cctv数据加载很慢，需要很长时间。"
         },
         {
             "股票数据": "中国股票有5000多支，如果一次性获取时间跨度较长的全部数据，会导致数据量过大，加载时间过长，建议分批获取数据"
