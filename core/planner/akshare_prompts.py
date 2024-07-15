@@ -117,6 +117,7 @@ class AksharePrompts:
 
         请提供修复后的完整计划，确保其符合所有要求并可以被直接解析为Python字典。
         """
+
     @staticmethod
     def modify_plan_prompt(query: str, current_plan: Dict[str, Any]) -> str:
         return f"""
@@ -332,6 +333,7 @@ class AksharePrompts:
 
         请根据修改请求提供更新后的完整代码。只返回修改后的代码，不需要任何解释。
         """
+
     @staticmethod
     def schedule_run_prompt(schedule_query: str, current_time: str) -> str:
         return f"""
@@ -353,4 +355,19 @@ class AksharePrompts:
         对于 "cron" 触发器，可以使用 "year", "month", "day", "week", "day_of_week", "hour", "minute", "second" 等参数。
 
         如果无法解析请求，请返回 {{"error": "无法解析调度请求"}}。
+        """
+    
+    @staticmethod
+    def fix_code_prompt_review(self, code: str, error: str, review_results: str) -> str:
+        return f"""
+        原始代码：
+        {code}
+
+        遇到的错误：
+        {error}
+
+        代码审查结果：
+        {review_results}
+
+        请根据以上信息修复代码。提供完整的修复后的代码。
         """

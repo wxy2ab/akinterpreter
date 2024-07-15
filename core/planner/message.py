@@ -1,7 +1,7 @@
 from typing import Dict, Literal, Any, Generator
 from dataclasses import dataclass
 
-MessageType = Literal["message", "plan", "code","full_code", "progress", "result", "report" ,"error", "debug" ,"finish"]
+MessageType = Literal["message", "plan", "code","full_code", "code_review","progress", "result", "report" ,"error", "debug" ,"finish"]
 
 @dataclass
 class Message:

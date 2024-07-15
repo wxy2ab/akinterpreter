@@ -73,7 +73,7 @@ class UserSessionManager(metaclass= Singleton):
         session.step_codes = step_codes
         self.save_session(session)
 
-    def update_chat_history(self, session_id: str, chat_history: List[dict]):
+    def update_chat_history1(self, session_id: str, chat_history: List[dict]):
         if not self.session_exists(session_id):
             raise ValueError("Session does not exist")
         self.db.update_chat_history(session_id, chat_history)

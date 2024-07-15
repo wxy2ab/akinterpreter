@@ -9,6 +9,7 @@ import asyncio
 from core.session.chat_session_manager import ChatSessionManager
 from core.model.chat_request import ChatRequest, SessionChatRequest
 from core.utils.log import logger
+import traceback
 
 router = APIRouter()
 factory = TalkerFactory()
@@ -76,6 +77,7 @@ async def chat_stream(request: Request):
             yield "data: [DONE]\n\n"
         except Exception as e:
             logger.error(f"Error in generate function: {str(e)}")
+            logger.error(traceback.format_exc())
             yield f"data: {json.dumps({'type': 'error', 'content': str(e)})}\n\n"
         finally:
             logger.info(f"Clearing session: {session_id}")

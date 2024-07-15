@@ -14,7 +14,7 @@ from .akshare_prompts import AksharePrompts
 from ..llms.llm_factory import LLMFactory
 from .akshare_retrieval_provider import AkshareRetrievalProvider
 from .message import send_message
-
+from .code_enhancement_system import CodeEnhancementSystem
 
 class StepsPlanManager:
     def __init__(self,max_retry: int= 8 , allow_yfinance: bool = False):
@@ -33,6 +33,7 @@ class StepsPlanManager:
         self.allow_yfinance = allow_yfinance 
         self.is_plan_confirmed = False
         self.code_runner = SSECodeRunner()
+        self.code_enhancer = CodeEnhancementSystem()
 
     @property
     def total_steps(self) -> int:
@@ -96,8 +97,6 @@ class StepsPlanManager:
         
         yield {"type": "error", "content": "无法生成有效的计划，请重新尝试。"}
 
-
-
     def modify_plan(self, query: str) -> Generator[Dict[str, Any], None, None]:
         prompt = self._create_modify_plan_prompt(query)
         
@@ -134,7 +133,6 @@ class StepsPlanManager:
                 yield {"type": "error", "content": f"修改后的计划不是有效的 JSON，正在重试（尝试 {attempt + 1}/{self.max_retry}）"}
         
         yield {"type": "error", "content": "无法修改计划。请重新尝试。"}
-
 
     def fix_plan(self, plan: Dict[str, Any], error_message: str) -> Generator[Dict[str, Any], None, None]:
         categories = self.retriever.get_categories()
@@ -233,7 +231,16 @@ class StepsPlanManager:
         function_docs = self.retriever.get_specific_doc(selected_functions)
         code_prompt = self.prompts.generate_code_for_functions_prompt(step, function_docs)
 
-        yield from self._extract_code_from_chunks(code_prompt)
+        # 应用事前增强
+        enhanced_prompt = self.code_enhancer.apply_pre_enhancement("data_retrieval", step['description'], code_prompt)
+
+        code = yield from self._extract_code_from_chunks(enhanced_prompt, "data_retrieval", step['description'])
+        
+        # 应用事后增强
+        enhanced_code = yield from self._enhance_code(code, "data_retrieval", step['description'])
+
+        return enhanced_code
+
 
     def _generate_data_analysis_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
         data_summaries = {
@@ -242,9 +249,17 @@ class StepsPlanManager:
         }
         code_prompt = self.prompts.generate_data_analysis_code_prompt(step, data_summaries, self.allow_yfinance)
 
-        yield from self._extract_code_from_chunks(code_prompt)
+        # 应用事前增强
+        enhanced_prompt = self.code_enhancer.apply_pre_enhancement("data_analysis", step['description'], code_prompt)
 
-    def _extract_code_from_chunks(self, code_prompt: str) -> Generator[Union[Dict[str, Any], str], None, None]:
+        code = yield from self._extract_code_from_chunks(enhanced_prompt, "data_analysis", step['description'])
+        
+        # 应用事后增强
+        enhanced_code = yield from self._enhance_code(code, "data_analysis", step['description'])
+
+        return enhanced_code
+
+    def _extract_code_from_chunks(self, code_prompt: str, step_type: str, step_description: str) -> Generator[Union[Dict[str, Any], str], None, None]:
         extracted_code = ""
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
             yield send_message(chunk, "code")
@@ -259,14 +274,42 @@ class StepsPlanManager:
                 raise TypeError(f"无法处理 {type(chunk).__name__} 类型的 chunk")
         
         code = self._extract_code(extracted_code)
-        yield send_message(code, "full_code")
+
+        if not code:
+            yield send_message("未能生成有效的代码。", "error")
+            return None
+
+        return code
+
+    def _enhance_code(self, code: str, step_type: str, step_description: str) -> Generator[Dict[str, Any], None, None]:
+        # 应用事后增强
+        enhanced_code = self.code_enhancer.apply_post_enhancement(step_type, step_description, code)
+        yield send_message(enhanced_code, "full_code")
+
+        return enhanced_code
+
+    def _review_and_enhance_code(self, code: str, step_type: str, step_description: str) -> Generator[Dict[str, Any], None, None]:
+        # 应用事后增强
+        enhanced_code = self.code_enhancer.apply_post_enhancement(step_type, step_description, code)
+        yield send_message(enhanced_code, "full_code")
+
+        # 进行代码审查
+        for review_chunk in self.code_enhancer.review_code(enhanced_code, step_type):
+            yield review_chunk
+
+        return enhanced_code
 
     def fix_code(self, step: int, code: str, error: str) -> Generator[Dict[str, Any], None, None]:
         if not code:
             yield send_message(f"步骤 {step} 的代码不存在或为空。", "error")
             return
 
+        current_step = self.get_current_step()
+        step_type = "data_retrieval" if "save_data_to" in current_step else "data_analysis"
+
+        # 使用 fix_code_prompt 生成修复建议
         fix_prompt = self.prompts.fix_code_prompt(code, error)
+        
         fixed_code = ""
         for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
             yield send_message(chunk, "code")
@@ -274,10 +317,14 @@ class StepsPlanManager:
         
         fixed_code = self._extract_code(fixed_code)
         if fixed_code:
-            yield send_message(f"步骤 {step} 的代码已修复。")
-            yield send_message(fixed_code, "code")
+            # 应用事后增强
+            enhanced_fixed_code = self.code_enhancer.apply_post_enhancement(step_type, current_step['description'], fixed_code)
+            yield send_message(f"步骤 {step} 的代码已修复并增强。")
+            yield send_message(enhanced_fixed_code, "code")
+            return enhanced_fixed_code
         else:
             yield send_message("未能生成有效的修复代码。", "error")
+            return None
 
     def _select_functions_from_category(self, step: Dict[str, Any], category: str) -> Generator[List[str], None, None]:
         functions = self.retriever.get_functions([category])
@@ -313,7 +360,7 @@ class StepsPlanManager:
         code_generator = self.generate_step_code(current_step)
         full_code = ""
         for chunk in code_generator:
-            if chunk['type'] == 'full_code':
+            if isinstance(chunk, dict) and chunk.get('type') == 'full_code':
                 full_code = chunk['content']
             else:
                 yield chunk
@@ -322,10 +369,9 @@ class StepsPlanManager:
             yield send_message("未能生成有效的代码。", "error")
             return
 
-        #yield send_message(full_code, "code")
-
         self.set_step_code(self.current_step_number+1, full_code)
 
+        # 执行代码
         for attempt in range(self.max_retry):
             try:
                 if current_step['type'] == 'data_retrieval':
@@ -335,7 +381,6 @@ class StepsPlanManager:
                 else:
                     raise Exception(f"未知的步骤类型: {current_step['type']}")
 
-                self.set_step_code(self.current_step_number+1, full_code)
                 yield send_message(f"步骤 {self.current_step_number + 1} 执行成功。")
                 break
             except Exception as e:
@@ -401,7 +446,6 @@ class StepsPlanManager:
         except Exception as e:
             yield send_message(f"数据检索失败: {str(e)}", "error")
             raise
-
 
     def execute_data_analysis(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         yield send_message("开始执行数据分析...")
