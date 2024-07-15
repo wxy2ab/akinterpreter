@@ -94,17 +94,17 @@ def process_markdown_files1(root_dir, claude_client):
 def parse_akshare_docs(content):
     # 删除包含 "目标地址:" 的行
     content = re.sub(r'^目标地址:.*\n', '', content, flags=re.MULTILINE)
-    
-    # 使用正则表达式匹配接口名称和对应的文档内容
-    pattern = r'(#{1,5}\s*(.+?)\n\n接口:\s*(\w+)[\s\S]*?)(?=#{1,5}\s*.+?\n\n接口:|$)'
+
+    # 使用正则表达式匹配接口名称和对应的文档内容 (删除前后#号限制)
+    pattern = r'\n\n接口:\s*(\w+)([\s\S]*?)(?=(\n\n接口:|$))'
     matches = re.finditer(pattern, content)
-    
+
     result = {}
     for match in matches:
-        interface_name = match.group(3)  # 接口名称
-        doc_content = match.group(1).strip()  # 文档内容
+        interface_name = match.group(1).strip()  # 接口名称
+        doc_content = match.group(2).strip()    # 文档内容
         result[interface_name] = doc_content
-    
+
     return result
 
 def process_markdown_files(directory):
