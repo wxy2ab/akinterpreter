@@ -1,4 +1,9 @@
 {
     "data_retrieval":[],
-    "data_analysis":[]
+    "data_analysis":[
+        {
+            "applyto":"绘图",
+            "content":"使用matplotlib绘图时，注意使用中文字体，否则中文无法显示,如果是linux可以用rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']，如果是windows，和mac可以用rcParams['font.sans-serif'] = ['SimHei']  来设置字体解决中文显示问题"
+        }
+    ]
 }

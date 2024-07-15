@@ -3,7 +3,7 @@ from ..utils.config_setting import Config
 import akshare as ak
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 
-def pro_api_patch():
+def pro_api_1patch():
     config = Config()
     if config.has_key('tushare_key'):
         token = config.get('tushare_key')
