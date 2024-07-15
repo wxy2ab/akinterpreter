@@ -11,7 +11,6 @@ import json
 from typing import Generator, Dict, Any, List, Optional
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
-from ..interpreter.sse_code_runner import SSECodeRunner
 from ..interpreter.data_summarizer import DataSummarizer
 from ..interpreter._sse_planner import SSEPlanner, RetrievalProvider
 from .akshare_prompts import AksharePrompts
@@ -24,8 +23,7 @@ from .message import send_message
 class AkshareFunPlanner(SSEPlanner):
     def __init__(self, max_retry=8, allow_yfinance: bool = False):
         self.llm_factory = LLMFactory()
-        self.llm_client = self.llm_factory.get_instance()
-        self.code_runner = SSECodeRunner()
+        self.llm_client:LLMApiClient = self.llm_factory.get_instance()
         self.data_summarizer = DataSummarizer()
         self.retriever = AkshareRetrievalProvider()
         self.plan_manager = StepsPlanManager(max_retry=max_retry, allow_yfinance=allow_yfinance)
@@ -306,3 +304,31 @@ class AkshareFunPlanner(SSEPlanner):
         except Exception as e:
             yield send_message(f"添加计划任务失败：{str(e)}", "error")
 
+    def export(self) -> Generator[Dict[str, Any], None, None]:
+        import uuid
+        output_dir = "./output/code"
+        
+        # Check if the output directory exists, if not create it
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+            yield send_message(f"创建目录 {output_dir}")
+
+        # Create a new directory with a UUID4 name
+        export_dir = os.path.join(output_dir, str(uuid.uuid4()))
+        os.makedirs(export_dir)
+        yield send_message(f"创建导出目录: {export_dir}")
+
+        # Export the plan as plan.json
+        plan_path = os.path.join(export_dir, "plan.json")
+        with open(plan_path, 'w', encoding='utf-8') as f:
+            json.dump(self.plan_manager.current_plan, f, ensure_ascii=False, indent=2)
+        yield send_message(f"导出 plan 到: {plan_path}")
+
+        # Export step codes
+        for step_number, code in self.plan_manager.step_codes.items():
+            code_path = os.path.join(export_dir, f"step_code_{step_number}.py")
+            with open(code_path, 'w', encoding='utf-8') as f:
+                f.write(code)
+            yield send_message(f"导出步骤 {step_number} 代码到: {code_path}")
+
+        yield send_message("导出成功.")

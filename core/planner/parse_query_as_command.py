@@ -138,6 +138,11 @@ def create_command_parser():
         "清除所有数据",
         use_regex=False
     )
+    parser.add_command("export", 
+        lambda ctx, args: ctx.export(),
+        "导出当前计划和步骤代码",
+        use_regex=False
+    )
     return parser
 
 def handle_set_stop_every_step(ctx, args):
