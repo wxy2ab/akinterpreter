@@ -241,7 +241,6 @@ class StepsPlanManager:
 
         return enhanced_code
 
-
     def _generate_data_analysis_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
         data_summaries = {
             data_var: self.get_step_vars(f"{data_var}_summary") or "数据摘要不可用"
@@ -262,7 +261,7 @@ class StepsPlanManager:
     def _extract_code_from_chunks(self, code_prompt: str, step_type: str, step_description: str) -> Generator[Union[Dict[str, Any], str], None, None]:
         extracted_code = ""
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
-            yield send_message(chunk, "code")
+            #yield send_message(chunk, "code")
             if isinstance(chunk, dict):
                 if "content" in chunk:
                     extracted_code += chunk["content"]
