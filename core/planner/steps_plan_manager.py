@@ -75,8 +75,7 @@ class StepsPlanManager:
                 yield {"type": "plan", "content": chunk}
             
             try:
-                plan_text = self._extract_json_from_text(plan_text)
-                plan = json.loads(plan_text)
+                plan = self._extract_json_from_text(plan_text)
                 error_message, is_valid = self.validate_plan(plan)
                 if is_valid:
                     self.current_plan = plan
