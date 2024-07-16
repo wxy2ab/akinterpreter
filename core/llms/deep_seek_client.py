@@ -6,8 +6,8 @@ from ..utils.config_setting import Config
 
 class DeepSeekClient(LLMApiClient):
     def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-coder"
-                 , temperature: float = 0.7,
-                 top_p: float = 1.0, frequency_penalty: float = 0, presence_penalty: float = 0,
+                 , temperature: float = 0.5,
+                 top_p: float = 1, frequency_penalty: float = 0, presence_penalty: float = 0,
                  stop: Optional[Union[str, List[str]]] = None
                  ):
         config = Config()

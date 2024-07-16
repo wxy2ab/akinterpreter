@@ -884,6 +884,7 @@
       "sw_index_third_info: 获取乐咕乐股提供的申万三级行业分类信息"
     ],
     "公司数据": [
+      "stock_research_report_em: 获取东方财富网数据中心的个股研报信息",
       "death_company: 获取IT桔子网站上的死亡公司名单数据",
       "forbes_rank: 获取福布斯中国榜单数据",
       "fortune_rank: 获取财富 500 强公司从 1996 年开始的排行榜数据",
