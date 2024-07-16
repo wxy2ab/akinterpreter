@@ -35,7 +35,7 @@ class StepsPlanManager:
         self.code_runner = SSECodeRunner()
         self.code_enhancer = CodeEnhancementSystem()
         self.llm_code = LLMFactory().get_instance()
-        self.llm_code.stop = ["```"]
+        self.llm_code.stop = ["```\n"]
 
     @property
     def total_steps(self) -> int:
