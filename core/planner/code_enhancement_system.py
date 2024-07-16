@@ -63,6 +63,8 @@ class CodeEnhancementSystem:
         {code}
 
         请判断并给出结果。
+        增强后的代码必须是完整的代码，而不是增量修改片段。
+        输出的代码用```python 和 ```包裹。
         """
 
         response = self.llm_client.one_chat(llm_prompt)

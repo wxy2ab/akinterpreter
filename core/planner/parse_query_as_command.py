@@ -157,8 +157,9 @@ def handle_help_command(ctx):
     commands = ctx.command_parser.get_help()
     help_text = "可用的命令：\n\n"
     for cmd, description in commands:
-        help_text += f"{cmd}: {description}\n"
-    yield {"type": "message", "content": help_text}
+        help_text = f"{cmd}: {description}\n"
+        yield {"type": "message", "content": help_text}
+    #yield {"type": "message", "content": help_text}
     
 def handle_set_max_retry(ctx, args):
     try:

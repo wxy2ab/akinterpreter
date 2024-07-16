@@ -285,6 +285,7 @@ class StepsPlanManager:
     def _enhance_code(self, code: str, step_type: str, step_description: str) -> Generator[Dict[str, Any], None, None]:
         # 应用事后增强
         enhanced_code = self.code_enhancer.apply_post_enhancement(step_type, step_description, code)
+        enhanced_code = self._extract_code(enhanced_code)
         yield send_message(enhanced_code, "full_code")
 
         return enhanced_code
