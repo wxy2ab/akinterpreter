@@ -59,6 +59,7 @@ class AksharePrompts:
         4. 每个 data_analysis 步骤的 required_data 列表包含了它需要的所有数据的变量名。
         5. 变量名应该是描述性的，易于理解的，如 stock_financial_data, company_fundamental_data 等。
         6. 计划包括所有必要的数据检索步骤，以及后续的数据分析步骤。
+        7. 保持计划尽量简单，如无必要，不新增步骤。
 
         请提供完整的JSON格式计划，确保其可以被直接解析为Python字典。
         """
