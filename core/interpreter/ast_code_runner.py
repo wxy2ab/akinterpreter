@@ -41,41 +41,58 @@ class ASTCodeRunner:
         finally:
             sys.stdout = old_stdout
 
-    def run(self, code: str, global_vars: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def run(self, code: str, global_vars: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        input:
+            code: 代码字符串
+            global_vars: 全局变量字典
+        output:
+            result: 执行结果字典
+                output: 标准输出
+                error: 错误信息
+                updated_vars: 更新后的全局变量
+                debug: 调试信息
+        """
+        # 准备捕获输出
         old_stdout = sys.stdout
+        old_stderr = sys.stderr
         redirected_output = io.StringIO()
+        redirected_error = io.StringIO()
         sys.stdout = redirected_output
+        sys.stderr = redirected_error
 
-        output = ""
-        updated_vars = {}
+        result = {
+            "output": "",
+            "error": None,
+            "updated_vars": {},
+            "debug": None
+        }
 
         try:
             if self.debug:
-                output += f"调试信息: 准备执行下面的代码:\n{code}\n"
+                result["debug"] = f"调试信息: 准备执行下面的代码:\n{code}"
 
-            tree = ast.parse(code)
-            self.check_security(tree)  # 添加安全检查
-
+            # 准备执行环境
             exec_globals = global_vars.copy()
-            exec_globals['print'] = lambda *args, **kwargs: print(*args, **kwargs, file=redirected_output, flush=True)
-            exec_globals['open'] = self.safe_open  # 使用安全的 open 函数
+            
+            # 执行代码
+            exec(code, exec_globals)
 
-            for node in tree.body:
-                self.execute_node(node, exec_globals)
-                output += redirected_output.getvalue()
-                redirected_output.truncate(0)
-                redirected_output.seek(0)
+            # 捕获输出
+            result["output"] = redirected_output.getvalue()
 
             # 返回更新后的变量
-            updated_vars = {k: v for k, v in exec_globals.items() if k not in global_vars or global_vars[k] is not v}
-        
-        except Exception as e:
-            output += str(e)
-        
-        finally:
-            sys.stdout = old_stdout
+            result["updated_vars"] = {k: v for k, v in exec_globals.items() if k not in global_vars or global_vars[k] is not v}
 
-        return output, updated_vars
+        except Exception as e:
+            result["error"] = f"{type(e).__name__}: {str(e)}"
+            result["error"] += f"\n{redirected_error.getvalue()}"
+        finally:
+            # 恢复标准输出和错误流
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+
+        return result
 
     def execute_node(self, node, exec_globals):
         if isinstance(node, ast.Expr):
