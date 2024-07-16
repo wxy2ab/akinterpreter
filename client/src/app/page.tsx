@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { getSession, updateCurrentPlan, updateStepCodes, getSSEStream } from '@/lib/api';
 import '../styles/custom-tabs.css';
 
 const ChatWindow = dynamic(() => import('@/components/ChatWindow'), { ssr: false });
 const MainWindow = dynamic(() => import('@/components/MainWindow'), { ssr: false });
+const Resizer = dynamic(() => import('../components/Resizer'), { ssr: false });
 
 interface SessionData {
   session_id: string;
@@ -18,35 +19,40 @@ interface SessionData {
 const Home: React.FC = () => {
   const [sessionData, setSessionData] = useState<SessionData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [leftWidth, setLeftWidth] = useState(25); // Initial width of 25%
+
+  const handleSSEMessage = useCallback((parsedData: any) => {
+    setSessionData((prevData) => {
+      if (!prevData) return null;
+      
+      if (parsedData.type === 'chat_history') {
+        return { ...prevData, chat_history: parsedData.chat_history };
+      } else if (parsedData.type === 'plan') {
+        return { ...prevData, current_plan: parsedData.plan };
+      } else if (parsedData.type === 'code') {
+        return { ...prevData, step_codes: parsedData.step_codes };
+      }
+      return prevData;
+    });
+  }, []);
 
   useEffect(() => {
     const fetchSessionData = async () => {
       try {
         const data = await getSession();
         setSessionData(data);
-        // Open SSE connection
+        
         const eventSource = getSSEStream(data.session_id);
         eventSource.onmessage = (event) => {
           const parsedData = JSON.parse(event.data);
-          if (parsedData.type === 'chat_history') {
-            setSessionData(prevData => ({
-              ...prevData!,
-              chat_history: parsedData.chat_history
-            }));
-          } else if (parsedData.type === 'plan') {
-            setSessionData(prevData => ({
-              ...prevData!,
-              current_plan: parsedData.plan
-            }));
-          } else if (parsedData.type === 'code') {
-            setSessionData(prevData => ({
-              ...prevData!,
-              step_codes: parsedData.step_codes
-            }));
-          }
+          handleSSEMessage(parsedData);
         };
         eventSource.onerror = (error) => {
           console.error('EventSource failed:', error);
+          eventSource.close();
+        };
+
+        return () => {
           eventSource.close();
         };
       } catch (error) {
@@ -57,7 +63,7 @@ const Home: React.FC = () => {
     };
 
     fetchSessionData();
-  }, []);
+  }, [handleSSEMessage]);
 
   const handlePlanUpdate = async (newPlan: any) => {
     if (!sessionData) return;
@@ -89,6 +95,10 @@ const Home: React.FC = () => {
     }
   };
 
+  const handleResize = (newLeftWidth: number) => {
+    setLeftWidth(newLeftWidth);
+  };
+
   if (loading) {
     return <div className="flex justify-center items-center h-screen bg-background text-foreground">Loading...</div>;
   }
@@ -99,10 +109,11 @@ const Home: React.FC = () => {
 
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
-      <div className="w-1/4 border-r border-border overflow-hidden">
+      <div style={{ width: `${leftWidth}%` }} className="h-full overflow-hidden">
         <ChatWindow initialMessages={sessionData.chat_history} />
       </div>
-      <div className="w-3/4 overflow-hidden">
+      <Resizer onResize={handleResize} />
+      <div style={{ width: `${100 - leftWidth}%` }} className="h-full overflow-hidden">
         <MainWindow
           currentPlan={sessionData.current_plan}
           stepCodes={sessionData.step_codes}

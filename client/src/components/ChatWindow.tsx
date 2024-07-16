@@ -1,5 +1,3 @@
-'use client';
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ChatMessage from './ChatMessage';
 import { getSessionId, sendChatMessage, getChatStream } from '@/lib/api';
@@ -34,6 +32,21 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
     fetchAppSessionId();
   }, []);
 
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input]);
+
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      const scrollHeight = textareaRef.current.scrollHeight;
+      const lineHeight = parseInt(getComputedStyle(textareaRef.current).lineHeight);
+      const maxHeight = lineHeight * 5; // 5 lines maximum
+      const newHeight = Math.min(scrollHeight, maxHeight);
+      textareaRef.current.style.height = `${newHeight}px`;
+    }
+  };
+
   const handleSendMessage = useCallback(async (message: string) => {
     if (!message.trim() || isLoading) return;
 
@@ -53,21 +66,27 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
       eventSourceRef.current = eventSource;
 
       eventSource.onmessage = (event) => {
-        const parsedData = JSON.parse(event.data);
-
-        if (parsedData.type === '[DONE]') {
+        if (event.data === '[DONE]') {
           setIsLoading(false);
           eventSource.close();
         } else {
-          setMessages(prevMessages => {
-            const lastMessage = prevMessages[prevMessages.length - 1];
-            if (lastMessage && lastMessage.type === parsedData.type) {
-              lastMessage.content += parsedData.content;
-              return [...prevMessages.slice(0, -1), lastMessage];
-            } else {
-              return [...prevMessages, parsedData];
-            }
-          });
+          try {
+            const parsedData = JSON.parse(event.data);
+            setMessages(prevMessages => {
+              const lastMessage = prevMessages[prevMessages.length - 1];
+              if (lastMessage && lastMessage.type === parsedData.type && lastMessage.isBot) {
+                const updatedMessage = {
+                  ...lastMessage,
+                  content: lastMessage.content + parsedData.content
+                };
+                return [...prevMessages.slice(0, -1), updatedMessage];
+              } else {
+                return [...prevMessages, { ...parsedData, isBot: true }];
+              }
+            });
+          } catch (error) {
+            console.error('Error parsing message:', error);
+          }
         }
       };
 
@@ -111,7 +130,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
             rows={1}
             style={{
               minHeight: '38px',
-              maxHeight: '38px',
+              maxHeight: '120px', // Approximately 5 lines
               overflow: 'auto',
             }}
           />
