@@ -2,7 +2,7 @@ import ast
 import sys
 import io
 import os
-from typing import Any, Dict, Generator
+from typing import Any, Dict, Generator, Tuple
 
 class ASTCodeRunner:
     def __init__(self, debug=False):
@@ -40,6 +40,42 @@ class ASTCodeRunner:
             yield {"type": "error", "content": str(e)}
         finally:
             sys.stdout = old_stdout
+
+    def run(self, code: str, global_vars: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+        old_stdout = sys.stdout
+        redirected_output = io.StringIO()
+        sys.stdout = redirected_output
+
+        output = ""
+        updated_vars = {}
+
+        try:
+            if self.debug:
+                output += f"调试信息: 准备执行下面的代码:\n{code}\n"
+
+            tree = ast.parse(code)
+            self.check_security(tree)  # 添加安全检查
+
+            exec_globals = global_vars.copy()
+            exec_globals['print'] = lambda *args, **kwargs: print(*args, **kwargs, file=redirected_output, flush=True)
+            exec_globals['open'] = self.safe_open  # 使用安全的 open 函数
+
+            for node in tree.body:
+                self.execute_node(node, exec_globals)
+                output += redirected_output.getvalue()
+                redirected_output.truncate(0)
+                redirected_output.seek(0)
+
+            # 返回更新后的变量
+            updated_vars = {k: v for k, v in exec_globals.items() if k not in global_vars or global_vars[k] is not v}
+        
+        except Exception as e:
+            output += str(e)
+        
+        finally:
+            sys.stdout = old_stdout
+
+        return output, updated_vars
 
     def execute_node(self, node, exec_globals):
         if isinstance(node, ast.Expr):
