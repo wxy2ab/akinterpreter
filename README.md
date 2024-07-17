@@ -32,10 +32,21 @@ python cli.py
 python main.py
 ```
 
+## 生成配置文件
+windows:
+```shell
+copy settings.ini.template settings.ini
+```
+
+linux & mac:
+```bash
+cp settings.ini.template settings.ini
+```
+
 ## 修改配置-配置模板
 ```text
 [Default]
-llm_api = DeepSeekClient        主要使用的LLM API，取值看下面的列表。需要自己申请key，并配置KEY
+llm_api = DeepSeekClient        #主要使用的LLM API，取值看下面的列表。需要自己申请key，并配置KEY
 llm_cheap_api = CheapClaude     #处理简单NLP任务，暂时没有使用
 embedding_api = BGELargeZhAPI   #文本向量化用，暂时没有使用
 ranker_api = BaiduBCEReranker   #二次排序用，暂时没有使用
@@ -76,6 +87,87 @@ volcengine_doubao =             #火山引擎API 需要的key，非火山引擎A
 - ranker_api 用于二次排序，暂时不用填
 - talker = CliTalker  要用cli模式,就不要动这个 
 - 后面的 api_key , 不同都填，选择哪个 LLM API，就填哪个 api_key
+
+## 运行
+```bash
+# 启动cli
+python cli.py
+
+# 启动web
+python main.py
+```
+
+## 特殊指令
+- 第一个 query 不接受指令，必须输入一个数据查询之后，才能输入指令。比如：分析今年上证指数走势
+- help 显示帮助信息
+- clear_history 清除历史记录，当前版本需要手动刷新一下
+- export 导出代码
+- go 执行计划
+- 除此之外的指令还不完善，暂时别用
+
+## 如何使用
+### 1. 输入一个查询
+```text
+分析今年上证指数走势
+```
+你会获得一个执行计划，如下：
+```json
+{
+  query_summary: '分析今年上证指数走势',
+  steps: [
+    {
+      step_number: 1,
+      description: '获取今年上证指数的历史数据',
+      type: 'data_retrieval',
+      data_category: '指数数据',
+      save_data_to: 'shanghai_index_data'
+    },
+    {
+      step_number: 2,
+      description: '获取相关的宏观经济数据',
+      type: 'data_retrieval',
+      data_category: '宏观经济数据',
+      save_data_to: 'macro_economic_data'
+    },
+    {
+      step_number: 3,
+      description: '分析上证指数走势，重点关注：\n1. 整体趋势\n2. 关键转折点\n3. 成交量变化\n4. 与宏观经济数据的关联',
+      type: 'data_analysis',
+      required_data: [
+        'shanghai_index_data',
+        'macro_economic_data'
+      ]
+    },
+    {
+      step_number: 4,
+      description: '总结分析结果，提供今年上证指数走势的综合报告',
+      type: 'data_analysis',
+      required_data: [
+        'shanghai_index_data',
+        'macro_economic_data'
+      ]
+    }
+  ]
+}
+```
+
+### 2. 删除/增加步骤
+```text
+删除步骤 3
+```
+
+### 3. 修改计划细节
+```text
+修改步骤 3：从成交量，关键支撑和阻力，整体趋势，关键转折点，于宏观数据关联等方面进行分析
+```
+
+### 4. 检查计划
+确认一个符合你心意的计划
+
+### 5. 执行计划
+```text
+执行计划
+```
 
 ## 安全及免责说明
 - ⚠️代码中含有执行任意代码的功能，并且目前不在沙盒中运行。还拥有生成代码的的功能，理论上说，有可能生成对你的电脑产生危害。如果你不知道自己在做什么，请不要使用本项目。反之，使用本项目意味着你自担风险。
