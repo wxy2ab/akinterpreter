@@ -20,41 +20,54 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
     }
 
     if (typeof content === 'string') {
-      const cleanContent = content.replace(/^```(json|python)?\s*|\s*```$/g, '');
+      const codeBlockRegex = /^```(json|python)?\s*([\s\S]*?)```$/;
+      const match = content.match(codeBlockRegex);
 
-      // 尝试解析 JSON
-      try {
-        const jsonContent = JSON.parse(cleanContent);
+      if (match) {
+        const language = match[1] || 'text';
+        const code = match[2].trim();
+
+        if (language === 'json') {
+          try {
+            const jsonContent = JSON.parse(code);
+            return (
+              <SyntaxHighlighter language="json" style={dracula}>
+                {JSON.stringify(jsonContent, null, 2)}
+              </SyntaxHighlighter>
+            );
+          } catch (e) {
+            // If JSON parsing fails, treat it as regular code
+          }
+        }
+
         return (
-          <SyntaxHighlighter language="json" style={dracula}>
-            {JSON.stringify(jsonContent, null, 2)}
+          <SyntaxHighlighter language={language} style={dracula}>
+            {code}
           </SyntaxHighlighter>
         );
-      } catch (e) {
-        // 如果不是 JSON，继续处理
       }
 
-      // 检查是否是 Python 代码
-      if (cleanContent.includes('def ') || cleanContent.includes('import ') || cleanContent.includes('print(')) {
+      // Check if it's Python code
+      if (content.includes('def ') || content.includes('import ') || content.includes('print(')) {
         return (
           <SyntaxHighlighter language="python" style={dracula}>
-            {cleanContent}
+            {content}
           </SyntaxHighlighter>
         );
       }
 
-      // 处理图片和链接
-      const parts = cleanContent.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
+      // Handle images and links
+      const parts = content.split(/(\!\[.*?\]\(.*?\)|\[.*?\]\(.*?\))/);
       return parts.map((part: string, index: number) => {
         if (part.startsWith('![')) {
-          // 图片
-          const match = part.match(/\!\[(.*?)\]\((.*?)\)/);
-          if (match) {
+          // Image
+          const imageMatch = part.match(/\!\[(.*?)\]\((.*?)\)/);
+          if (imageMatch) {
             return (
               <div key={index} className="relative w-full h-64 my-2">
                 <Image
-                  src={match[2]}
-                  alt={match[1]}
+                  src={imageMatch[2]}
+                  alt={imageMatch[1]}
                   layout="fill"
                   objectFit="contain"
                 />
@@ -62,17 +75,18 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
             );
           }
         } else if (part.startsWith('[')) {
-          // 链接
-          const match = part.match(/\[(.*?)\]\((.*?)\)/);
-          if (match) {
+          // Link
+          const linkMatch = part.match(/\[(.*?)\]\((.*?)\)/);
+          if (linkMatch) {
             return (
-              <a key={index} href={match[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
-                {match[1]}
+              <a key={index} href={linkMatch[2]} target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline">
+                {linkMatch[1]}
               </a>
             );
           }
         }
-        return <span key={index}>{part}</span>;
+        // Regular text
+        return <span key={index} className="whitespace-pre-wrap">{part}</span>;
       });
     }
 
