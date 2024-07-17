@@ -35,34 +35,34 @@ python main.py
 ## 修改配置-配置模板
 ```text
 [Default]
-llm_api = DeepSeekClient
-llm_cheap_api = CheapClaude
-embedding_api = BGELargeZhAPI
-ranker_api = BaiduBCEReranker
-talker = CliTalker
-project_id = 
-aws_access_key_id = 
-aws_secret_access_key = 
-tushare_key = 
-AZURE_OPENAI_API_KEY = 
-AZURE_OPENAI_ENDPOINT = 
-GAODE_MAP_API_KEY = 
-OPEN_WEATHER_API_KEY = 
-ERNIE_API_KEY = 
-ERNIE_SERCRET_KEY =
-glm_api_key = 
-deep_seek_api_key = 
-moonshot_api_key = 
-DASHSCOPE_API_KEY =
-baichuan_api_key =
-volcengine_api_key = 
-volcengine_embedding = 
-volcengine_doubao = 
+llm_api = DeepSeekClient        主要使用的LLM API，取值看下面的列表。需要自己申请key，并配置KEY
+llm_cheap_api = CheapClaude     #处理简单NLP任务，暂时没有使用
+embedding_api = BGELargeZhAPI   #文本向量化用，暂时没有使用
+ranker_api = BaiduBCEReranker   #二次排序用，暂时没有使用
+talker = CliTalker              #不要改动
+project_id =                    #Google gemini API 需要的proect id，非gemini API不用管
+aws_access_key_id =             #AWS bedrock API 需要的key，非aws API不用管
+aws_secret_access_key =         #AWS bedrock API 需要的key，非aws API不用管
+tushare_key =                   #tushare API 需要的key  不用填
+AZURE_OPENAI_API_KEY =          #Azure OpenAI API 需要的key，非azure API不用管
+AZURE_OPENAI_ENDPOINT =         #Azure OpenAI API 需要的endpoint，非azure API不用管
+GAODE_MAP_API_KEY =             #高德地图API 需要的key，不用管
+OPEN_WEATHER_API_KEY =          #OpenWeatherMap API 需要的key，不用管
+ERNIE_API_KEY =                 #百度文心一言API 需要的key，非百度API不用管
+ERNIE_SERCRET_KEY =             #百度文心一言API 需要的key，非百度API不用管
+glm_api_key =                   #智谱的GLM API 需要的key，非智谱API不用管
+deep_seek_api_key =             #DeepSeek API 需要的key，非DeepSeekAPI不用管
+moonshot_api_key =              #MooonShot API 需要的key，非MooonShotAPI不用管
+DASHSCOPE_API_KEY =             #dashscope API 需要的key，非dashscopeAPI不用管
+baichuan_api_key =              #百川API 需要的key，非百川API不用管
+volcengine_api_key =            #火山引擎API 需要的key，非火山引擎API不用管
+volcengine_embedding =          #火山引擎API 需要的key，非火山引擎API不用管
+volcengine_doubao =             #火山引擎API 需要的key，非火山引擎API不用管
 ```
 
 ## 如何填写
 - **llm_api**  可选值,除了填写 api_key, 还需要安装依赖项 , 申请 api_key 的时候，应该都知道安装什么依赖项
-    * **SimpleClaudeAwsClient**:  Aws的 Claude API ，国内可用，依赖 Anthopic 库
+    * **SimpleClaudeAwsClient**:  Aws的 Claude API ，国内可用，依赖 Anthopic 库，这是目前开发和测试用的API
     * **SimpleAzureClient**:  Azure的 OpenAI API，国内可用，依赖 openai 库
     * **DeepSeekClient**:  DeepSeek的 API (依赖openai库)
     * **QianWenClient**: 同义千问的 API (还没测试,依赖dashscope库)

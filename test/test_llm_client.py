@@ -120,6 +120,13 @@ def test1_doubao_client():
                                 is_stream=False)
     print(iterator)
 
+def test1_baichuan_client():
+    from core.llms.baichuan_client import BaichuanClient
+    client = BaichuanClient()
+    iterator = client.one_chat("写一个python函数，可以用于判断1000003是否是素数", is_stream=False)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
 def test1_llm_factory():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
