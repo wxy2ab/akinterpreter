@@ -157,6 +157,9 @@ class WebTalker(Talker):
         if command=="clear_all":
             self.sessions.clear_all()
     
+    def save_plan(self,plan:dict) -> None:
+        self.akshare_planner.set_current_plan(plan)
+    
     
 
         
