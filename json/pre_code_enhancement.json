@@ -20,7 +20,7 @@
     "data_analysis": [
         {
             "applyto": "图表分析",
-            "content": "使用matplotlib绘图时，注意使用中文字体，否则中文无法显示,如果是linux可以用plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']，如果是windows可以用plt.rcParams['font.sans-serif'] = ['msyh.ttc']  ，如果是mac ply.rcParams['font.sans-serif'] = ['/System/Library/Fonts/PingFang.ttc'] 来设置字体解决中文显示问题"
+            "content": "使用matplotlib绘图时，注意使用中文字体，否则中文无法显示,如果是linux可以用from matplotlib import font_manager font_path = '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc' font_manager.fontManager.addfont(font_path) plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei']，如果是windows可以用plt.rcParams['font.sans-serif'] = ['msyh.ttc']  ，如果是mac ply.rcParams['font.sans-serif'] = ['/System/Library/Fonts/PingFang.ttc'] 来设置字体解决中文显示问题"
         },
         {
             "applyto": "词频统计",
@@ -32,7 +32,7 @@
         },
         {
             "applyto": "词云",
-            "content": "生成词云时，为了支持中文，需要设置font_path ，windows msyh.ttc, mac /System/Library/Fonts/PingFang.ttc ,linux wqy-zenhei.ttc"
+            "content": "生成词云时，为了支持中文，需要设置font_path ，windows msyh.ttc, mac /System/Library/Fonts/PingFang.ttc ,linux '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'"
         },
         {
             "applyto": "新闻分析",
