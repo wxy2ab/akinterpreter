@@ -815,8 +815,7 @@
     "stock_info_global_futu: 富途牛牛-快讯",
     "stock_info_global_sina: 新浪财经-全球财经快讯",
     "stock_info_global_ths: 同花顺财经-全球财经直播",
-    "stock_news_em: 东方财富-个股新闻-最近 100 条新闻",
-    "tool_trade_date_hist_sina: 新浪财经-交易日历-历史数据"
+    "stock_news_em: 东方财富-个股新闻-最近 100 条新闻"
   ],
   "港股数据": [
     "stock_financial_hk_analysis_indicator_em: 东方财富-港股-财务分析-主要指标",
