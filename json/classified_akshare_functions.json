@@ -15,8 +15,6 @@
       "stock_bj_a_spot_em: 获取东方财富网京 A 股的实时行情数据",
       "stock_board_change_em: 获取东方财富行情中心的当日板块异动详情",
       "stock_board_concept_cons_em: 获取东方财富网站上沪深板块中特定概念板块的成份股信息",
-      "stock_board_concept_cons_ths: 获取同花顺概念板块的成份股信息",
-      "stock_board_concept_graph_ths: 获取同花顺板块概念图谱数据",
       "stock_board_concept_hist_em: 获取东方财富网沪深板块概念板块的历史行情数据",
       "stock_board_concept_hist_min_em: 获取东方财富网沪深板块中概念板块的分时历史行情数据",
       "stock_board_concept_hist_ths: 获取同花顺板块概念指数的历史数据",
