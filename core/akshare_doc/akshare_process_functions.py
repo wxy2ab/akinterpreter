@@ -59,6 +59,10 @@ all_functions = \"\"\"
         print(f"已将函数文档字符串写入到 {file_path}")
 
     def classify_akshare_functions(self,akshare_all_functions: str, llm_client: LLMApiClient) -> Dict[str, List[str]]:
+        from core.akshare_doc.akshare_data_singleton import AKShareDataSingleton
+        singleton = AKShareDataSingleton()
+        categories_summary = singleton.category_summaries
+        summary = "\n".join([f"{k}: {v}" for k, v in categories_summary.items()])
         # 定义主要分类
         categories = [
             "股票数据", "期货数据", "期权数据", "债券数据", "外汇数据", 
@@ -103,6 +107,9 @@ all_functions = \"\"\"
 
             可选类别:
             {', '.join(categories)}
+
+            类别描述：
+            {summary}
 
             需要分类的函数：
             """
