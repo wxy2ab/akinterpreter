@@ -1,41 +1,44 @@
-// src/components/JsonEditor.tsx
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { locale } from 'react-json-editor-ajrm/locale/en';
-
-const JSONInput = dynamic(() => import('react-json-editor-ajrm'), { ssr: false });
+import React, { useEffect, useState } from 'react';
+import Editor from '@monaco-editor/react';
 
 interface JsonEditorProps {
-    initialJson: any;
-    onJsonChange: (updatedJson: any) => void;
+  initialJson: any;
+  onJsonChange: (updatedJson: any) => void;
 }
 
-const JsonEditorComponent: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
-    const [json, setJson] = useState(initialJson);
+const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
+  const [value, setValue] = useState<string>(JSON.stringify(initialJson, null, 2));
 
-    useEffect(() => {
-        setJson(initialJson);
-    }, [initialJson]);
+  useEffect(() => {
+    setValue(JSON.stringify(initialJson, null, 2));
+  }, [initialJson]);
 
-    const handleJsonChange = (edit: any) => {
-        const updatedJson = edit.json;
-        setJson(updatedJson);
-        onJsonChange(updatedJson);
-    };
+  const handleEditorChange = (value: string | undefined) => {
+    if (value === undefined) return;
+    setValue(value);
+    try {
+      const parsedJson = JSON.parse(value);
+      onJsonChange(parsedJson);
+    } catch (error) {
+      console.error('Invalid JSON detected:', error);
+    }
+  };
 
-    return (
-        <div style={{ height: '100%', width: '100%' }}>
-            <JSONInput
-                id="json-editor"
-                placeholder={json}
-                onChange={handleJsonChange}
-                locale={locale}
-                height="100%"
-                width="100%"
-                style={{ padding: '10px', borderRadius: '5px', boxShadow: '0 0 10px rgba(0, 0, 0, 0.1)' }}
-            />
-        </div>
-    );
+  return (
+    <Editor
+      height="100%"
+      defaultLanguage="json"
+      defaultValue={value}
+      value={value}
+      onChange={handleEditorChange}
+      theme="vs-dark"
+      options={{
+        automaticLayout: true,
+        wordWrap: 'on',
+        formatOnType: true,
+      }}
+    />
+  );
 };
 
-export default JsonEditorComponent;
+export default JsonEditor;

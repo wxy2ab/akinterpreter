@@ -60,11 +60,18 @@ export const updateChatHistory = async (chatHistory: any) => {
     return response.data;
 };
 
-export const updateCurrentPlan = async (currentPlan: any) => {
-    const sessionId = await getSessionId();
-    const response = await axios.put(`${API_BASE_URL}/sessions/${sessionId}/current_plan`, currentPlan);
+export const updateCurrentPlan = async (sessionId: string, currentPlan: any) => {
+    const response = await axios.put(
+      `${API_BASE_URL}/sessions/${sessionId}/current_plan`,
+      currentPlan,
+      {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }
+    );
     return response.data;
-};
+  };
 
 export const updateStepCodes = async (stepCodes: any) => {
     const sessionId = await getSessionId();
@@ -88,5 +95,15 @@ export const deleteSession = async () => {
     const sessionId = await getSessionId();
     const response = await axios.delete(`${API_BASE_URL}/sessions/${sessionId}`);
     Cookies.remove(SESSION_COOKIE_NAME);
+    return response.data;
+};
+
+// New function for saving plan
+export const savePlan = async (plan: any) => {
+    const sessionId = await getSessionId();
+    const response = await axios.post(`${API_BASE_URL}/save_plan`, {
+        session_id: sessionId,
+        plan: plan
+    });
     return response.data;
 };

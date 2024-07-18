@@ -1,8 +1,6 @@
-import React, { useState } from 'react';
-import dynamic from 'next/dynamic';
-
-const JsonEditor = dynamic(() => import('./JsonEditor'), { ssr: false });
-const CodeEditor = dynamic(() => import('./CodeEditor'), { ssr: false });
+import React, { useState, useMemo } from 'react';
+import JsonEditor from './JsonEditor';
+import CodeEditor from './CodeEditor';
 
 interface MainWindowProps {
   currentPlan: any;
@@ -18,14 +16,26 @@ const MainWindow: React.FC<MainWindowProps> = ({
   onCodeUpdate,
 }) => {
   const [activeTab, setActiveTab] = useState('plan');
+  const [error, setError] = useState<string | null>(null);
 
-  const handlePlanChange = (newPlan: any) => {
-    onPlanUpdate(newPlan);
+  const validateJson = (json: any): object | any[] => {
+    if (typeof json === 'object' && json !== null) {
+      return json;
+    }
+    try {
+      const parsedJson = JSON.parse(json);
+      if (typeof parsedJson === 'object' && parsedJson !== null) {
+        return parsedJson;
+      }
+    } catch (error) {
+      console.error('Invalid JSON string provided, using empty object as fallback.', error);
+    }
+    return {};
   };
 
-  const handleCodeChange = (step: string, newCode: string) => {
-    onCodeUpdate(step, newCode);
-  };
+  const validCurrentPlan = useMemo(() => {
+    return validateJson(currentPlan);
+  }, [currentPlan]);
 
   const tabStyle = {
     padding: '10px 15px',
@@ -71,12 +81,24 @@ const MainWindow: React.FC<MainWindowProps> = ({
         ))}
       </div>
       <div style={contentStyle}>
+        {error && <div className="error-message">{error}</div>}
         {activeTab === 'plan' ? (
-          <JsonEditor initialJson={currentPlan} onJsonChange={handlePlanChange} />
+          <JsonEditor 
+            key={JSON.stringify(validCurrentPlan)}  // Force re-render on plan change
+            initialJson={validCurrentPlan} 
+            onJsonChange={(updatedJson) => {
+              try {
+                const validJson = validateJson(updatedJson);
+                onPlanUpdate(validJson);
+              } catch (error) {
+                setError('Failed to update JSON. Please check the console for more details.');
+              }
+            }}  
+          />
         ) : (
           <CodeEditor
             value={stepCodes[activeTab]}
-            onChange={(newCode) => handleCodeChange(activeTab, newCode)}
+            onChange={(newCode) => onCodeUpdate(activeTab, newCode)}
             language="python"
           />
         )}

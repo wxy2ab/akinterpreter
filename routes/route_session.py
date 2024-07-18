@@ -1,13 +1,22 @@
 # routers/session.py
 from datetime import datetime
-from typing import Dict, List
-from fastapi import APIRouter, HTTPException
+import json
+from typing import Any, Dict, List
+from fastapi import APIRouter, Body, HTTPException, Request
+from pydantic import BaseModel, ValidationError
+from core.session.chat_manager import ChatManager
 from core.session.user_session_manager import UserSessionManager
 
 router = APIRouter()
 session_manager = UserSessionManager()
 router.prefix = "/api"
 
+class PlanModel(BaseModel):
+    # Define the expected structure of your plan
+    # For example:
+    title: str
+    steps: List[Dict[str, Any]]
+    
 @router.post("/sessions")
 def create_session():
     session_id = session_manager.add_session()
@@ -39,12 +48,49 @@ def update_chat_history(session_id: str, chat_history: List[dict]):
     return {"message": "Chat history updated successfully"}
 
 @router.put("/sessions/{session_id}/current_plan")
-def update_current_plan(session_id: str, current_plan: Dict):
+async def update_current_plan(session_id: str, request: Request):
     try:
-        session_manager.update_current_plan(session_id, current_plan)
+        # Get the raw body
+        body = await request.body()
+        body_str = body.decode('utf-8')
+        print(f"Raw request body: {body_str}")
+
+        # Try to parse the JSON
+        try:
+            current_plan = json.loads(body_str)
+        except json.JSONDecodeError as e:
+            print(f"JSON Decode Error: {str(e)}")
+            # 尝试修复截断的 JSON
+            if body_str.endswith('"}]'):
+                body_str += '}'
+                try:
+                    current_plan = json.loads(body_str)
+                except json.JSONDecodeError:
+                    raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+            else:
+                raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+
+        print(f"Parsed plan: {json.dumps(current_plan, indent=2)}")
+
+        chat_manager = ChatManager()
+        result = "保存成功"
+        chatbot = chat_manager.get_chatbot(session_id)
+        if chatbot:
+            result = chatbot.save_plan(current_plan)
+        if result == "保存成功":
+            session_manager.update_current_plan(session_id, current_plan)
+        else:
+            raise ValueError(result)
+        return {"message": "Current plan updated successfully"}
+    except ValidationError as e:
+        print(f"Validation Error: {str(e)}")
+        raise HTTPException(status_code=422, detail=str(e))
     except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    return {"message": "Current plan updated successfully"}
+        print(f"Value Error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        print(f"Unexpected Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/sessions/{session_id}/step_codes")
 def update_step_codes(session_id: str, step_codes: Dict):
