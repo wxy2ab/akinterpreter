@@ -174,13 +174,16 @@ class AksharePrompts:
         """
 
     @staticmethod
-    def select_functions_from_category_prompt(step: Dict[str, Any], functions: List[str]) -> str:
+    def select_functions_from_category_prompt(step: Dict[str, Any], functions: List[str],descriptions:str) -> str:
         return f"""
         基于以下数据检索任务：
         {step['description']}
 
         从以下函数中选择1到5个最合适的函数：
         {json.dumps(functions, indent=2, ensure_ascii=False)}
+
+        函数说明：
+        {descriptions}
 
         请返回选中的函数名称列表，用逗号分隔。不需要其他解释。
         """

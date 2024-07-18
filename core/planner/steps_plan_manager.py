@@ -330,10 +330,12 @@ class StepsPlanManager:
 
     def _select_functions_from_category(self, step: Dict[str, Any], category: str) -> Generator[List[str], None, None]:
         functions = self.retriever.get_functions([category])
+        functions_description = self.retriever.classified_functions
         if len(functions)==0:
             yield send_message(f"未找到类别 '{category}' 的函数。请重新生成计划。", "error")
             raise ValueError(f"未找到类别 '{category}' 的函数")
-        function_prompt = self.prompts.select_functions_from_category_prompt(step, functions[category])
+        descriptions = '\n'.join(functions_description[category])
+        function_prompt = self.prompts.select_functions_from_category_prompt(step, functions[category],descriptions)
         
         full_response = ""
         for chunk in self.llm_client.text_chat(function_prompt, is_stream=True):
