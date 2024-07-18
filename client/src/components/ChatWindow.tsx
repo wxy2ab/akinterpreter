@@ -57,7 +57,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
 
     if (message.trim().toLowerCase() === 'save_plan') {
       try {
-        const response = await savePlan(currentPlan);
+        let plan_obj: object;
+        if (typeof currentPlan === 'string') {
+          plan_obj = JSON.parse(currentPlan);
+        } else {
+          plan_obj = currentPlan;
+        }
+        const response = await savePlan(plan_obj);
         setMessages(prevMessages => [...prevMessages, { type: 'text', content: response.message, isBot: true }]);
       } catch (error) {
         console.error('Error saving plan:', error);

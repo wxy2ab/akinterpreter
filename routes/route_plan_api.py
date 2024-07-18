@@ -6,7 +6,7 @@ from fastapi import APIRouter, Body, HTTPException , Response
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse,FileResponse
 from fastapi.templating import Jinja2Templates
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from core.session.chat_manager import ChatManager
 from core.session.user_session_manager import UserSessionManager
 from core.utils.log import logger
@@ -18,13 +18,16 @@ chat_manager = ChatManager()
 router.prefix = "/api"
 from core.utils.log import logger
 
+class PlanRequest(BaseModel):
+    session_id: str
+    plan: dict
+
 @router.post("/save_plan")
-async def save_plan(session_id: str, request: Request):
+async def save_plan(request: PlanRequest):
     try:
         # Get the raw body
-        body = await request.body()
-        body_str = body.decode('utf-8')
-        plan = json.loads(body_str)
+        session_id = request.session_id
+        plan = request.plan
         print(f"Received plan for session {session_id}: {json.dumps(plan, indent=2)}")
 
         chatbot = chat_manager.get_chatbot(session_id)
