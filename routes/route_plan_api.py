@@ -28,7 +28,7 @@ async def save_plan(request: PlanRequest):
         # Get the raw body
         session_id = request.session_id
         plan = request.plan
-        print(f"Received plan for session {session_id}: {json.dumps(plan, indent=2)}")
+        logger.debug(f"Received plan for session {session_id}: {json.dumps(plan, indent=2)}")
 
         chatbot = chat_manager.get_chatbot(session_id)
         if chatbot:
