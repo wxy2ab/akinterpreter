@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import JsonEditor from './JsonEditor';
 import CodeEditor from './CodeEditor';
 
@@ -17,6 +17,7 @@ const MainWindow: React.FC<MainWindowProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState('plan');
   const [error, setError] = useState<string | null>(null);
+  const updateTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const validateJson = (json: any): object | any[] => {
     if (typeof json === 'object' && json !== null) {
@@ -36,6 +37,21 @@ const MainWindow: React.FC<MainWindowProps> = ({
   const validCurrentPlan = useMemo(() => {
     return validateJson(currentPlan);
   }, [currentPlan]);
+
+  const handleJsonChange = (updatedJson: any) => {
+    if (updateTimeout.current) {
+      clearTimeout(updateTimeout.current);
+    }
+
+    updateTimeout.current = setTimeout(() => {
+      try {
+        const validJson = validateJson(updatedJson);
+        onPlanUpdate(validJson);
+      } catch (error) {
+        setError('Failed to update JSON. Please check the console for more details.');
+      }
+    }, 2000); // 2秒后调用API
+  };
 
   const tabStyle = {
     padding: '10px 15px',
@@ -86,14 +102,7 @@ const MainWindow: React.FC<MainWindowProps> = ({
           <JsonEditor 
             key={JSON.stringify(validCurrentPlan)}  // Force re-render on plan change
             initialJson={validCurrentPlan} 
-            onJsonChange={(updatedJson) => {
-              try {
-                const validJson = validateJson(updatedJson);
-                onPlanUpdate(validJson);
-              } catch (error) {
-                setError('Failed to update JSON. Please check the console for more details.');
-              }
-            }}  
+            onJsonChange={handleJsonChange}  
           />
         ) : (
           <CodeEditor

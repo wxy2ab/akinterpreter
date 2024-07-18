@@ -19,8 +19,12 @@ router.prefix = "/api"
 from core.utils.log import logger
 
 @router.post("/save_plan")
-async def save_plan(session_id: str, plan: Dict[str, Any] = Body(...)):
+async def save_plan(session_id: str, request: Request):
     try:
+        # Get the raw body
+        body = await request.body()
+        body_str = body.decode('utf-8')
+        plan = json.loads(body_str)
         print(f"Received plan for session {session_id}: {json.dumps(plan, indent=2)}")
 
         chatbot = chat_manager.get_chatbot(session_id)
