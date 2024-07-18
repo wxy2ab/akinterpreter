@@ -6,6 +6,7 @@ from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel, ValidationError
 from core.session.chat_manager import ChatManager
 from core.session.user_session_manager import UserSessionManager
+from core.utils.log import logger
 
 router = APIRouter()
 session_manager = UserSessionManager()
@@ -53,13 +54,12 @@ async def update_current_plan(session_id: str, request: Request):
         # Get the raw body
         body = await request.body()
         body_str = body.decode('utf-8')
-        print(f"Raw request body: {body_str}")
 
         # Try to parse the JSON
         try:
             current_plan = json.loads(body_str)
         except json.JSONDecodeError as e:
-            print(f"JSON Decode Error: {str(e)}")
+            logger.error(f"JSON Decode Error: {str(e)}")
             # 尝试修复截断的 JSON
             if body_str.endswith('"}]'):
                 body_str += '}'
@@ -70,7 +70,7 @@ async def update_current_plan(session_id: str, request: Request):
             else:
                 raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
 
-        print(f"Parsed plan: {json.dumps(current_plan, indent=2)}")
+        logger.debug(f"Parsed plan: {json.dumps(current_plan, indent=2)}")
 
         chat_manager = ChatManager()
         result = "保存成功"
@@ -83,13 +83,13 @@ async def update_current_plan(session_id: str, request: Request):
             raise ValueError(result)
         return {"message": "Current plan updated successfully"}
     except ValidationError as e:
-        print(f"Validation Error: {str(e)}")
+        logger.error(f"Validation Error: {str(e)}")
         raise HTTPException(status_code=422, detail=str(e))
     except ValueError as e:
-        print(f"Value Error: {str(e)}")
+        logger.error(f"Value Error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        print(f"Unexpected Error: {str(e)}")
+        logger.error(f"Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/sessions/{session_id}/step_codes")
