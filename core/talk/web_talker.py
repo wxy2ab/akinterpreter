@@ -157,9 +157,14 @@ class WebTalker(Talker):
         if command=="clear_all":
             self.sessions.clear_all()
     
-    def save_plan(self,plan:dict) -> None:
+    def save_plan(self,plan:dict) -> str:
+        error ,result = self.akshare_planner.validate_plan(plan)
+        if error:
+            return error
         self.akshare_planner.set_current_plan(plan)
+        return "保存成功"
     
-    
+    def validate_plan(self,plan:dict) -> tuple[ str ,bool]:
+        return  self.akshare_planner.validate_plan(plan)
 
         

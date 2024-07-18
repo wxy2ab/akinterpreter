@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ChatMessage from './ChatMessage';
-import { getSessionId, sendChatMessage, getChatStream } from '@/lib/api';
+import { getSessionId, sendChatMessage, getChatStream, savePlan } from '@/lib/api';
 
 interface Message {
   type: string;
@@ -10,9 +10,10 @@ interface Message {
 
 interface ChatWindowProps {
   initialMessages: Message[];
+  currentPlan: any;  // 保留这个 prop
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan }) => {
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -53,6 +54,18 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
     setMessages(prevMessages => [...prevMessages, { type: 'text', content: message, isBot: false }]);
     setInput('');
     setIsLoading(true);
+
+    if (message.trim().toLowerCase() === 'save_plan') {
+      try {
+        const response = await savePlan(currentPlan);
+        setMessages(prevMessages => [...prevMessages, { type: 'text', content: response.message, isBot: true }]);
+      } catch (error) {
+        console.error('Error saving plan:', error);
+        setMessages(prevMessages => [...prevMessages, { type: 'text', content: 'Error saving plan. Please try again.', isBot: true }]);
+      }
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const chatSessionId = await sendChatMessage(message);
@@ -99,7 +112,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages }) => {
       console.error('Error sending message:', error);
       setIsLoading(false);
     }
-  }, [isLoading]);
+  }, [isLoading, currentPlan]);  // 添加 currentPlan 到依赖数组
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

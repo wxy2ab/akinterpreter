@@ -332,3 +332,6 @@ class AkshareFunPlanner(SSEPlanner):
             yield send_message(f"导出步骤 {step_number} 代码到: {code_path}")
 
         yield send_message("导出成功.")
+        
+        def validate_plan(self,plan)-> Tuple[str, bool]:
+            return self.plan_manager.validate_plan(plan)

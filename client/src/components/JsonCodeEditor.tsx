@@ -1,13 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
-import { JSONInputProps } from 'react-json-editor-ajrm';
-import locale from 'react-json-editor-ajrm/locale/en';
-
-
-const JSONEditor = dynamic<JSONInputProps>(
-  () => import('react-json-editor-ajrm').then((mod) => mod.default),
-  { ssr: false }
-);
+import React, { useEffect, useState } from 'react';
+import CodeMirror from '@uiw/react-codemirror';
+import { json } from '@codemirror/lang-json';
+import '@uiw/react-codemirror/dist/codemirror.css';
 
 interface JsonEditorProps {
   initialJson: any;
@@ -15,34 +9,30 @@ interface JsonEditorProps {
 }
 
 const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
-  const [json, setJson] = useState(initialJson);
+  const [value, setValue] = useState<string>(JSON.stringify(initialJson, null, 2));
 
   useEffect(() => {
-    setJson(initialJson);
+    setValue(JSON.stringify(initialJson, null, 2));
   }, [initialJson]);
 
-  const handleJsonChange = (data: { jsObject: any } | { error: boolean }) => {
-    if ('jsObject' in data) {
-      setJson(data.jsObject);
-      onJsonChange(data.jsObject);
+  const handleChange = (value: string) => {
+    setValue(value);
+    try {
+      const parsedJson = JSON.parse(value);
+      onJsonChange(parsedJson);
+    } catch (error) {
+      console.error('Invalid JSON detected:', error);
     }
   };
 
   return (
-    <div style={{ height: '100%', width: '100%', fontSize: '16px'  }}>
-      <JSONEditor
-        id="json-editor"
-        placeholder={json}
-        onChange={handleJsonChange}
-        locale={locale}
-        height="100%"
-        width="100%"
-        colors={{
-          background: '#1a202c',
-          default: '#d4d4d4',
-        }}
-      />
-    </div>
+    <CodeMirror
+      value={value}
+      extensions={[json()]}
+      onChange={(value) => handleChange(value)}
+      theme="dark"
+      basicSetup={{ lineNumbers: true }}
+    />
   );
 };
 

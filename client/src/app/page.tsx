@@ -21,18 +21,36 @@ const Home: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [leftWidth, setLeftWidth] = useState(25); // Initial width of 25%
 
+  const validateJson = (json: any): object | any[] => {
+    if (typeof json === 'object' && json !== null) {
+      return json;
+    }
+    try {
+      const parsedJson = JSON.parse(json);
+      if (typeof parsedJson === 'object' && parsedJson !== null) {
+        return parsedJson;
+      }
+    } catch (error) {
+      console.error('Invalid JSON string provided, using empty object as fallback.', error);
+    }
+    return {};
+  };
+
   const handleSSEMessage = useCallback((parsedData: any) => {
+    console.log('Received SSE message:', parsedData);
     setSessionData((prevData) => {
       if (!prevData) return null;
-      
+
+      let newData = { ...prevData };
       if (parsedData.type === 'chat_history') {
-        return { ...prevData, chat_history: parsedData.chat_history };
+        newData.chat_history = parsedData.chat_history;
       } else if (parsedData.type === 'plan') {
-        return { ...prevData, current_plan: parsedData.plan };
+        newData.current_plan = validateJson(parsedData.plan);
       } else if (parsedData.type === 'code') {
-        return { ...prevData, step_codes: parsedData.step_codes };
+        newData.step_codes = parsedData.step_codes;
       }
-      return prevData;
+      console.log('Updated session data:', newData);
+      return newData;
     });
   }, []);
 
@@ -40,8 +58,9 @@ const Home: React.FC = () => {
     const fetchSessionData = async () => {
       try {
         const data = await getSession();
+        console.log('Fetched session data:', data);
         setSessionData(data);
-        
+
         const eventSource = getSSEStream(data.session_id);
         eventSource.onmessage = (event) => {
           const parsedData = JSON.parse(event.data);
@@ -65,35 +84,45 @@ const Home: React.FC = () => {
     fetchSessionData();
   }, [handleSSEMessage]);
 
-  const handlePlanUpdate = async (newPlan: any) => {
+  const handlePlanUpdate = useCallback(async (newPlan: any) => {
     if (!sessionData) return;
+    console.log('Updating plan with:', newPlan);
     try {
-      await updateCurrentPlan(newPlan);
-      setSessionData(prevData => ({
-        ...prevData!,
-        current_plan: newPlan
-      }));
+      await updateCurrentPlan(sessionData.session_id, newPlan);
+      setSessionData(prevData => {
+        const updatedData = {
+          ...prevData!,
+          current_plan: newPlan
+        };
+        console.log('Updated session data after plan update:', updatedData);
+        return updatedData;
+      });
     } catch (error) {
       console.error('Failed to update plan:', error);
     }
-  };
+  }, [sessionData]);
 
-  const handleCodeUpdate = async (step: string, newCode: string) => {
+  const handleCodeUpdate = useCallback(async (step: string, newCode: string) => {
     if (!sessionData) return;
+    console.log(`Updating code for step ${step}:`, newCode);
     try {
       const updatedStepCodes = {
         ...sessionData.step_codes,
         [step]: newCode
       };
       await updateStepCodes(updatedStepCodes);
-      setSessionData(prevData => ({
-        ...prevData!,
-        step_codes: updatedStepCodes
-      }));
+      setSessionData(prevData => {
+        const updatedData = {
+          ...prevData!,
+          step_codes: updatedStepCodes
+        };
+        console.log('Updated session data after code update:', updatedData);
+        return updatedData;
+      });
     } catch (error) {
       console.error('Failed to update code:', error);
     }
-  };
+  }, [sessionData]);
 
   const handleResize = (newLeftWidth: number) => {
     setLeftWidth(newLeftWidth);
@@ -107,10 +136,15 @@ const Home: React.FC = () => {
     return <div className="flex justify-center items-center h-screen bg-background text-foreground">No session data available.</div>;
   }
 
+  console.log('Rendering Home component with session data:', sessionData);
+
   return (
     <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
       <div style={{ width: `${leftWidth}%` }} className="h-full overflow-hidden">
-        <ChatWindow initialMessages={sessionData.chat_history} />
+        <ChatWindow 
+          initialMessages={sessionData.chat_history} 
+          currentPlan={sessionData.current_plan}
+        />
       </div>
       <Resizer onResize={handleResize} />
       <div style={{ width: `${100 - leftWidth}%` }} className="h-full overflow-hidden">
