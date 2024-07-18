@@ -2,7 +2,7 @@
     "data_retrieval": [
         {
             "applyto": "读取新闻数据",
-            "content": "新闻数据尽量避免使用cctv数据，因为cctv数据加载很慢，需要很长时间。stock_news_em 返回的是个股的新闻，stock_info_cjzc_em，stock_info_global_cls，stock_info_global_em，stock_info_global_futu，stock_info_global_sina，stock_info_global_ths获取的是全球经济新闻。"
+            "content": "除非要求，新闻数据尽量避免使用cctv数据，因为cctv数据加载很慢，需要很长时间。"
         },
         {
             "applyto": "读取数据",
