@@ -127,6 +127,13 @@ def test1_baichuan_client():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
+def test_minimax_cleint():
+    from core.llms.mini_max_client import MiniMaxClient
+    client = MiniMaxClient()
+    iterator  = client.text_chat("写一个python函数，可以用于判断1000003是否是素数", is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
 def test1_llm_factory():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
