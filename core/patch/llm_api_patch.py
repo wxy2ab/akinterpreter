@@ -139,7 +139,7 @@ print(predictions)
 def predict_with_news_patch():
 
     single = AKShareDataSingleton()
-    single.classified_functions["数据工具"].append("llm_client.predict_with_news: 基于LLM API 使用新闻内容和股价来预测未来股价(或者时序序列)")
+    single.classified_functions["数据工具"].append("llm_client.predict_with_news: 基于LLM API 使用新闻内容和股价来预测未来股价(或者时序序列), 这个函数需要提供新闻数据效果更好")
     single.akshare_docs["llm_client.predict_with_news"]="""
 predict_with_news 函数是 llm_client 类的一个方法，用于结合历史股票价格数据和相关新闻信息来预测未来的股票价格。这个函数能够处理多种类型的股票数据输入，包括单一价格序列和多维度的股票数据（如开盘价、收盘价、最高价、最低价和交易量）。
 函数签名
