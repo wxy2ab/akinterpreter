@@ -228,10 +228,17 @@ class StepsPlanManager:
             yield send_message(f"错误：未知的步骤类型 {step['type']}", "error")
 
     def _generate_data_retrieval_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
+        data_summaries = {
+            data_var: self.get_step_vars(f"{data_var}_summary") or "数据摘要不可用"
+            for data_var in step['required_data']
+        }
         category = step['data_category']
         selected_functions = yield from self._select_functions_from_category(step, category)
         function_docs = self.retriever.get_specific_doc(selected_functions)
-        code_prompt = self.prompts.generate_code_for_functions_prompt(step, function_docs)
+        if "required_data" in step:
+            code_prompt = self.prompts.generate_enhanced_code_for_data_retrieval_prompt(step, function_docs, data_summaries)
+        else:
+            code_prompt = self.prompts.generate_code_for_functions_prompt(step, function_docs)
 
         # 应用事前增强
         enhanced_prompt = self.code_enhancer.apply_pre_enhancement("data_retrieval", step['description'], code_prompt)
@@ -470,6 +477,7 @@ class StepsPlanManager:
             updated_vars = next((event['content'] for event in events if event['type'] == 'variables'), None)
             
             if updated_vars is not None:
+                # 处理 analysis_result
                 if 'analysis_result' in updated_vars:
                     result = updated_vars['analysis_result']
                     
@@ -489,6 +497,20 @@ class StepsPlanManager:
                     error_msg = f"执行代码未产生预期的 'analysis_result' 变量。可用变量: {list(updated_vars.keys())}"
                     yield send_message(error_msg, "error")
                     raise Exception(error_msg)
+
+                # 处理 save_data_to
+                if 'save_data_to' in step and step['save_data_to'] in updated_vars:
+                    data = updated_vars[step['save_data_to']]
+                    self.set_step_vars(step['save_data_to'], data)
+                    
+                    summary = self.data_summarizer.get_data_summary(data)
+                    self.set_step_vars(f"{step['save_data_to']}_summary", summary)
+                    
+                    yield send_message(f"额外数据已保存到 {step['save_data_to']}")
+                    yield send_message(f"额外数据摘要: {summary}", "result")
+                elif 'save_data_to' in step:
+                    warning_msg = f"未找到预期的 '{step['save_data_to']}' 变量来保存额外数据。"
+                    yield send_message(warning_msg, "warning")
 
             yield send_message("数据分析成功完成。")
 
