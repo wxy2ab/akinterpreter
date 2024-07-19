@@ -134,7 +134,7 @@ def test1_minimax_cleint():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-def test_llama_improver():
+def test1_llama_improver():
     from core.llms.zero1_improver_client import Zero1LLamaImproverClient
     client = Zero1LLamaImproverClient()
     iterator = client.text_chat("写一个python函数，可以用于判断1000003是否是素数", is_stream=True)
