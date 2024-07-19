@@ -189,7 +189,14 @@ class AksharePrompts:
         """
 
     @staticmethod
-    def generate_data_analysis_code_prompt(step: Dict[str, Any], data_summaries: Dict[str, str],allow_yfinance:bool) -> str:
+    def generate_data_analysis_code_prompt(step: Dict[str, Any], data_summaries: Dict[str, str], allow_yfinance: bool) -> str:
+        save_data_instruction = ""
+        if 'save_data_to' in step:
+            save_data_instruction = f"""
+        9. 除了分析结果外，请将原始数据（非分析结果）存储在变量 '{step['save_data_to']}' 中。
+           这个变量应该包含用于分析的原始数据，而不是分析后的结果。
+        """
+
         return f"""
         生成一个Python代码块来分析以下数据：
 
@@ -208,6 +215,7 @@ class AksharePrompts:
         6. 将生成的文件和图片以Markdown链接的格式写入返回值。
         7. 将主要的分析结果也写入返回值。
         8. 对于新闻分析、情感分析等自然语言处理任务，必须使用LLM API进行分析。
+        {save_data_instruction}
 
         如果需要使用LLM API进行分析，请使用以下代码获取一个新的LLMApiClient实例：
 
@@ -236,7 +244,7 @@ class AksharePrompts:
         os.makedirs('output', exist_ok=True)
 
         # 访问之前步骤的数据
-        # 例如：data = {step['required_data'][0]}
+        # 例如：data = {step['required_data'][0] if step['required_data'] else 'your_data_variable'}
 
         # 你的数据分析代码
         # ...
@@ -266,9 +274,50 @@ class AksharePrompts:
 
         # 将结果保存到analysis_result变量
         analysis_result = "\\n".join(results)
+
+        {f"# 保存原始数据到 {step['save_data_to']} 变量" if 'save_data_to' in step else ''}
+        {f"{step['save_data_to']} = data  # 假设 'data' 是您的原始数据变量" if 'save_data_to' in step else ''}
         ```
 
         请确保代码完整可执行，并将分析结果保存在名为'analysis_result'的变量中。
+        {f"同时，请将原始数据保存在名为'{step['save_data_to']}'的变量中。" if 'save_data_to' in step else ''}
+        """
+
+    @staticmethod
+    def generate_enhanced_code_for_data_retrieval_prompt(
+        step: Dict[str, Any], 
+        function_docs: Dict[str, str],
+        data_summaries: Dict[str, str]
+    ) -> str:
+        required_data = step.get('required_data', [])
+        
+        return f"""
+        基于以下数据检索任务：
+        {step['description']}
+
+        考虑使用以下Akshare函数来完成任务：
+
+        {json.dumps(function_docs, indent=2, ensure_ascii=False)}
+
+        之前步骤数据变量的数据摘要：
+        {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
+
+        对于之前步骤的数据，你可以使用以下变量名访问：
+        {', '.join(required_data)}
+
+        请生成一个完整的Python代码块来执行任务。遵循以下规则：
+
+        1. 只生成一个Python代码块，使用 ```python 和 ``` 包裹。
+        2. 确保代码完整可执行，并将结果保存在一个名为'{step['save_data_to']}'的变量中。
+        3. 不要在代码块外添加任何解释或注释。
+        4. 代码应考虑数据的时效性、范围、格式和结构，以及可能需要的数据预处理步骤。
+        5. 如果需要多个函数配合使用，直接在代码中组合它们。
+        6. 确保最终结果被赋值给变量 '{step['save_data_to']}'，而不是其他名称。
+        7. 除非特殊说明，存储到结果变量的数据应该是函数返回的原始数据，不要进行额外的处理。
+        8. 如果需要使用之前步骤的数据，请直接使用相应的变量名。
+        9. 在使用之前步骤的数据时，请参考提供的数据摘要来了解数据的结构和内容。
+
+        请只提供代码，不要添加任何额外的解释。
         """
 
     @staticmethod
