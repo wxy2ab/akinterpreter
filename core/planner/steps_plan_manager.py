@@ -228,10 +228,13 @@ class StepsPlanManager:
             yield send_message(f"错误：未知的步骤类型 {step['type']}", "error")
 
     def _generate_data_retrieval_code(self, step: Dict[str, Any]) -> Generator[Union[Dict[str, Any], str], None, None]:
-        data_summaries = {
+        if 'required_data' in step:
+            data_summaries = {
             data_var: self.get_step_vars(f"{data_var}_summary") or "数据摘要不可用"
             for data_var in step['required_data']
         }
+        else:
+            data_summaries = {}
         category = step['data_category']
         selected_functions = yield from self._select_functions_from_category(step, category)
         function_docs = self.retriever.get_specific_doc(selected_functions)
