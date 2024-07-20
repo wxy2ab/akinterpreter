@@ -257,3 +257,171 @@ print(predictions)
 新闻数据的质量和相关性对预测结果有重要影响。尽量提供与股票直接相关的重要新闻。
 使用llm_client和llm_factory 不需要导入，可以直接使用
 """
+
+
+def llm_factor_patch():
+    single = AKShareDataSingleton()
+    single.classified_functions["数据工具"].append("llm_factory.class_instantiation: 通过分析股票相关新闻、历史价格数据,以及相关公司或指数的信息来预测股票的未来走势")
+    single.akshare_docs["llm_factory.class_instantiation"]="""
+##获得LLMFactor的实例
+llm_factor=llm_factory.class_instantiation("LLMFactor")
+
+LLMFactor 是一个利用大型语言模型(LLM)进行股票走势预测的类。它通过分析股票相关新闻、历史价格数据,以及相关公司或指数的信息来预测股票的未来走势。该类使用了序列知识引导提示(Sequential Knowledge-Guided Prompting, SKGP)策略来提高预测的准确性。
+
+## 主要特性
+
+- 提取影响股票价格的关键因素
+- 分析公司与公司之间的关系,或公司与指数之间的关系
+- 综合考虑目标股票和相关股票/指数的历史价格数据
+- 生成新闻摘要
+- 预测股票未来走势并提供理由
+
+## 方法
+
+参数:
+- client (LLMApiClient): LLM API 客户端实例
+
+### get_relation(self, stock_target: str, stock_match: str, is_match_index: bool) -> str
+
+获取两家公司之间的关系,或公司与指数之间的关系。
+
+参数:
+- stock_target (str): 目标股票的公司名称
+- stock_match (str): 相关股票的公司名称或指数名称
+- is_match_index (bool): stock_match 是否为指数
+
+返回值:
+- str: 描述两者关系的字符串
+
+### extract_factors(self, stock_target: str, news: List[Dict[str, Any]], start_date: datetime.date, end_date: datetime.date, k: int = 5) -> List[str]
+
+从给定的新闻中提取可能影响股票价格的因素。
+
+参数:
+- stock_target (str): 目标股票的公司名称
+- news (List[Dict[str, Any]]): 新闻列表,每条新闻包含 'date' 和 'content' 键
+- start_date (datetime.date): 开始日期
+- end_date (datetime.date): 结束日期
+- k (int, 可选): 提取的因素数量,默认为 5
+
+返回值:
+- List[str]: 提取出的因素列表
+
+### predict_movement(self, stock_target: str, stock_match: str, is_match_index: bool, factors: List[str], relation: str, target_price_history: List[Dict[str, Any]], match_price_history: List[Dict[str, Any]], news_summary: str) -> Dict[str, Any]
+
+预测股票走势。
+
+参数:
+- stock_target (str): 目标股票的公司名称
+- stock_match (str): 相关股票的公司名称或指数名称
+- is_match_index (bool): stock_match 是否为指数
+- factors (List[str]): 影响股价的因素列表
+- relation (str): 两者的关系
+- target_price_history (List[Dict[str, Any]]): 目标股票的价格历史
+- match_price_history (List[Dict[str, Any]]): 相关股票或指数的价格历史
+- news_summary (str): 新闻摘要
+
+返回值:
+- Dict[str, Any]: 包含预测结果和理由的字典
+
+### analyze(self, stock_target: str, stock_match: str, is_match_index: bool, news: List[Dict[str, Any]], target_price_data: Union[List[Dict[str, Any]], pd.DataFrame], match_price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: datetime.date) -> Dict[str, Any]
+
+分析股票并预测走势。
+
+参数:
+- stock_target (str): 目标股票的公司名称
+- stock_match (str): 相关股票的公司名称或指数名称
+- is_match_index (bool): stock_match 是否为指数
+- news (List[Dict[str, Any]]): 新闻列表,每条新闻包含 'date' 和 'content' 键
+- target_price_data (Union[List[Dict[str, Any]], pd.DataFrame]): 目标股票的价格数据
+- match_price_data (Union[List[Dict[str, Any]], pd.DataFrame]): 相关股票或指数的价格数据
+- target_date (datetime.date): 目标预测日期
+
+返回值:
+- Dict[str, Any]: 包含分析结果的字典,包括关系、影响因素、预测结果和理由
+
+### calculate_price_history(self, price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: datetime.date, window_size: int = 5) -> Tuple[List[Dict[str, Any]], datetime.date]
+
+计算给定日期前的价格历史。
+
+参数:
+- price_data (Union[List[Dict[str, Any]], pd.DataFrame]): 价格数据
+- target_date (datetime.date): 目标日期
+- window_size (int, 可选): 历史窗口大小,默认为 5
+
+返回值:
+- Tuple[List[Dict[str, Any]], datetime.date]: 价格历史列表和开始日期
+
+### summarize_news(self, news: List[Dict[str, Any]], max_length: int = 500) -> str
+
+生成新闻摘要。
+
+参数:
+- news (List[Dict[str, Any]]): 新闻列表,每条新闻包含 'date' 和 'content' 键
+- max_length (int, 可选): 摘要的最大长度,默认为 500
+
+返回值:
+- str: 生成的新闻摘要
+
+## 使用示例
+
+```python
+from core.llms._llm_api_client import LLMApiClient
+from core.llms.llm_factory import LLMFactory
+import pandas as pd
+import datetime
+
+# 初始化 LLMApiClient
+factory = LLMFactory()
+llm_client = factory.get_instance()
+
+# 初始化 LLMFactor
+llm_factor = LLMFactor(llm_client)
+
+# 准备数据
+stock_target = "阿里巴巴"
+stock_match = "腾讯"
+is_match_index = False
+news = [
+    {"date": "2023-06-25", "content": "阿里巴巴集团今日宣布，将投资10亿元人民币用于改善其物流网络。"},
+    {"date": "2023-06-26", "content": "阿里巴巴第一季度财报显示，营收同比增长9%，超出市场预期。"},
+    # ... 更多新闻
+]
+
+# 生成股票数据 (这里使用随机数据作为示例)
+df_target = pd.DataFrame({
+    'date': pd.date_range(start='2023-01-01', end='2023-06-30'),
+    'close': np.random.randint(100, 120, size=181)
+})
+
+df_match = pd.DataFrame({
+    'date': pd.date_range(start='2023-01-01', end='2023-06-30'),
+    'close': np.random.randint(80, 100, size=181)
+})
+
+target_date = datetime.date(2023, 6, 30)
+
+# 进行分析
+result = llm_factor.analyze(stock_target, stock_match, is_match_index, news, df_target, df_match, target_date)
+
+print(f"关系: {result['relation']}")
+print(f"因素: {result['factors']}")
+print(f"预测: {result['prediction']}")
+print(f"理由: {result['reasoning']}")
+
+# 使用指数作为比较对象的示例
+stock_match_index = "上证指数"
+is_match_index = True
+
+df_index = pd.DataFrame({
+    'date': pd.date_range(start='2023-01-01', end='2023-06-30'),
+    'close': np.random.randint(3000, 3500, size=181)
+})
+
+result_index = llm_factor.analyze(stock_target, stock_match_index, is_match_index, news, df_target, df_index, target_date)
+
+print(f"关系: {result_index['relation']}")
+print(f"因素: {result_index['factors']}")
+print(f"预测: {result_index['prediction']}")
+print(f"理由: {result_index['reasoning']}")
+"""

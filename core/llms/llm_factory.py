@@ -1,10 +1,11 @@
 import os
 import re
 import importlib
-from typing import Dict, Type
+from typing import Any, Dict, Type
 from ..utils.single_ton import Singleton
 from ..utils.config_setting import Config
 from ._llm_api_client import LLMApiClient
+from ..utils.log import logger
 
 class LLMFactory(metaclass=Singleton):
     def __init__(self):
@@ -44,3 +45,14 @@ class LLMFactory(metaclass=Singleton):
 
     def list_available_llms(self) -> list[str]:
         return list(self.llm_classes.keys())
+    
+    def class_instantiation(self,name:str) -> Any:
+        if name == "LLMFactor":
+            try:
+                from core.planner.llm_factor import LLMFactor
+                client = self.get_instance()
+                return LLMFactor(client)
+            except Exception as e:
+                logger.error(f"Error creating LLMFactor: {e}")
+                return None
+        return None
