@@ -278,52 +278,6 @@ LLMFactor 是一个利用大型语言模型(LLM)进行股票走势预测的类�
 
 ## 方法
 
-参数:
-- client (LLMApiClient): LLM API 客户端实例
-
-### get_relation(self, stock_target: str, stock_match: str, is_match_index: bool) -> str
-
-获取两家公司之间的关系,或公司与指数之间的关系。
-
-参数:
-- stock_target (str): 目标股票的公司名称
-- stock_match (str): 相关股票的公司名称或指数名称
-- is_match_index (bool): stock_match 是否为指数
-
-返回值:
-- str: 描述两者关系的字符串
-
-### extract_factors(self, stock_target: str, news: List[Dict[str, Any]], start_date: datetime.date, end_date: datetime.date, k: int = 5) -> List[str]
-
-从给定的新闻中提取可能影响股票价格的因素。
-
-参数:
-- stock_target (str): 目标股票的公司名称
-- news (List[Dict[str, Any]]): 新闻列表,每条新闻包含 'date' 和 'content' 键
-- start_date (datetime.date): 开始日期
-- end_date (datetime.date): 结束日期
-- k (int, 可选): 提取的因素数量,默认为 5
-
-返回值:
-- List[str]: 提取出的因素列表
-
-### predict_movement(self, stock_target: str, stock_match: str, is_match_index: bool, factors: List[str], relation: str, target_price_history: List[Dict[str, Any]], match_price_history: List[Dict[str, Any]], news_summary: str) -> Dict[str, Any]
-
-预测股票走势。
-
-参数:
-- stock_target (str): 目标股票的公司名称
-- stock_match (str): 相关股票的公司名称或指数名称
-- is_match_index (bool): stock_match 是否为指数
-- factors (List[str]): 影响股价的因素列表
-- relation (str): 两者的关系
-- target_price_history (List[Dict[str, Any]]): 目标股票的价格历史
-- match_price_history (List[Dict[str, Any]]): 相关股票或指数的价格历史
-- news_summary (str): 新闻摘要
-
-返回值:
-- Dict[str, Any]: 包含预测结果和理由的字典
-
 ### analyze(self, stock_target: str, stock_match: str, is_match_index: bool, news: List[Dict[str, Any]], target_price_data: Union[List[Dict[str, Any]], pd.DataFrame], match_price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: datetime.date) -> Dict[str, Any]
 
 分析股票并预测走势。
@@ -340,43 +294,15 @@ LLMFactor 是一个利用大型语言模型(LLM)进行股票走势预测的类�
 返回值:
 - Dict[str, Any]: 包含分析结果的字典,包括关系、影响因素、预测结果和理由
 
-### calculate_price_history(self, price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: datetime.date, window_size: int = 5) -> Tuple[List[Dict[str, Any]], datetime.date]
-
-计算给定日期前的价格历史。
-
-参数:
-- price_data (Union[List[Dict[str, Any]], pd.DataFrame]): 价格数据
-- target_date (datetime.date): 目标日期
-- window_size (int, 可选): 历史窗口大小,默认为 5
-
-返回值:
-- Tuple[List[Dict[str, Any]], datetime.date]: 价格历史列表和开始日期
-
-### summarize_news(self, news: List[Dict[str, Any]], max_length: int = 500) -> str
-
-生成新闻摘要。
-
-参数:
-- news (List[Dict[str, Any]]): 新闻列表,每条新闻包含 'date' 和 'content' 键
-- max_length (int, 可选): 摘要的最大长度,默认为 500
-
-返回值:
-- str: 生成的新闻摘要
 
 ## 使用示例
 
 ```python
-from core.llms._llm_api_client import LLMApiClient
-from core.llms.llm_factory import LLMFactory
 import pandas as pd
 import datetime
 
-# 初始化 LLMApiClient
-factory = LLMFactory()
-llm_client = factory.get_instance()
-
 # 初始化 LLMFactor
-llm_factor = LLMFactor(llm_client)
+llm_factor=llm_factory.class_instantiation("LLMFactor")
 
 # 准备数据
 stock_target = "阿里巴巴"
