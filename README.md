@@ -71,6 +71,23 @@ volcengine_embedding =          #火山引擎API 需要的key，非火山引擎A
 volcengine_doubao =             #火山引擎API 需要的key，非火山引擎API不用管
 ```
 
+## 支持的LLM API列表
+
+| 类名                  | 厂商                        | 依赖       |
+|----------------------|-----------------------------|------------|
+| SimpleClaudeAwsClient| Aws bedrock部署的Claude API  | Anthopic   |
+| SimpleAzureClient    | Azure部署的opeai GTP API     | openai     |
+| DeepSeekClient       | DeepSeek                    | openai     |
+| QianWenClient        | 同义千问                     | dashscope  |
+| MoonShotClient       | MooonShot                   | openai     |
+| GLMClient            | 智谱                        | zhipuai    |
+| ErnieApiClient       | 百度文心一言                 | 无依赖     |
+| DoubaoApiClient      | 字节的火山引擎               | 火山 SDK   |
+| GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud |  
+
+__陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
+
+
 ## 如何填写
 - **llm_api**  可选值,除了填写 api_key, 还需要安装依赖项 , 申请 api_key 的时候，应该都知道安装什么依赖项
     * **SimpleClaudeAwsClient**:  Aws的 Claude API ，国内可用，依赖 Anthopic 库，这是目前开发和测试用的API
