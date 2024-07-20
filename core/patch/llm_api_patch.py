@@ -261,7 +261,7 @@ print(predictions)
 
 def llm_factor_patch():
     single = AKShareDataSingleton()
-    single.classified_functions["数据工具"].append("llm_factory.class_instantiation: 通过分析股票相关新闻、历史价格数据,以及相关公司或指数的信息来预测股票的未来走势")
+    single.classified_functions["数据工具"].append("llm_factory.class_instantiation: 使用llm_factor通过分析股票相关新闻、历史价格数据,以及相关公司或指数的信息来预测股票的未来走势")
     single.akshare_docs["llm_factory.class_instantiation"]="""
 ##获得LLMFactor的实例
 llm_factor=llm_factory.class_instantiation("LLMFactor")
