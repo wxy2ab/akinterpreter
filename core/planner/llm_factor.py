@@ -20,14 +20,15 @@ class LLMFactor:
         response = self.client.one_chat(prompt)
         return response.strip()
     
-    def extract_factors(self, stock_target: str, news: List[Dict[str, Any]], start_date: datetime.date, end_date: datetime.date, k: int = 5) -> List[str]:
+
+    def extract_factors(self, stock_target: str, news: List[Dict[str, Any]], start_date: pd.Timestamp, end_date: pd.Timestamp, k: int = 5) -> List[str]:
         relevant_news = [
             n for n in news 
-            if start_date <= datetime.datetime.strptime(n['date'], "%Y-%m-%d").date() <= end_date
+            if start_date <= pd.Timestamp(n['date']) <= end_date
         ]
         relevant_news.sort(key=lambda x: x['date'], reverse=True)
         
-        combined_news = "\n\n".join([f"日期: {n['date']}\n内容: {n['content']}" for n in relevant_news[:5]])
+        combined_news = "\n\n".join([f"日期: {n['date'].strftime('%Y-%m-%d')}\n内容: {n['headline']}" for n in relevant_news[:5]])
         prompt = f"请从以下新闻中提取可能影响{stock_target}股价的前{k}个因素：\n\n{combined_news}"
         response = self.client.one_chat(prompt)
         factors = response.strip().split('\n')
@@ -65,7 +66,7 @@ class LLMFactor:
     def analyze(self, stock_target: str, stock_match: str, is_match_index: bool, news: List[Dict[str, Any]], 
                 target_price_data: Union[List[Dict[str, Any]], pd.DataFrame],
                 match_price_data: Union[List[Dict[str, Any]], pd.DataFrame],
-                target_date: datetime.date) -> Dict[str, Any]:
+                target_date: pd.Timestamp) -> Dict[str, Any]:
         target_price_history, start_date = self.calculate_price_history(target_price_data, target_date)
         match_price_history, _ = self.calculate_price_history(match_price_data, target_date)
         relation = self.get_relation(stock_target, stock_match, is_match_index)
@@ -73,7 +74,7 @@ class LLMFactor:
         
         relevant_news = [
             n for n in news 
-            if start_date <= datetime.datetime.strptime(n['date'], "%Y-%m-%d").date() <= target_date
+            if start_date <= pd.Timestamp(n['date']) <= target_date
         ]
         news_summary = self.summarize_news(relevant_news)
         
@@ -87,7 +88,7 @@ class LLMFactor:
             "reasoning": prediction["reasoning"]
         }
     
-    def calculate_price_history(self, price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: datetime.date, window_size: int = 5) -> Tuple[List[Dict[str, Any]], datetime.date]:
+    def calculate_price_history(self, price_data: Union[List[Dict[str, Any]], pd.DataFrame], target_date: pd.Timestamp, window_size: int = 5) -> Tuple[List[Dict[str, Any]], pd.Timestamp]:
         if isinstance(price_data, list) and isinstance(price_data[0], dict):
             df = pd.DataFrame(price_data)
             df['date'] = pd.to_datetime(df['date'])
@@ -115,12 +116,12 @@ class LLMFactor:
                 "movement": movement
             })
         
-        start_date = df.iloc[-window_size - 1]['date'].date()
+        start_date = pd.Timestamp(df.iloc[-window_size - 1]['date'])
         
         return price_history, start_date
 
-    def summarize_news(self, news: List[Dict[str, Any]], max_length: int = 500) -> str:
-        combined_news = "\n\n".join([f"日期: {n['date']}\n内容: {n['content']}" for n in news])
+    def summarize_news(self, news: List[Dict[str, Any]], max_length: int = 140) -> str:
+        combined_news = "\n\n".join([f"日期: {n['date']}\n内容: {n['headline']}" for n in news])
         prompt = f"请对以下新闻进行总结，总结长度不超过{max_length}个字：\n\n{combined_news}"
         summary = self.client.one_chat(prompt)
         return summary.strip()
