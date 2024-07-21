@@ -201,7 +201,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
 
             final_response = self.client.messages.create(
                 model=self.model,
-                max_tokens=max_tokens,
+                max_tokens=max_tokens or self.max_tokens,
                 messages=self.history + [{"role": "assistant", "content": assistant_message},
                                          {"role": "user", "content": f"工具函数返回结果: {tool_result}"}],
                 stream=True
