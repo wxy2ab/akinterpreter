@@ -53,7 +53,7 @@ def test1_ernie_client():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-def test1_simple_claude():
+def test_simple_claude():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
     from core.utils.all_tools import tools_info_claude, AllTools

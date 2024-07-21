@@ -352,3 +352,4 @@ print(f"因素: {result_index['factors']}")
 print(f"预测: {result_index['prediction']}")
 print(f"理由: {result_index['reasoning']}")
 """
+

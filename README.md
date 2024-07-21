@@ -200,5 +200,9 @@ python main.py
 - 分析思路和方法也是需要逐步积累的，目前积累尚浅，很多分析未必产生很好的效果，需要很详细的提示词，当然随着积累，能越来越好。
 - 主体代码尚不完善，很多功能没有实现，需要慢慢完善。也请使用的朋友耐心，遇到问题积极反馈，我们一起来完善这个项目。
 
+## 关联项目  
+- [akshare](https://github.com/jindaxiang/akshare)  数据源
+- [ak_code_library](https://github.com/wxy2ab/ak_code_library)  由akinterpreter 生成的代码，会放在这个仓库，方便大家使用
+
 ## 微信
 ![微信](./docs/wechat.jpg)

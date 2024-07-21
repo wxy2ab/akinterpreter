@@ -459,7 +459,7 @@ class StepsPlanManager:
 
         except Exception as e:
             yield send_message(f"数据检索失败: {str(e)}", "error")
-            raise
+            raise e
 
     def execute_data_analysis(self, code: str, step: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:
         yield send_message("开始执行数据分析...")
@@ -519,7 +519,7 @@ class StepsPlanManager:
 
         except Exception as e:
             yield send_message(f"数据分析失败: {str(e)}", "error")
-            raise
+            raise e
 
     def reset(self):
         self.current_plan = {}
