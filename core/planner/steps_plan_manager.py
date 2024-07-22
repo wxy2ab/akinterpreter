@@ -364,6 +364,7 @@ class StepsPlanManager:
             return content.strip()
         
     def step(self) -> Generator[Dict[str, Any], None, None]:
+        self.clear_history()
         if self.current_step_number >= self.total_steps:
             yield send_message("所有步骤已完成。")
             return
@@ -740,3 +741,6 @@ class StepsPlanManager:
             'initial_query': initial_query,
             'results_summary': results_summary
         }
+    
+    def clear_history(self):
+        self.llm_client.clear_chat()
