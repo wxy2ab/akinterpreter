@@ -277,3 +277,60 @@ class LLMApiClient(ABC):
             ]
 
         raise ValueError(f"无法从响应中提取足够的有效数据。需要 {num_of_predict} 组预测，每组包含 {len(columns)} 个值。")
+
+    def parse_and_store_compressed_history(self, compressed: str) -> List[Dict[str, str]]:
+        try:
+            # 尝试解析JSON
+            data = json.loads(compressed)
+            
+            # 验证所需的键是否存在
+            required_keys = ["topic", "key_points", "open_questions"]
+            if not all(key in data for key in required_keys):
+                raise ValueError("压缩历史记录中缺少必要的键")
+
+            # 存储解析后的数据（这里只是一个示例，您可能需要根据实际需求调整存储方式）
+            self.compressed_data = data
+
+            # 创建压缩后的历史记录，确保至少有两个条目
+            compressed_history = [
+                {"role": "user", "content": "我们之前的聊天要点是什么？"},
+                {"role": "assistant", "content": f"我们讨论的主要话题是：{data['topic']}。关键点包括：{', '.join(data['key_points'])}。" + (f"还有一些未解决的问题：{', '.join(data['open_questions'])}。" if data['open_questions'] else "")}
+            ]
+
+            return compressed_history
+
+        except json.JSONDecodeError:
+            # 如果JSON解析失败，返回基本的两个条目
+            return [
+                {"role": "user", "content": "我们之前的聊天要点是什么？"},
+                {"role": "assistant", "content": "抱歉，我无法准确总结之前的对话。我们可以从这里重新开始我们的讨论。"}
+            ]
+        except Exception as e:
+            # 处理其他可能的错误
+            print(f"解析压缩历史记录时出错：{e}")
+            return [
+                {"role": "user", "content": "我们之前的聊天要点是什么？"},
+                {"role": "assistant", "content": "在总结我们之前的对话时遇到了一些问题。我们可以从这里重新开始我们的讨论。"}
+            ]
+
+    def compress_history(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
+        """
+        使用 one_chat 方法压缩历史记录。
+        这个方法需要在具体的 LLMApiClient 实现中重写，以适应特定的 API。
+        """
+        prompt = """
+        请对以下对话历史进行高度概括和压缩：
+
+        {history}
+
+        请按照以下格式输出压缩后的结果：
+        1. 主要话题：(简要描述主要讨论的话题)
+        2. 关键点：(列出3-5个关键点，每个点不超过15字)
+        3. 未解决问题：(如果有的话，列出1-2个未解决的问题)
+
+        请确保输出的总字数不超过200字。输出应为JSON格式，键名分别为"topic", "key_points", "open_questions"。
+        """
+
+        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
+        compressed = self.one_chat(prompt.format(history=history_text))
+        return self.parse_and_store_compressed_history(compressed)

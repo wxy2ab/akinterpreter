@@ -8,6 +8,7 @@ from PIL import Image
 import io
 import json
 from ._llm_api_client import LLMApiClient
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class AzureGPT4oClient(LLMApiClient):
     def __init__(self, 
@@ -71,7 +72,7 @@ class AzureGPT4oClient(LLMApiClient):
         if message:
             self.history.append({"role": "user", "content": message})
             self.history.append({"role": "assistant", "content": full_response})
-
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         copy_history= self.history.copy()
         copy_history.append({"role": "user", "content": message})

@@ -15,6 +15,7 @@ import asyncio
 import queue
 import threading
 from ..utils.log import logger as logging
+from ..utils.handle_max_tokens import handle_max_tokens
 
 #众所周知，这个类在一定范围内是运行不了的
 #想运行这个库，应该开启proxy 设置
@@ -134,6 +135,7 @@ class GeminiAPIClient(LLMApiClient):
     def _get_chat_history(self):
         return self.history
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.function_calls += 1
         self._add_to_history("user", message)

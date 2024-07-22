@@ -11,7 +11,7 @@ from PIL import Image
 import io
 from ..utils.retry import retry
 from ._llm_api_client import LLMApiClient
-
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class ClaudeAwsClient(LLMApiClient):
 
@@ -128,6 +128,7 @@ class ClaudeAwsClient(LLMApiClient):
             self.stat["total_input_tokens"] += usage.input_tokens
             self.stat["total_output_tokens"] += usage.output_tokens
 
+    @handle_max_tokens
     def text_chat(self,
                   message: str,
                   max_tokens: Optional[ int] = None,
