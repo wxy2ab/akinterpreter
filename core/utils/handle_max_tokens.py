@@ -19,7 +19,7 @@ def handle_max_tokens(func: Callable) -> Callable:
                     return result  # 直接返回非生成器结果
             except Exception as e:
                 # 检查是否为最大 token 错误
-                if "maximum context length" in str(e) or "maximum" in str(e) or "reduce the length" in str(e):
+                if "maximum context length" in str(e) or "maximum" in str(e) or "reduce the length" in str(e) or "最大" in str(e):
                     # 使用 one_chat 压缩历史记录
                     compressed_history = self.compress_history(original_history)
                     
