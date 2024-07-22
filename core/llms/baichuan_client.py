@@ -2,6 +2,7 @@ import json
 import requests
 from typing import Generator, Iterator, List, Dict, Any, Union
 from ._llm_api_client import LLMApiClient
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class BaichuanClient(LLMApiClient):
     def __init__(self, api_key: str, secret_key: str, model: str = "Baichuan2-53B"):
@@ -9,7 +10,7 @@ class BaichuanClient(LLMApiClient):
         self.secret_key = secret_key
         self.model = model
         self.base_url = "https://api.baichuan-ai.com/v1/chat"
-        self.conversation_history: List[Dict[str, str]] = []
+        self.history: List[Dict[str, str]] = []
         self.parameters: Dict[str, Any] = {
             "temperature": 0.3,
             "top_k": 20,
@@ -42,15 +43,16 @@ class BaichuanClient(LLMApiClient):
 
         return response if stream else response.json()
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.conversation_history.append({"role": "user", "content": message})
-        response = self._make_request(self.conversation_history, is_stream)
+        self.history.append({"role": "user", "content": message})
+        response = self._make_request(self.history, is_stream)
 
         if is_stream:
             return self._process_stream_response(response)
         else:
             assistant_message = response['choices'][0]['message']['content']
-            self.conversation_history.append({"role": "assistant", "content": assistant_message})
+            self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
@@ -69,7 +71,7 @@ class BaichuanClient(LLMApiClient):
                             yield content
                         if 'usage' in data:
                             self.stats["total_tokens"] += data['usage']['total_tokens']
-        self.conversation_history.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         if isinstance(message, str):
@@ -95,7 +97,7 @@ class BaichuanClient(LLMApiClient):
         raise NotImplementedError("Baichuan API does not support video chat.")
 
     def clear_chat(self):
-        self.conversation_history.clear()
+        self.history.clear()
 
     def get_stats(self) -> Dict[str, Any]:
         return self.stats

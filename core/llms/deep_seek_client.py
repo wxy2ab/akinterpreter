@@ -3,6 +3,7 @@ import openai
 import json
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class DeepSeekClient(LLMApiClient):
     def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-coder"
@@ -57,6 +58,7 @@ class DeepSeekClient(LLMApiClient):
         else:
             return response.choices[0].message.content
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.messages.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(

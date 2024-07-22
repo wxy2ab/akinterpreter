@@ -3,6 +3,7 @@ from zhipuai import ZhipuAI
 import json
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class GLMClient(LLMApiClient):
     def __init__(self, api_key: str = "", model: Literal["glm-4-0520", "glm-4", "glm-4-air", "glm-4-airx", "glm-4-flash"] = "glm-4-0520",
@@ -12,7 +13,7 @@ class GLMClient(LLMApiClient):
             api_key = config.get("glm_api_key")
         self.client = ZhipuAI(api_key=api_key)
         self.model = model
-        self.messages = []
+        self.history = []
         self.do_sample = do_sample
         self.temperature = temperature
         self.top_p = top_p
@@ -20,16 +21,16 @@ class GLMClient(LLMApiClient):
         self.stop = stop
 
     def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
-        self.messages = [{"role": "system", "content": system_message}]
-
+        self.history = [{"role": "system", "content": system_message}]
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
-        self.messages.append({"role": "user", "content": message})
+        self.history.append({"role": "user", "content": message})
         
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.messages,
+            messages=self.history,
             do_sample=self.do_sample,
             temperature=self.temperature,
             top_p=self.top_p,
@@ -45,11 +46,11 @@ class GLMClient(LLMApiClient):
                     if chunk.choices[0].delta.content:
                         yield chunk.choices[0].delta.content
                         full_response += chunk.choices[0].delta.content
-                self.messages.append({"role": "assistant", "content": full_response})
+                self.history.append({"role": "assistant", "content": full_response})
             return generate()
         else:
             output = response.choices[0].message.content
-            self.messages.append({"role": "assistant", "content": output})
+            self.history.append({"role": "assistant", "content": output})
             return output
 
     def one_chat(self, message: Union[str, List[Union[str, Dict[str, str]]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
@@ -89,11 +90,11 @@ class GLMClient(LLMApiClient):
                 yield chunk.choices[0].delta.content
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.messages.append({"role": "user", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         
         response = self.client.chat.completions.create(
             model=self.model,
-            messages=self.messages,
+            messages=self.history,
             tools=tools,
             tool_choice="auto",
             do_sample=self.do_sample,
@@ -144,7 +145,7 @@ class GLMClient(LLMApiClient):
                 "content": full_response,
                 "tool_calls": tool_calls
             }
-            self.messages.append(assistant_message)
+            self.history.append(assistant_message)
             
             yield "\n执行工具调用...\n"
             for tool_call in tool_calls:
@@ -157,22 +158,22 @@ class GLMClient(LLMApiClient):
                         tool_output = tool_func(**tool_args)
                         yield f"工具 {tool_call['id']} 返回结果: {tool_output}\n"
                         tool_msg = {"role": "tool", "content": str(tool_output), "tool_call_id": tool_call["id"]}
-                        self.messages.append(tool_msg)
+                        self.history.append(tool_msg)
                     except Exception as e:
                         error_msg = f"Error executing {tool_name}: {str(e)}"
                         yield f"工具 {tool_call['id']} 执行错误: {error_msg}\n"
                         tool_msg = {"role": "tool", "content": error_msg, "tool_call_id": tool_call["id"]}
-                        self.messages.append(tool_msg)
+                        self.history.append(tool_msg)
                 else:
                     error_msg = f"Function {tool_name} not found in the provided module."
                     yield f"工具 {tool_call['id']} 未找到: {error_msg}\n"
                     tool_msg = {"role": "tool", "content": error_msg, "tool_call_id": tool_call["id"]}
-                    self.messages.append(tool_msg)
+                    self.history.append(tool_msg)
             
             yield "\n生成最终回复...\n"
             final_response = self.client.chat.completions.create(
                 model=self.model,
-                messages=self.messages,
+                messages=self.history,
                 do_sample=self.do_sample,
                 temperature=self.temperature,
                 top_p=self.top_p,
@@ -185,7 +186,7 @@ class GLMClient(LLMApiClient):
                 if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
                     yield chunk.choices[0].delta.content
         else:
-            self.messages.append({"role": "assistant", "content": full_response})
+            self.history.append({"role": "assistant", "content": full_response})
 
     def _non_stream_tool_chat(self, response, tools: List[Dict[str, Any]], function_module: Any) -> str:
         output = response.choices[0].message
@@ -208,7 +209,7 @@ class GLMClient(LLMApiClient):
             "content": full_response,
             "tool_calls": tool_calls
         }
-        self.messages.append(assistant_message)
+        self.history.append(assistant_message)
 
         if tool_calls:
             for tool_call in tool_calls:
@@ -220,19 +221,19 @@ class GLMClient(LLMApiClient):
                     try:
                         tool_output = tool_func(**tool_args)
                         tool_msg = {"role": "tool", "content": str(tool_output), "tool_call_id": tool_call["id"]}
-                        self.messages.append(tool_msg)
+                        self.history.append(tool_msg)
                     except Exception as e:
                         error_msg = f"Error executing {tool_name}: {str(e)}"
                         tool_msg = {"role": "tool", "content": error_msg, "tool_call_id": tool_call["id"]}
-                        self.messages.append(tool_msg)
+                        self.history.append(tool_msg)
                 else:
                     error_msg = f"Function {tool_name} not found in the provided module."
                     tool_msg = {"role": "tool", "content": error_msg, "tool_call_id": tool_call["id"]}
-                    self.messages.append(tool_msg)
+                    self.history.append(tool_msg)
 
             final_response = self.client.chat.completions.create(
                 model=self.model,
-                messages=self.messages,
+                messages=self.history,
                 do_sample=self.do_sample,
                 temperature=self.temperature,
                 top_p=self.top_p,
@@ -240,7 +241,7 @@ class GLMClient(LLMApiClient):
                 stop=self.stop
             )
             final_output = final_response.choices[0].message.content
-            self.messages.append({"role": "assistant", "content": final_output})
+            self.history.append({"role": "assistant", "content": final_output})
             return final_output
         else:
             return full_response
@@ -268,11 +269,11 @@ class GLMClient(LLMApiClient):
         return tool_outputs
 
     def clear_chat(self) -> None:
-        self.messages = []
+        self.history = []
 
     def get_stats(self) -> Dict[str, Any]:
         return {
-            "total_messages": len(self.messages)
+            "total_messages": len(self.history)
         }
 
     def image_chat(self, message: str, image_path: str) -> str:

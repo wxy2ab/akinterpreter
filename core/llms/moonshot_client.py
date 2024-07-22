@@ -3,6 +3,7 @@ from openai import OpenAI
 import json
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class MoonShotClient(LLMApiClient):
     def __init__(self, api_key: str = "", base_url: str = "https://api.moonshot.cn/v1",
@@ -14,7 +15,7 @@ class MoonShotClient(LLMApiClient):
         self.client = OpenAI(api_key=api_key, base_url=base_url)
         self.chat_count = 0
         self.token_count = 0
-        self.messages = []
+        self.history = []
         self._model_list = ["moonshot-v1-128k", "moonshot-v1-8k", "moonshot-v1-32k"]
         self.model = self._model_list[0]
         self.max_tokens = max_tokens
@@ -25,28 +26,29 @@ class MoonShotClient(LLMApiClient):
         self.stop = stop
 
     def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
-        self.messages = [{"role": "system", "content": system_message}]
+        self.history = [{"role": "system", "content": system_message}]
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
-        self.messages.append({"role": "user", "content": message})
-        return self._create_chat_completion(self.messages, is_stream)
+        self.history.append({"role": "user", "content": message})
+        return self._create_chat_completion(self.history, is_stream)
 
     def one_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
         msg = [{"role": "user", "content": message}] if isinstance(message, str) else message
         return self._create_chat_completion(msg, is_stream)
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
-        self.messages.append({"role": "user", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         if is_stream:
-            return self._unified_tool_stream(self.messages, tools, function_module)
+            return self._unified_tool_stream(self.history, tools, function_module)
         else:
-            response = self._create_chat_completion(self.messages, is_stream, tools)
+            response = self._create_chat_completion(self.history, is_stream, tools)
             return self._process_tool_response(response, tools, function_module)
 
     def _unified_tool_stream(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], function_module: Any) -> Iterator[str]:
@@ -105,7 +107,7 @@ class MoonShotClient(LLMApiClient):
         except Exception as e:
             yield f"发生错误: {str(e)}"
 
-        self.messages = [msg for msg in messages[-5:] if msg.get('content', '').strip()]
+        self.history = [msg for msg in messages[-5:] if msg.get('content', '').strip()]
 
     def _create_chat_completion(self, messages: List[Dict[str, str]], is_stream: bool, tools: List[Dict[str, Any]] = None, raw_response: bool = False) -> Union[str, Iterator[str]]:
         kwargs = {
@@ -135,13 +137,13 @@ class MoonShotClient(LLMApiClient):
         self._update_stats(response.usage)
 
         if hasattr(assistant_output, 'tool_calls') and assistant_output.tool_calls:
-            self.messages.append({"role": "assistant", "content": assistant_output.content, "tool_calls": assistant_output.tool_calls})
+            self.history.append({"role": "assistant", "content": assistant_output.content, "tool_calls": assistant_output.tool_calls})
             tool_outputs = self._execute_tool_calls(assistant_output.tool_calls, function_module)
-            self.messages.extend(tool_outputs)
-            second_response = self._create_chat_completion(self.messages, False, tools)
+            self.history.extend(tool_outputs)
+            second_response = self._create_chat_completion(self.history, False, tools)
             final_output = second_response.choices[0].message.content
         else:
-            self.messages.append({"role": "assistant", "content": assistant_output.content})
+            self.history.append({"role": "assistant", "content": assistant_output.content})
             final_output = assistant_output.content
 
         return final_output
@@ -154,7 +156,7 @@ class MoonShotClient(LLMApiClient):
                 if hasattr(delta, 'content') and delta.content:
                     full_response += delta.content
                     yield delta.content
-        self.messages.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
     def _execute_tool_calls(self, tool_calls, function_module: Any) -> List[Dict[str, str]]:
         tool_outputs = []
@@ -200,7 +202,7 @@ class MoonShotClient(LLMApiClient):
         }
 
     def clear_chat(self) -> None:
-        self.messages = []
+        self.history = []
 
     def image_chat(self, message: str, image_path: str) -> str:
         raise NotImplementedError("MoonShot API does not support image chat.")

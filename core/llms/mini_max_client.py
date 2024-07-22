@@ -8,6 +8,7 @@ from typing import Any, Dict, Generator, Iterator, List, Union
 import requests
 from core.llms._llm_api_client import LLMApiClient
 from  ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class MiniMaxClient(LLMApiClient):
     def __init__(self,  model: str = "abab6.5s-chat"):
@@ -20,7 +21,7 @@ class MiniMaxClient(LLMApiClient):
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.api_key}"
         }
-        self.conversation_history: List[Dict[str, str]] = []
+        self.history: List[Dict[str, str]] = []
         self.parameters: Dict[str, Any] = {
             "temperature": 0.9,
             "top_p": 1,
@@ -56,15 +57,16 @@ class MiniMaxClient(LLMApiClient):
                 if line.startswith("data: "):
                     yield json.loads(line[6:])
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.conversation_history.append({"role": "user", "content": message})
-        response = self._make_request(self.conversation_history, is_stream)
+        self.history.append({"role": "user", "content": message})
+        response = self._make_request(self.history, is_stream)
 
         if is_stream:
             return self._process_stream_response(response)
         else:
             assistant_message = response['choices'][0]['message']['content']
-            self.conversation_history.append({"role": "assistant", "content": assistant_message})
+            self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
@@ -83,7 +85,7 @@ class MiniMaxClient(LLMApiClient):
                         full_response = content
             if 'usage' in chunk:
                 self.stats["total_tokens"] += chunk['usage']['total_tokens']
-        self.conversation_history.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         if isinstance(message, str):
@@ -99,18 +101,18 @@ class MiniMaxClient(LLMApiClient):
             return response['choices'][0]['message']['content']
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.conversation_history.append({"role": "user", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         payload = {
             "tools": tools,
             "tool_choice": "auto"
         }
-        response = self._make_request(self.conversation_history, is_stream, **payload)
+        response = self._make_request(self.history, is_stream, **payload)
 
         if is_stream:
             return self._process_stream_response(response)
         else:
             assistant_message = response['choices'][0]['message']['content']
-            self.conversation_history.append({"role": "assistant", "content": assistant_message})
+            self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
@@ -121,7 +123,7 @@ class MiniMaxClient(LLMApiClient):
         raise NotImplementedError("MiniMax API does not support video chat.")
 
     def clear_chat(self):
-        self.conversation_history.clear()
+        self.history.clear()
 
     def get_stats(self) -> Dict[str, Any]:
         return self.stats

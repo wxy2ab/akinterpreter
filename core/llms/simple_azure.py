@@ -8,6 +8,7 @@ import os
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from ..utils.log import logger
+from ..utils.handle_max_tokens import handle_max_tokens
 
 logger.setLevel("ERROR")
 
@@ -69,7 +70,7 @@ class SimpleAzureClient(LLMApiClient):
             yield text
         self.history.append({"role": "assistant", "content": full_response})
 
-
+    @handle_max_tokens
     def text_chat(self, message: str,  max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         response = self.client.chat.completions.create(

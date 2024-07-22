@@ -4,6 +4,7 @@ from dashscope import Generation
 from typing import Iterator, List, Dict, Any, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class QianWenClient(LLMApiClient):
     def __init__(self, api_key: str = "", max_tokens: int = 2000, top_p: float = 0.8, 
@@ -14,7 +15,7 @@ class QianWenClient(LLMApiClient):
         if api_key == "" and config.has_key("DASHSCOPE_API_KEY"):
             api_key = config.get("DASHSCOPE_API_KEY")
         dashscope.api_key = api_key
-        self.messages = [{'role': 'system', 'content': '你是一个智能助手。'}]
+        self.history = [{'role': 'system', 'content': '你是一个智能助手。'}]
         self.total_tokens = 0
         self.request_count = 0
         self.successful_requests = 0
@@ -28,22 +29,23 @@ class QianWenClient(LLMApiClient):
         self.stop = stop
         self.enable_search = enable_search
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.messages.append({'role': 'user', 'content': message})
+        self.history.append({'role': 'user', 'content': message})
         if is_stream:
-            return self._stream_response(self.messages)
+            return self._stream_response(self.history)
         else:
-            response = self._send_request(self.messages, model=self.model)
+            response = self._send_request(self.history, model=self.model)
             if response.status_code == HTTPStatus.OK:
                 assistant_message = response.output.choices[0]['message']
-                self.messages.append(assistant_message)
+                self.history.append(assistant_message)
                 return assistant_message['content']
             else:
-                self.messages.pop()
+                self.history.pop()
                 return "Error: Failed to get response from the model."
 
     def one_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        messages = self.messages.copy()
+        messages = self.history.copy()
         messages.append({'role': 'user', 'content': message})
         if is_stream:
             return self._stream_response(messages)
@@ -56,7 +58,7 @@ class QianWenClient(LLMApiClient):
                 return "Error: Failed to get response from the model."
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.messages.append({"role": "user", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         
         if is_stream:
             return self._stream_tool_chat(tools, function_module)
@@ -64,14 +66,14 @@ class QianWenClient(LLMApiClient):
             return self._non_stream_tool_chat(tools, function_module)
 
     def _non_stream_tool_chat(self, tools: List[Dict[str, Any]], function_module: Any) -> str:
-        response = self._send_tool_request(self.messages, tools)
+        response = self._send_tool_request(self.history, tools)
         
         if response.status_code != HTTPStatus.OK:
-            self.messages.pop()
+            self.history.pop()
             return "Error: Failed to get response from the model."
 
         assistant_message = response.output.choices[0]['message']
-        self.messages.append(assistant_message)
+        self.history.append(assistant_message)
         
         if 'tool_calls' in assistant_message:
             tool_calls = assistant_message['tool_calls']
@@ -84,16 +86,16 @@ class QianWenClient(LLMApiClient):
 
                 tool_result = self._execute_function(function_name, function_args, function_module)
                 
-                self.messages.append({
+                self.history.append({
                     "role": "tool",
                     "name": function_name,
                     "content": str(tool_result)
                 })
 
-            final_response = self._send_tool_request(self.messages, tools)
+            final_response = self._send_tool_request(self.history, tools)
             if final_response.status_code == HTTPStatus.OK:
                 final_message = final_response.output.choices[0]['message']
-                self.messages.append(final_message)
+                self.history.append(final_message)
                 return final_message['content']
             else:
                 return "Error: Failed to get final response from the model."
@@ -101,7 +103,7 @@ class QianWenClient(LLMApiClient):
             return assistant_message['content']
 
     def _stream_tool_chat(self, tools: List[Dict[str, Any]], function_module: Any) -> Iterator[str]:
-        response_stream = self._send_tool_request(self.messages, tools, stream=True)
+        response_stream = self._send_tool_request(self.history, tools, stream=True)
         full_response = ""
         tool_calls = []
 
@@ -134,13 +136,13 @@ class QianWenClient(LLMApiClient):
                 tool_result = self._execute_function(function_name, function_args, function_module)
                 yield f"\nTool Call: {function_name}\nTool Result: {tool_result}\n"
 
-                self.messages.append({
+                self.history.append({
                     "role": "tool",
                     "name": function_name,
                     "content": str(tool_result)
                 })
 
-            final_response_stream = self._send_tool_request(self.messages, tools, stream=True)
+            final_response_stream = self._send_tool_request(self.history, tools, stream=True)
             for chunk in final_response_stream:
                 if chunk.status_code == HTTPStatus.OK:
                     content = chunk.output.choices[0]['message'].get('content', '')
@@ -149,7 +151,7 @@ class QianWenClient(LLMApiClient):
                 else:
                     yield f"Error: {chunk.code} - {chunk.message}"
         
-        self.messages.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
     def _execute_function(self, function_name: str, function_args: Dict[str, Any], function_module: Any) -> Any:
         if hasattr(function_module, function_name):
@@ -226,7 +228,7 @@ class QianWenClient(LLMApiClient):
                 yield text
             else:
                 yield f"Error: {response.code} - {response.message}"
-        self.messages.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
         self.request_count += 1
         self.successful_requests += 1
 
@@ -282,7 +284,7 @@ class QianWenClient(LLMApiClient):
     def _process_tool_response(self, response, tools, function_module):
         if response.status_code == HTTPStatus.OK:
             assistant_output = response.output.choices[0].message
-            self.messages.append(assistant_output)
+            self.history.append(assistant_output)
             
             if 'tool_calls' in assistant_output:
                 tool_call = assistant_output.tool_calls[0]
@@ -294,11 +296,11 @@ class QianWenClient(LLMApiClient):
                     tool_func = getattr(function_module, tool_name)
                     tool_output = tool_func(**tool_args)
                     tool_msg = {"name": tool_name, "role": "tool", "content": tool_output}
-                    self.messages.append(tool_msg)
+                    self.history.append(tool_msg)
                     
-                    second_response = self._send_tool_request(self.messages, tools, model=self.model)
+                    second_response = self._send_tool_request(self.history, tools, model=self.model)
                     final_output = second_response.output.choices[0].message['content']
-                    self.messages.append(second_response.output.choices[0].message)
+                    self.history.append(second_response.output.choices[0].message)
                 else:
                     final_output = f"Error: Function {tool_name} not found in the provided module."
             else:
@@ -306,7 +308,7 @@ class QianWenClient(LLMApiClient):
                 
             return final_output
         else:
-            self.messages.pop()
+            self.history.pop()
             return "Error: Failed to get response from the model."
 
     def get_stats(self) -> Dict[str, Any]:
@@ -318,7 +320,7 @@ class QianWenClient(LLMApiClient):
         }
 
     def clear_chat(self) -> None:
-        self.messages = [self.messages[0]]  # Keep the system message
+        self.history = [self.history[0]]  # Keep the system message
 
     def image_chat(self, message: str, image_path: str) -> str:
         raise NotImplementedError("QianWen API does not support image chat.")

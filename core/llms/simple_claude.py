@@ -10,6 +10,7 @@ import io
 from ..utils.retry import retry
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class SimpleClaudeAwsClient(LLMApiClient):
     def __init__(self, 
@@ -87,6 +88,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
             self.stat['output_tokens'] += response.usage.output_tokens
             self.stat["total_tokens"] += response.usage.input_tokens + response.usage.output_tokens
 
+    @handle_max_tokens
     def text_chat(self, message: str, max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         copy_history= self.history.copy()
         copy_history.append({"role": "user", "content": message})

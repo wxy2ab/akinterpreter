@@ -4,6 +4,7 @@ import json
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from typing import Literal
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class ErnieApiClient(LLMApiClient):
     def __init__(self, 
@@ -27,7 +28,7 @@ class ErnieApiClient(LLMApiClient):
         self.access_token = None
         self.base_url = f"https://aip.baidubce.com/rpc/2.0/ai_custom/v1/wenxinworkshop/chat/{api_name}"
         self.chat_statistics = {'total_tokens': 0, "call_times": 0}
-        self.chat_history = []
+        self.history = []
         self.system = None
         self.temperature = temperature
         self.top_p = top_p
@@ -46,10 +47,9 @@ class ErnieApiClient(LLMApiClient):
         if not self.access_token:
             self.get_access_token()
         full_messages = None
-        # Only use chat_history if use_full_messages is True
         if use_full_messages:
-            self.chat_history.extend(messages)
-            full_messages = self.chat_history
+            self.history.extend(messages)
+            full_messages = self.history
         else:
             full_messages = messages
 
@@ -101,8 +101,9 @@ class ErnieApiClient(LLMApiClient):
                     if data.get('is_end', False):
                         self._update_stats(data)
                         break
-        self.chat_history.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}]
         if is_stream:
@@ -214,7 +215,7 @@ class ErnieApiClient(LLMApiClient):
                 messages.append({"role": "assistant", "content": response_data.get("result", "")})
 
             # Update chat history after the entire conversation
-            self.chat_history.extend(messages)
+            self.history.extend(messages)
 
             return "\n".join(result)
 
@@ -237,7 +238,7 @@ class ErnieApiClient(LLMApiClient):
         self.max_output_tokens = max_output_tokens
 
     def clear_chat(self) -> None:
-        self.chat_history = []
+        self.history = []
 
     def get_stats(self) -> Dict[str, Any]:
         return self.chat_statistics

@@ -3,6 +3,7 @@ from typing import Iterator, List, Dict, Any, Optional, Tuple, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from volcenginesdkarkruntime import Ark
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class DoubaoApiClient(LLMApiClient):
     def __init__(self):
@@ -25,7 +26,7 @@ class DoubaoApiClient(LLMApiClient):
         self.temperature = 1
         self.top_p = 1
         self.frequency_penalty = 1
-
+    @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         

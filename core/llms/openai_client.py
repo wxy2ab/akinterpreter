@@ -4,7 +4,7 @@ import base64
 from typing import Union, List, Dict, Any, Iterator
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
-
+from ..utils.handle_max_tokens import handle_max_tokens
 
 class OpenAIClient(LLMApiClient):
 
@@ -30,7 +30,7 @@ class OpenAIClient(LLMApiClient):
             self.client = openai.OpenAI(api_key=self.api_key)
         self.chat_count = 0
         self.token_count = 0
-        self.messages = []
+        self.history = []
         self.model = model
         self.max_tokens = max_tokens
         self.temperature = temperature
@@ -41,20 +41,20 @@ class OpenAIClient(LLMApiClient):
 
     def set_system_message(self,
                            system_message: str = "你是个智能助手，你遵循指令和写代码的能力超级棒."):
-        self.messages = [{"role": "system", "content": system_message}]
-
+        self.history = [{"role": "system", "content": system_message}]
+    @handle_max_tokens
     def text_chat(self,
                   message: str,
                   is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
-        self.messages.append({"role": "user", "content": message})
-        return self._create_chat_completion(self.messages, is_stream)
+        self.history.append({"role": "user", "content": message})
+        return self._create_chat_completion(self.history, is_stream)
 
     def one_chat(self,
                  message: str,
                  is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
         msg = [{
             "role": "user",
@@ -67,14 +67,14 @@ class OpenAIClient(LLMApiClient):
                   tools: List[Dict[str, Any]],
                   function_module: Any,
                   is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
-        self.messages.append({"role": "user", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         if is_stream:
-            return self._unified_tool_stream(self.messages, tools,
+            return self._unified_tool_stream(self.history, tools,
                                              function_module)
         else:
-            response = self._create_chat_completion(self.messages, is_stream,
+            response = self._create_chat_completion(self.history, is_stream,
                                                     tools)
             return self._process_tool_response(response, tools,
                                                function_module)
@@ -83,7 +83,7 @@ class OpenAIClient(LLMApiClient):
                    message: str,
                    image_path_or_url: str,
                    is_stream: bool = False) -> Union[str, Iterator[str]]:
-        if not self.messages:
+        if not self.history:
             self.set_system_message()
 
         if image_path_or_url.startswith(
@@ -102,7 +102,7 @@ class OpenAIClient(LLMApiClient):
                 }
             }
 
-        self.messages.append({
+        self.history.append({
             "role":
             "user",
             "content": [{
@@ -110,7 +110,7 @@ class OpenAIClient(LLMApiClient):
                 "text": message
             }, image_content]
         })
-        return self._create_chat_completion(self.messages, is_stream)
+        return self._create_chat_completion(self.history, is_stream)
 
     def _encode_image_to_base64(self, image_path: str) -> str:
         with open(image_path, "rb") as image_file:
@@ -198,7 +198,7 @@ class OpenAIClient(LLMApiClient):
         except Exception as e:
             yield f"An error occurred: {str(e)}"
 
-        self.messages = [
+        self.history = [
             msg for msg in messages[-5:] if msg.get('content', '').strip()
         ]
 
@@ -238,19 +238,19 @@ class OpenAIClient(LLMApiClient):
 
         if hasattr(assistant_output,
                    'tool_calls') and assistant_output.tool_calls:
-            self.messages.append({
+            self.history.append({
                 "role": "assistant",
                 "content": assistant_output.content,
                 "tool_calls": assistant_output.tool_calls
             })
             tool_outputs = self._execute_tool_calls(
                 assistant_output.tool_calls, function_module)
-            self.messages.extend(tool_outputs)
+            self.history.extend(tool_outputs)
             second_response = self._create_chat_completion(
-                self.messages, False, tools)
+                self.history, False, tools)
             final_output = second_response.choices[0].message.content
         else:
-            self.messages.append({
+            self.history.append({
                 "role": "assistant",
                 "content": assistant_output.content
             })
@@ -266,7 +266,7 @@ class OpenAIClient(LLMApiClient):
                 if hasattr(delta, 'content') and delta.content:
                     full_response += delta.content
                     yield delta.content
-        self.messages.append({"role": "assistant", "content": full_response})
+        self.history.append({"role": "assistant", "content": full_response})
 
     def _execute_tool_calls(self, tool_calls,
                             function_module: Any) -> List[Dict[str, str]]:
@@ -313,7 +313,7 @@ class OpenAIClient(LLMApiClient):
         }
 
     def clear_chat(self) -> None:
-        self.messages = []
+        self.history = []
 
     def audio_chat(self, message: str, audio_path: str) -> str:
         raise NotImplementedError("OpenAI API does not support audio chat.")
