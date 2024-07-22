@@ -11,6 +11,7 @@ class LLMFactory(metaclass=Singleton):
     def __init__(self):
         self.llm_classes: Dict[str, str] = {}  # 存储类名和文件名的映射
         self._discover_llm_classes()
+        self._stop_words = None
 
     def _discover_llm_classes(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -56,3 +57,10 @@ class LLMFactory(metaclass=Singleton):
                 logger.error(f"Error creating LLMFactor: {e}")
                 return None
         return None
+    
+    @property
+    def stop_words(self) -> set:
+        if self._stop_words is None:
+            from ..utils.stop_words import stop_words
+            self._stop_words = stop_words
+        return self._stop_words
