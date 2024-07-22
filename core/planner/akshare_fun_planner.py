@@ -181,6 +181,7 @@ class AkshareFunPlanner(SSEPlanner):
 
     def stream_progress(self) -> Generator[Dict[str, Any], None, None]:
         while self.plan_manager.current_step_number < self.plan_manager.total_steps:
+            self.plan_manager.clear_history()
             current_step = self.plan_manager.get_current_step()
             total_steps = self.plan_manager.total_steps
             step_number = self.plan_manager.current_step_number + 1
