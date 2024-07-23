@@ -1,0 +1,36 @@
+name: Bump version on push
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    
+    - name: Bump version and push tag
+      uses: anothrNick/github-tag-action@1.35.0
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        DEFAULT_BUMP: patch
+        WITH_V: true
+
+    - name: Update version in __init__.py
+      run: |
+        # 获取最新的tag
+        LATEST_TAG=$(git describe --tags --abbrev=0)
+        # 去掉tag中的'v'前缀
+        VERSION=${LATEST_TAG#v}
+        # 更新版本号在 ./core/__init__.py 文件中
+        sed -i 's/^__version__ = .*/__version__ = "'$VERSION'"/' ./core/__init__.py
+        
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add -A
+        git diff-index --quiet HEAD || (git commit -m "Bump version to ${LATEST_TAG}" --allow-empty && git push)
