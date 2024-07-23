@@ -10,21 +10,31 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+    
+    - name: Get version
+      id: get_version
+      run: |
+        echo "VERSION=$(python -c "exec(open('./core/__init__.py').read()); print(__version__)")" >> $GITHUB_OUTPUT
+    
     - name: Create ZIP archive
-      run: zip -r release.zip . -x "*.git*"
+      run: zip -r akinterpreter-${{ steps.get_version.outputs.VERSION }}.zip . -x "*.git*"
       
     - name: Upload ZIP artifact
       uses: actions/upload-artifact@v2
       with:
-        name: release
-        path: release.zip
-
+        name: akinterpreter-${{ steps.get_version.outputs.VERSION }}
+        path: akinterpreter-${{ steps.get_version.outputs.VERSION }}.zip
+    
     - name: Upload Release Asset
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release.zip
-        asset_name: release.zip
+        asset_path: ./akinterpreter-${{ steps.get_version.outputs.VERSION }}.zip
+        asset_name: akinterpreter-${{ steps.get_version.outputs.VERSION }}.zip
         asset_content_type: application/zip
