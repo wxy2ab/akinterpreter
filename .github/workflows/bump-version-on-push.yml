@@ -8,37 +8,59 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Set up Python
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
 
     - name: Install dependencies
-      run: pip install packaging
+      run: |
+        python -m pip install --upgrade pip
+        pip install packaging
 
     - name: Get current version and bump
       id: version
       run: |
         import re
         import os
+        import sys
         from packaging import version
 
-        with open('./core/__init__.py', 'r') as f:
-            content = f.read()
-            current_version = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content).group(1)
+        try:
+            print("Current working directory:", os.getcwd())
+            print("Contents of current directory:", os.listdir())
 
-        new_version = version.parse(current_version)
-        new_version = version.parse(f"{new_version.major}.{new_version.minor}.{new_version.micro + 1}")
+            init_file = './core/__init__.py'
+            if not os.path.exists(init_file):
+                raise FileNotFoundError(f"Cannot find {init_file}")
 
-        with open('./core/__init__.py', 'w') as f:
-            f.write(re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\1{new_version}\\3', content))
+            with open(init_file, 'r') as f:
+                content = f.read()
+                print("Content of __init__.py:", content)
+                match = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content)
+                if not match:
+                    raise ValueError("Version string not found in __init__.py")
+                current_version = match.group(1)
 
-        print(f"::set-output name=new_version::{new_version}")
-        print(f"::set-output name=new_tag::v{new_version}")
+            print(f"Current version: {current_version}")
+            new_version = version.parse(current_version)
+            new_version = version.parse(f"{new_version.major}.{new_version.minor}.{new_version.micro + 1}")
+            print(f"New version: {new_version}")
+
+            with open(init_file, 'w') as f:
+                new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\1{new_version}\\3', content)
+                f.write(new_content)
+
+            print(f"::set-output name=new_version::{new_version}")
+            print(f"::set-output name=new_tag::v{new_version}")
+        except Exception as e:
+            print(f"Error: {str(e)}", file=sys.stderr)
+            sys.exit(1)
       shell: python
 
     - name: Commit and push if changed
@@ -46,9 +68,17 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -A
-        git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" --allow-empty
+        git diff --staged --quiet || (git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" --allow-empty)
         git tag ${{ steps.version.outputs.new_tag }}
         git push && git push --tags
+      continue-on-error: true
 
     - name: Output new version
+      if: steps.version.outputs.new_version
       run: echo "New version - ${{ steps.version.outputs.new_version }}"
+
+    - name: Check for errors
+      if: failure()
+      run: |
+        echo "The workflow failed. Please check the logs for more information."
+        exit 1
