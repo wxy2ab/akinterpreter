@@ -64,3 +64,26 @@ class LLMFactory(metaclass=Singleton):
             from ..utils.stop_words import stop_words
             self._stop_words = stop_words
         return self._stop_words
+
+    @staticmethod
+    def configure_matplotlib_for_chinese():
+        from matplotlib import font_manager
+        import matplotlib.pyplot as plt
+        import platform
+        system = platform.system()
+        if system == 'Windows':
+            font_name = 'SimHei'
+        elif system == 'Darwin':
+            font_name = 'STHeiti'
+        else:  # For Linux
+            font_path = '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'
+            if os.path.exists(font_path):
+                font_manager.fontManager.addfont(font_path)
+                font_name = font_manager.FontProperties(fname=font_path).get_name()
+            else:
+                raise FileNotFoundError(f"Font file not found: {font_path}")
+        
+        # Set the font properties
+        plt.rcParams['font.sans-serif'] = [font_name]
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['axes.unicode_minus'] = False
