@@ -31,9 +31,13 @@ jobs:
         import sys
         from packaging import version
 
+        def log(message):
+            print(f"LOG: {message}")
+            sys.stdout.flush()
+
         try:
-            print("Current working directory:", os.getcwd())
-            print("Contents of current directory:", os.listdir())
+            log("Current working directory: " + os.getcwd())
+            log("Contents of current directory: " + str(os.listdir()))
 
             init_file = './core/__init__.py'
             if not os.path.exists(init_file):
@@ -41,16 +45,16 @@ jobs:
 
             with open(init_file, 'r') as f:
                 content = f.read()
-                print("Content of __init__.py:", content)
+                log("Content of __init__.py: " + content)
                 match = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content)
                 if not match:
                     raise ValueError("Version string not found in __init__.py")
                 current_version = match.group(1)
 
-            print(f"Current version: {current_version}")
+            log(f"Current version: {current_version}")
             new_version = version.parse(current_version)
             new_version = version.parse(f"{new_version.major}.{new_version.minor}.{new_version.micro + 1}")
-            print(f"New version: {new_version}")
+            log(f"New version: {new_version}")
 
             with open(init_file, 'w') as f:
                 new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\1{new_version}\\3', content)
@@ -59,8 +63,8 @@ jobs:
             print(f"::set-output name=new_version::{new_version}")
             print(f"::set-output name=new_tag::v{new_version}")
         except Exception as e:
-            print(f"Error: {str(e)}", file=sys.stderr)
-            sys.exit(1)
+            log(f"Error: {str(e)}")
+            raise
       shell: python
 
     - name: Commit and push if changed
@@ -68,9 +72,11 @@ jobs:
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -A
+        git status
         git diff --staged --quiet || (git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" --allow-empty)
-        git tag ${{ steps.version.outputs.new_tag }}
-        git push && git push --tags
+        git tag ${{ steps.version.outputs.new_tag }} || echo "Failed to create tag"
+        git push || echo "Failed to push commits"
+        git push --tags || echo "Failed to push tags"
       continue-on-error: true
 
     - name: Output new version
@@ -81,4 +87,8 @@ jobs:
       if: failure()
       run: |
         echo "The workflow failed. Please check the logs for more information."
+        echo "Python script output:"
+        cat $GITHUB_WORKSPACE/python_script_output.log
+        echo "Git operations output:"
+        cat $GITHUB_WORKSPACE/git_operations_output.log
         exit 1
