@@ -45,7 +45,7 @@ jobs:
 
             with open(init_file, 'r') as f:
                 content = f.read()
-                log("Content of __init__.py: " + content)
+                log("Content of __init__.py before update: " + content)
                 match = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content)
                 if not match:
                     raise ValueError("Version string not found in __init__.py")
@@ -59,13 +59,23 @@ jobs:
             with open(init_file, 'w') as f:
                 new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\g<1>{new_version}\\g<3>', content)
                 f.write(new_content)
+                log("Content of __init__.py after update: " + new_content)
 
-            print(f"::set-output name=new_version::{new_version}")
-            print(f"::set-output name=new_tag::v{new_version}")
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                print(f"new_version={new_version}", file=fh)
+                print(f"new_tag=v{new_version}", file=fh)
+                
+            log(f"Set output - new_version: {new_version}")
+            log(f"Set output - new_tag: v{new_version}")
         except Exception as e:
             log(f"Error: {str(e)}")
             raise
       shell: python
+
+    - name: Debug outputs
+      run: |
+        echo "New version from previous step: ${{ steps.version.outputs.new_version }}"
+        echo "New tag from previous step: ${{ steps.version.outputs.new_tag }}"
 
     - name: Commit and push if changed
       run: |
@@ -73,15 +83,22 @@ jobs:
         git config --local user.name "GitHub Action"
         git add -A
         git status
-        git diff --staged --quiet || (git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" --allow-empty)
-        git tag ${{ steps.version.outputs.new_tag }} || echo "Failed to create tag"
-        git push || echo "Failed to push commits"
-        git push --tags || echo "Failed to push tags"
-      continue-on-error: true
+        git diff --cached --exit-code && echo "No changes to commit" || (git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" && echo "Changes committed")
+        git tag ${{ steps.version.outputs.new_tag }} && echo "Tag created: ${{ steps.version.outputs.new_tag }}" || echo "Failed to create tag"
+        git push && echo "Changes pushed" || echo "Failed to push commits"
+        git push --tags && echo "Tags pushed" || echo "Failed to push tags"
 
-    - name: Output new version
-      if: steps.version.outputs.new_version
-      run: echo "New version - ${{ steps.version.outputs.new_version }}"
+    - name: Verify version update
+      run: |
+        echo "Content of __init__.py after git operations:"
+        cat ./core/__init__.py
+        echo "Current git status:"
+        git status
+        echo "Latest commit:"
+        git log -1
+
+    - name: Output final version
+      run: echo "Final version - ${{ steps.version.outputs.new_version }}"
 
     - name: Check for errors
       if: failure()
