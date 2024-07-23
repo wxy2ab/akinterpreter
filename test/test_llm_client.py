@@ -53,7 +53,7 @@ def test1_ernie_client():
     for chunk in iterator:
         print(chunk, end='', flush=True)
 
-def test_simple_claude():
+def test1_simple_claude():
     from core.llms._llm_api_client import LLMApiClient
     from core.llms.llm_factory import LLMFactory
     from core.utils.all_tools import tools_info_claude, AllTools
@@ -63,6 +63,14 @@ def test_simple_claude():
                                tools = tools_info_claude,
                                 function_module=AllTools,
                                is_stream=True)
+    for chunk in iterator:
+        print(chunk, end='', flush=True)
+
+def test1_hunyuan_client():
+    from core.llms.hunyuan_client import HunyuanClient
+    client = HunyuanClient()
+    iterator = client.text_chat("写一个python函数，可以用于判断1000003是否是素数",
+                                is_stream=True)
     for chunk in iterator:
         print(chunk, end='', flush=True)
 

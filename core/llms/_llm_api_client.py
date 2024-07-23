@@ -21,6 +21,13 @@ class LLMApiClient(ABC):
 
         - `tools`：工具规范列表（字典）。
         - `function_module`：包含要调用的工具函数的模块。
+
+        tool_chat的实现流程：
+        1. 将用户消息，tools 发送给API
+        2. 接收响应，处理里面的工具调用
+        3. 用function_module调配合解析出的函数名和参数用工具函数
+        4. 把结果返回给API
+        5. 获得并返回最终响应
         """
         pass
 
