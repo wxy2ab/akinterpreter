@@ -56,6 +56,8 @@ class APIService:
         html_directory = os.path.abspath("static")
         if not os.path.exists(html_directory):
             os.makedirs(html_directory) 
+        if not os.path.exists("output"):
+            os.makedirs("output")
         self.app.mount("/", StaticFiles(directory=html_directory,html=True), name="static")
         self.app.mount("/output", StaticFiles(directory=os.path.abspath("output")), name="static_output")
         if os.path.exists("static/.next/static"):
