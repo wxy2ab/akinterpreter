@@ -92,7 +92,12 @@ volcengine_doubao =             #火山引擎API 需要的key，非火山引擎A
 | GLMClient            | 智谱                        | zhipuai    |
 | ErnieApiClient       | 百度文心一言                 | 无依赖     |
 | DoubaoApiClient      | 字节的火山引擎               | 火山 SDK   |
-| GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud |  
+| GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud |
+| BaichuanClient      | 百川 | 无依赖 |
+|HunyuanClient        | 腾讯混元 | tencentcloud-sdk-python-hunyuan |
+|MiniMaxClient        | 上海稀宇科技 | 无依赖 |
+|OpenAIClient         | OPENAI | openai |
+|Zero1LLamaImproverClient| 零一 | openai |
 
 __陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
 
