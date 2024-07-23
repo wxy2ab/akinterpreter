@@ -8,43 +8,47 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    
-    - name: Get current version
-      id: get_version
-      run: |
-        current_version=$(grep -oP '__version__ = "\K[^"]+' ./core/__init__.py)
-        echo "Current version: $current_version"
-        echo "current_version=$current_version" >> $GITHUB_OUTPUT
 
-    - name: Bump version
-      id: bump_version
-      uses: anothrNick/github-tag-action@1.61.0  # 使用最新版本
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        DEFAULT_BUMP: patch
-        WITH_V: true
-        INITIAL_VERSION: ${{ steps.get_version.outputs.current_version }}
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.x'
 
-    - name: Update version in __init__.py
-      if: steps.bump_version.outputs.new_tag
+    - name: Install dependencies
+      run: pip install packaging
+
+    - name: Get current version and bump
+      id: version
       run: |
-        NEW_VERSION=${steps.bump_version.outputs.new_tag#v}
-        sed -i 's/^__version__ = .*/__version__ = "'$NEW_VERSION'"/' ./core/__init__.py
-        
+        import re
+        import os
+        from packaging import version
+
+        with open('./core/__init__.py', 'r') as f:
+            content = f.read()
+            current_version = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content).group(1)
+
+        new_version = version.parse(current_version)
+        new_version = version.parse(f"{new_version.major}.{new_version.minor}.{new_version.micro + 1}")
+
+        with open('./core/__init__.py', 'w') as f:
+            f.write(re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\1{new_version}\\3', content))
+
+        print(f"::set-output name=new_version::{new_version}")
+        print(f"::set-output name=new_tag::v{new_version}")
+      shell: python
+
     - name: Commit and push if changed
-      if: steps.bump_version.outputs.new_tag
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -A
-        git commit -m "Bump version to ${steps.bump_version.outputs.new_tag}" --allow-empty
-        git push
-        git push --tags
+        git commit -m "Bump version to ${{ steps.version.outputs.new_version }}" --allow-empty
+        git tag ${{ steps.version.outputs.new_tag }}
+        git push && git push --tags
 
     - name: Output new version
-      if: steps.bump_version.outputs.new_tag
-      run: |
-        echo "New version: ${steps.bump_version.outputs.new_tag}"
+      run: echo "New version - ${{ steps.version.outputs.new_version }}"
