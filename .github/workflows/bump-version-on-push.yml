@@ -57,7 +57,7 @@ jobs:
             log(f"New version: {new_version}")
 
             with open(init_file, 'w') as f:
-                new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\1{new_version}\\3', content)
+                new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\g<1>{new_version}\\g<3>', content)
                 f.write(new_content)
 
             print(f"::set-output name=new_version::{new_version}")
@@ -87,8 +87,4 @@ jobs:
       if: failure()
       run: |
         echo "The workflow failed. Please check the logs for more information."
-        echo "Python script output:"
-        cat $GITHUB_WORKSPACE/python_script_output.log
-        echo "Git operations output:"
-        cat $GITHUB_WORKSPACE/git_operations_output.log
         exit 1
