@@ -8,29 +8,43 @@ jobs:
   bump-version:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
       with:
         fetch-depth: 0
     
-    - name: Bump version and push tag
-      uses: anothrNick/github-tag-action@1.35.0
+    - name: Get current version
+      id: get_version
+      run: |
+        current_version=$(grep -oP '__version__ = "\K[^"]+' ./core/__init__.py)
+        echo "Current version: $current_version"
+        echo "current_version=$current_version" >> $GITHUB_OUTPUT
+
+    - name: Bump version
+      id: bump_version
+      uses: anothrNick/github-tag-action@1.61.0  # 使用最新版本
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         DEFAULT_BUMP: patch
         WITH_V: true
+        INITIAL_VERSION: ${{ steps.get_version.outputs.current_version }}
 
     - name: Update version in __init__.py
+      if: steps.bump_version.outputs.new_tag
       run: |
-        # 获取最新的tag
-        LATEST_TAG=$(git describe --tags --abbrev=0)
-        # 去掉tag中的'v'前缀
-        VERSION=${LATEST_TAG#v}
-        # 更新版本号在 ./core/__init__.py 文件中
-        sed -i 's/^__version__ = .*/__version__ = "'$VERSION'"/' ./core/__init__.py
+        NEW_VERSION=${steps.bump_version.outputs.new_tag#v}
+        sed -i 's/^__version__ = .*/__version__ = "'$NEW_VERSION'"/' ./core/__init__.py
         
     - name: Commit and push if changed
+      if: steps.bump_version.outputs.new_tag
       run: |
         git config --local user.email "action@github.com"
         git config --local user.name "GitHub Action"
         git add -A
-        git diff-index --quiet HEAD || (git commit -m "Bump version to ${LATEST_TAG}" --allow-empty && git push)
+        git commit -m "Bump version to ${steps.bump_version.outputs.new_tag}" --allow-empty
+        git push
+        git push --tags
+
+    - name: Output new version
+      if: steps.bump_version.outputs.new_tag
+      run: |
+        echo "New version: ${steps.bump_version.outputs.new_tag}"
