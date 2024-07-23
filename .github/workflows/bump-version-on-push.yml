@@ -4,6 +4,9 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  contents: write
+
 jobs:
   bump-version:
     runs-on: ubuntu-latest
@@ -12,7 +15,6 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0
-        token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -73,11 +75,6 @@ jobs:
             raise
       shell: python
 
-    - name: Debug outputs
-      run: |
-        echo "New version from previous step: ${{ steps.version.outputs.new_version }}"
-        echo "New tag from previous step: ${{ steps.version.outputs.new_tag }}"
-
     - name: Verify file changes
       run: |
         echo "Content of core/__init__.py:"
@@ -87,8 +84,8 @@ jobs:
 
     - name: Commit and push if changed
       run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
         git add -A
         git status
         if git diff --staged --quiet; then
@@ -118,9 +115,3 @@ jobs:
 
     - name: Output final version
       run: echo "Final version - ${{ steps.version.outputs.new_version }}"
-
-    - name: Check for errors
-      if: failure()
-      run: |
-        echo "The workflow failed. Please check the logs for more information."
-        exit 1
