@@ -1,0 +1,30 @@
+name: Create ZIP Archive on Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    
+    - name: Create ZIP archive
+      run: zip -r release.zip . -x "*.git*"
+      
+    - name: Upload ZIP artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: release
+        path: release.zip
+
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./release.zip
+        asset_name: release.zip
+        asset_content_type: application/zip
