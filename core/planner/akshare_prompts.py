@@ -377,10 +377,13 @@ class AksharePrompts:
         """
 
     @staticmethod
-    def modify_step_code_prompt(current_code: str, query: str) -> str:
+    def modify_step_code_prompt(current_code: str, query: str,data_summaries:str) -> str:
         return f"""
         当前代码：
         {current_code}
+
+        之前步骤数据变量的数据摘要：
+        {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
 
         修改请求：
         {query}

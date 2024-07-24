@@ -103,7 +103,7 @@ def create_command_parser():
         use_regex=True
     )
     parser.add_command(r"modify_step_code=(?P<step>\d+)\s*(?P<query>.*)", 
-        lambda ctx, step, query: ctx.modify_step_code(int(step)-1, query),
+        lambda ctx, step, query: ctx.modify_step_code(int(step), query),
         "修改特定步骤的代码",
         use_regex=True
     )

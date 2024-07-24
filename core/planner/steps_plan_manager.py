@@ -208,8 +208,14 @@ class StepsPlanManager:
         if not current_code:
             yield send_message(f"步骤 {step} 的代码不存在。", "error")
             return
+        
+        step = self.current_plan['steps'][step]
+        data_summaries = {
+            data_var: self.get_step_vars(f"{data_var}_summary") or "数据摘要不可用"
+            for data_var in step['required_data']
+        }
 
-        prompt = self.prompts.modify_step_code_prompt(current_code, query)
+        prompt = self.prompts.modify_step_code_prompt(current_code, query,data_summaries)
         modified_code = ""
         for chunk in self.llm_code.text_chat(prompt, is_stream=True):
             modified_code += chunk
