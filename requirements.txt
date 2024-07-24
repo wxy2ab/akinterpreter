@@ -23,3 +23,5 @@ jieba
 playwright
 aiohttp
 tenacity
+pdfplumber
+ python-docx
