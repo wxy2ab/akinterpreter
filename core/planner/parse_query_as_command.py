@@ -143,6 +143,11 @@ def create_command_parser():
         "导出当前计划和步骤代码",
         use_regex=False
     )
+    parser.add_command("redo", 
+    lambda ctx, args: ctx.redo(),
+    "重新代码(不再重新生成代码)",
+    use_regex=False
+    )
     return parser
 
 def handle_set_stop_every_step(ctx, args):

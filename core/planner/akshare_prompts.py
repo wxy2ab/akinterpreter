@@ -377,19 +377,20 @@ class AksharePrompts:
         """
 
     @staticmethod
-    def modify_step_code_prompt(current_code: str, query: str,data_summaries:str) -> str:
+    def modify_step_code_prompt(current_code: str, query: str,data_summaries:str,step) -> str:
         return f"""
         当前代码：
         {current_code}
 
-        之前步骤数据变量的数据摘要：
-        {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
+        {  f"你可以使用以下变量名：{', '.join(step['required_data'])}  这些变量的数据摘要：{json.dumps(data_summaries, indent=2, ensure_ascii=False)}" if 'required_data' in step else ""  }
 
         修改请求：
         {query}
 
         请根据修改请求提供更新后的完整代码。只返回修改后的代码，不需要任何解释。
-        代码用 ```python 和 ``` 包裹。
+        {f"请确保将结果保存在名为'{step['save_data_to']}'的变量中。" if 'save_data_to' in step else ""}
+        如果代码之中使用了'analysis_result'来保存分析结果，那么新代码仍然应该如此。
+        输出的代码用 ```python 和 ``` 包裹。
         """
 
     @staticmethod

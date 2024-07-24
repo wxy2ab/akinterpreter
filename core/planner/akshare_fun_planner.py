@@ -202,6 +202,17 @@ class AkshareFunPlanner(SSEPlanner):
         yield send_message("所有步骤已完成。正在生成最终报告...")
         yield from self.get_final_report()
 
+    def redo(self)-> Generator[Dict[str, Any], None, None]:
+        self.plan_manager.current_step_number = 0
+        self.plan_manager.is_plan_confirmed = False
+        while self.plan_manager.current_step_number < self.plan_manager.total_steps:
+            self.plan_manager.clear_history()
+            current_step = self.plan_manager.get_current_step()
+            total_steps = self.plan_manager.total_steps
+            step_number = self.plan_manager.current_step_number + 1
+            yield from self.plan_manager.redo_step()
+
+
     def step(self) -> Generator[Dict[str, Any], None, None]:
         try:
             yield from self.plan_manager.step()
