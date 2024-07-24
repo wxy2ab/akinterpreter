@@ -24,4 +24,5 @@ playwright
 aiohttp
 tenacity
 pdfplumber
- python-docx
+python-docx
+seaborn
