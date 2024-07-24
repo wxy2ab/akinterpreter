@@ -12,4 +12,7 @@ echo Installing requirements...
 call .\env\Scripts\activate.bat
 pip install -r requirements.txt
 
+echo Installing playwright...
+playwright install
+
 echo Miniconda installation and setup complete.

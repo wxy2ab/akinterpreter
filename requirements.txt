@@ -20,3 +20,6 @@ apscheduler
 wordcloud
 duckdb
 jieba
+playwright
+aiohttp
+tenacity
