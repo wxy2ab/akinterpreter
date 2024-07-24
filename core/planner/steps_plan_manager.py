@@ -215,7 +215,7 @@ class StepsPlanManager:
             for data_var in step['required_data']
         }
 
-        prompt = self.prompts.modify_step_code_prompt(current_code, query,data_summaries)
+        prompt = self.prompts.modify_step_code_prompt(current_code, query,data_summaries,step)
         modified_code = ""
         for chunk in self.llm_code.text_chat(prompt, is_stream=True):
             modified_code += chunk
@@ -368,7 +368,7 @@ class StepsPlanManager:
             return code_match.group(1).strip()
         else:
             return content.strip()
-        
+    
     def step(self) -> Generator[Dict[str, Any], None, None]:
         self.clear_history()
         if self.current_step_number >= self.total_steps:
@@ -424,7 +424,48 @@ class StepsPlanManager:
                     break
 
         self.current_step_number += 1
-        yield send_message(f"当前步骤更新为: {self.current_step_number}", "debug")
+        yield send_message(f"当前步骤更新为: {self.current_step_number+1}", "debug")
+
+    def redo_step(self)-> Generator[Dict[str, Any], None, None]:
+        self.clear_history()
+        if self.current_step_number >= self.total_steps:
+            yield send_message("所有步骤已完成。")
+            return
+        current_step = self.get_current_step()
+        full_code = self.get_step_code(self.current_step_number)
+        # 执行代码
+        for attempt in range(self.max_retry):
+            try:
+                if current_step['type'] == 'data_retrieval':
+                    yield from self.execute_data_retrieval(full_code, current_step)
+                elif current_step['type'] == 'data_analysis':
+                    yield from self.execute_data_analysis(full_code, current_step)
+                else:
+                    raise Exception(f"未知的步骤类型: {current_step['type']}")
+
+                yield send_message(f"步骤 {self.current_step_number + 1} 执行成功。")
+                break
+            except Exception as e:
+                if attempt < self.max_retry - 1:
+                    yield send_message(f"第 {attempt + 1} 次尝试失败。错误：{str(e)}。正在尝试修复代码。", "code")
+                    fix_generator = self.fix_code(self.current_step_number, full_code, str(e))
+                    new_code = ""
+                    for chunk in fix_generator:
+                        if chunk['type'] == 'code':
+                            new_code = chunk['content']
+                        yield chunk
+                    if new_code:
+                        full_code = new_code
+                        self.set_step_code(self.current_step_number+1, full_code)
+                    else:
+                        yield send_message("未能生成修复后的代码。", "error")
+                        break
+                else:
+                    yield send_message(f"在 {self.max_retry} 次尝试后仍无法执行代码。最后的错误：{str(e)}", "error")
+                    break
+
+        self.current_step_number += 1
+        yield send_message(f"当前步骤更新为: {self.current_step_number+1}", "debug")
 
     def next_step(self):
         self.current_step_number += 1
