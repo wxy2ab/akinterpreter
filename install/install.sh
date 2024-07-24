@@ -58,4 +58,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
+echo "intalling playwright..."
+playwright install
+
 echo "Miniconda installation and setup complete."
