@@ -66,10 +66,8 @@ jobs:
 
             with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
                 print(f"new_version={new_version}", file=fh)
-                print(f"new_tag=v{new_version}", file=fh)
                 
             log(f"Set output - new_version: {new_version}")
-            log(f"Set output - new_tag: v{new_version}")
         except Exception as e:
             log(f"Error: {str(e)}")
             raise
@@ -95,13 +93,6 @@ jobs:
           echo "Changes committed"
           git push
           echo "Changes pushed"
-        fi
-        if git tag ${{ steps.version.outputs.new_tag }}; then
-          echo "Tag created: ${{ steps.version.outputs.new_tag }}"
-          git push --tags
-          echo "Tags pushed"
-        else
-          echo "Failed to create tag"
         fi
 
     - name: Verify version update
