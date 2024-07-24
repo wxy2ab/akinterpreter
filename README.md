@@ -35,12 +35,12 @@ python main.py
 ```
 
 ### 没有python环境的安装方案
->- 下载release版本，解压到任意目录,目录不要包含中文  
->- 把settings.ini.template 修改为 settings.ini
->- 修改settings.ini中的llm_api，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表
->- 修改settings.ini中的   对应你的llm api的api_key  
->- windows: 执行run.bat
->- linux & mac: 执行chmod +x ./run.sh  &&  ./run.sh
+- 下载release版本，解压到任意目录,目录不要包含中文  
+- 把settings.ini.template 修改为 settings.ini
+- 修改settings.ini中的llm_api，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表
+- 修改settings.ini中的   对应你的llm api的api_key  
+- windows: 执行run.bat
+- linux & mac: 执行chmod +x ./run.sh  &&  ./run.sh
 
 ## 生成配置文件
 windows:
@@ -95,10 +95,10 @@ volcengine_doubao =             #火山引擎API 需要的key，非火山引擎A
 | DoubaoApiClient      | 字节的火山引擎               | 火山 SDK   |
 | GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud |
 | BaichuanClient      | 百川 | 无依赖 |
-|HunyuanClient        | 腾讯混元 | tencentcloud-sdk-python-hunyuan |
-|MiniMaxClient        | 上海稀宇科技 | 无依赖 |
-|OpenAIClient         | OPENAI | openai |
-|Zero1LLamaImproverClient| 零一 | openai |
+| HunyuanClient        | 腾讯混元 | tencentcloud-sdk-python-hunyuan |
+| MiniMaxClient        | 上海稀宇科技 | 无依赖 |
+| OpenAIClient         | OPENAI | openai |
+| Zero1LLamaImproverClient| 零一 | openai |
 
 __陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
 
@@ -114,6 +114,11 @@ __陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
     * **ErnieApiClient**: 百度文心一言的 API (还没测试，无依赖)
     * **DoubaoApiClient**: 字节的火山引擎 豆包 API (还没测试，依赖火山 SDK)
     * **GeminiAPIClient**: Google 的 Gemini API (国内不可用，依赖 google cloud 库)
+    * **BaichuanClient**: 百川的 API (还没测试，无依赖)
+    * **HunyuanClient**: 腾讯混元 API (还没测试，依赖 tencentcloud-sdk-python-hunyuan 库)
+    * **MiniMaxClient**: 上海稀宇科技的 API (还没测试，无依赖)
+    * **OpenAIClient**: OPENAI API (众所周知，国内不可用，依赖openai库)
+    * **Zero1LLamaImproverClient**: 零一 API (还没测试，依赖openai库)
 - llm_cheap_api 用于处理简易 NLP 任务，暂时不用填
 - embedding_api 用于文本向量化，暂时不用填
 - ranker_api 用于二次排序，暂时不用填
@@ -135,6 +140,8 @@ python main.py
 - clear_history 清除历史记录，当前版本需要手动刷新一下
 - export 导出代码
 - go 执行计划
+- modify_step_code=step_number query 修改指定步骤的代码
+- redo 重新执行(不会生成代码)
 - 除此之外的指令还不完善，暂时别用
 
 ## 如何使用

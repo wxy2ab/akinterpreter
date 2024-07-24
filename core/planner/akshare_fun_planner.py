@@ -207,9 +207,6 @@ class AkshareFunPlanner(SSEPlanner):
         self.plan_manager.is_plan_confirmed = False
         while self.plan_manager.current_step_number < self.plan_manager.total_steps:
             self.plan_manager.clear_history()
-            current_step = self.plan_manager.get_current_step()
-            total_steps = self.plan_manager.total_steps
-            step_number = self.plan_manager.current_step_number + 1
             yield from self.plan_manager.redo_step()
 
 
