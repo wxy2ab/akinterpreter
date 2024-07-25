@@ -5,6 +5,7 @@ module.exports = {
     './src/pages/**/*.{ts,tsx}',
     './src/components/**/*.{ts,tsx}',
     './src/app/**/*.{ts,tsx}',
+    './src/components/ui/**/*.{ts,tsx}', 
   ],
   theme: {
     container: {
@@ -71,5 +72,10 @@ module.exports = {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [
+    require("tailwindcss-animate") , 
+    require('@tailwindcss/forms'),  // 添加这行
+    require('@tailwindcss/typography'),  // 添加这行
+    require('@tailwindcss/aspect-ratio'),  // 添加这行],
+  ],
 }
