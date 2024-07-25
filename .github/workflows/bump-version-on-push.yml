@@ -1,0 +1,108 @@
+name: Bump version on push
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  bump-version:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install packaging
+
+    - name: Get current version and bump
+      id: version
+      run: |
+        import re
+        import os
+        import sys
+        from packaging import version
+
+        def log(message):
+            print(f"LOG: {message}")
+            sys.stdout.flush()
+
+        try:
+            log("Current working directory: " + os.getcwd())
+            log("Contents of current directory: " + str(os.listdir()))
+
+            init_file = './core/__init__.py'
+            if not os.path.exists(init_file):
+                raise FileNotFoundError(f"Cannot find {init_file}")
+
+            with open(init_file, 'r') as f:
+                content = f.read()
+                log("Content of __init__.py before update: " + content)
+                match = re.search(r'__version__\s*=\s*["\'](.+?)["\']', content)
+                if not match:
+                    raise ValueError("Version string not found in __init__.py")
+                current_version = match.group(1)
+
+            log(f"Current version: {current_version}")
+            new_version = version.parse(current_version)
+            new_version = version.parse(f"{new_version.major}.{new_version.minor}.{new_version.micro + 1}")
+            log(f"New version: {new_version}")
+
+            with open(init_file, 'w') as f:
+                new_content = re.sub(r'(__version__\s*=\s*["\'])(.+?)(["\'])', f'\\g<1>{new_version}\\g<3>', content)
+                f.write(new_content)
+                log("Content of __init__.py after update: " + new_content)
+
+            with open(os.environ['GITHUB_OUTPUT'], 'a') as fh:
+                print(f"new_version={new_version}", file=fh)
+                
+            log(f"Set output - new_version: {new_version}")
+        except Exception as e:
+            log(f"Error: {str(e)}")
+            raise
+      shell: python
+
+    - name: Verify file changes
+      run: |
+        echo "Content of core/__init__.py:"
+        cat ./core/__init__.py
+        echo "Git status:"
+        git status
+
+    - name: Commit and push if changed
+      run: |
+        git config --local user.email "github-actions[bot]@users.noreply.github.com"
+        git config --local user.name "github-actions[bot]"
+        git add -A
+        git status
+        if git diff --staged --quiet; then
+          echo "No changes to commit"
+        else
+          git commit -m "Bump version to ${{ steps.version.outputs.new_version }}"
+          echo "Changes committed"
+          git push
+          echo "Changes pushed"
+        fi
+
+    - name: Verify version update
+      run: |
+        echo "Content of __init__.py after git operations:"
+        cat ./core/__init__.py
+        echo "Current git status:"
+        git status
+        echo "Latest commit:"
+        git log -1
+
+    - name: Output final version
+      run: echo "Final version - ${{ steps.version.outputs.new_version }}"
