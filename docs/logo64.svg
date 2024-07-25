@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" style="shape-rendering:geometricPrecision;text-rendering:geometricPrecision;image-rendering:optimizeQuality;fill-rule:evenodd;clip-rule:evenodd"><path fill="#e998b6" d="m32.5 3.5-2 6q-.272-4.58-.5-9a10.5 10.5 0 0 1 2.5 3" style="opacity:.8"/><path fill="#ec4996" d="M33.5 4.5q1 0 1 1l-1 4q-2-2.5 0-5" style="opacity:1"/>
+<path fill="#d03f8f" d="M34.5 5.5q1.76 1.52 2 4h-3z" style="opacity:1"/>
+<path fill="#f16091" d="M32.5 3.5q1 0 1 1-2 2.5 0 5v2a12.1 12.1 0 0 0-4 3 20.7 20.7 0 0 0 1-5z" style="opacity:1"/>
+<path fill="#af2f87" d="M33.5 9.5h3q2.31 3.507 2 8h-1v-2q-1.025-2.515-4-2z" style="opacity:1"/>
+<path fill="#a61780" d="M33.5 13.5q2.975-.515 4 2h-4z" style="opacity:1"/>
+<path fill="#de4483" d="M33.5 11.5v4q-1.258.513-1 2h-3v-3a12.1 12.1 0 0 1 4-3" style="opacity:1"/>
+<path fill="#9e117c" d="M33.5 15.5h4v3a19.2 19.2 0 0 1-6 1l1-2q-.258-1.487 1-2" style="opacity:1"/>
+<path fill="#d54f86" d="M29.5 15.5v2q0 2-2 2v-1q-.11-2.29 2-3" style="opacity:1"/>
+<path fill="#d64487" d="M29.5 17.5h3l-1 2-1 2q-.5 1.5-2 2-2.415-1.748-1-4 2 0 2-2" style="opacity:1"/>
+<path fill="#98157d" d="M37.5 18.5q-.648 1.815-2 3h-5l1-2a19.2 19.2 0 0 0 6-1" style="opacity:1"/>
+<path fill="#d75a98" d="M27.5 18.5v1q-1.415 2.252 1 4l-1 2-2 1v-1q-2-2.5 0-5 .5-1.5 2-2" style="opacity:1"/>
+<path fill="#9c2084" d="M31.5 21.5h4l-1 2h-1q-2 0-2-2" style="opacity:1"/>
+<path fill="#53336a" d="M37.5 17.5h1q.136 3.978-2 7-.513-1.258-2-1l1-2q1.352-1.185 2-3z" style="opacity:.914"/>
+<path fill="#d46ea1" d="M25.5 20.5q-2 2.5 0 5-2 0-2-2-.11-2.29 2-3" style="opacity:1"/>
+<path fill="#a12c92" d="M30.5 21.5h1q0 2 2 2-.5 1.5-2 2h-4l1-2q1.5-.5 2-2" style="opacity:1"/>
+<path fill="#4b3574" d="M33.5 23.5h1q1.487-.258 2 1 .11 2.29-2 3h-4l1-2q1.5-.5 2-2" style="opacity:1"/>
+<path fill="#d16fa8" d="M23.5 23.5q0 2 2 2v2a5.73 5.73 0 0 0-3 1q-1.356-1.063-1-3 .5-1.5 2-2" style="opacity:1"/>
+<path fill="#9a3e9f" d="M27.5 25.5h4l-1 2h-5v-1z" style="opacity:1"/>
+<path fill="#924fb2" d="M25.5 27.5h4q-1.185 1.352-3 2h-4v-1a5.73 5.73 0 0 1 3-1" style="opacity:1"/>
+<path fill="#434188" d="M29.5 27.5h5l-1 2q-2.398-.402-4 1h-3v-1q1.815-.648 3-2" style="opacity:1"/>
+<path fill="#452668" d="M42.5 27.5q1.1 1.812 1 4l-2 2v-2q-.401-2.398 1-4" style="opacity:1"/>
+<path fill="#c281b9" d="M21.5 25.5q-.356 1.937 1 3v1q-1.5.5-2 2-1 0-1 1h-1v-1q-.059-3.883 3-6" style="opacity:1"/>
+<path fill="#59629b" d="M29.5 30.5q1.602-1.402 4-1a6.54 6.54 0 0 1-3 3v-1q0-1-1-1" style="opacity:1"/>
+<path fill="#4b3b72" d="M42.5 24.5v3q-1.401 1.602-1 4-1.487-.258-2 1h-2q2.82-4.826 5-8" style="opacity:1"/>
+<path fill="#b04b8b" d="M42.5 24.5q2.69 2.89 3 7h-2q.1-2.188-1-4z" style="opacity:1"/>
+<path fill="#8767c8" d="M22.5 29.5h4v1l-2 1h-4q.5-1.5 2-2" style="opacity:1"/>
+<path fill="#3d539d" d="M26.5 30.5h3q1 0 1 1l-6 1v-1z" style="opacity:1"/>
+<path fill="#7b77d7" d="M20.5 31.5h4v1q-1 0-1 1-2.398.401-4-1 0-1 1-1" style="opacity:1"/>
+<path fill="#38286b" d="M41.5 31.5v3l-2 1v-3q.513-1.258 2-1" style="opacity:1"/>
+<path fill="#3d62a6" d="M30.5 31.5v1q0 1-1 1h-6q0-1 1-1z" style="opacity:1"/>
+<path fill="#7092e2" d="M18.5 32.5h1q1.602 1.401 4 1l-2 3q0 1-1 1-2.634-1.578-2-5" style="opacity:1"/>
+<path fill="#2f3574" d="M37.5 32.5h2v3l-1 2h-1z" style="opacity:1"/>
+<path fill="#ad53a0" d="M43.5 31.5h2q.427 2.872-1 5-2.29.11-3-2v-1z" style="opacity:1"/>
+<path fill="#3a80b8" d="M23.5 33.5h6l-2 3h-6z" style="opacity:1"/>
+<path fill="#2c407b" d="M37.5 33.5v4q0 1-1 1-1.356-1.064-1-3 .5-1.5 2-2" style="opacity:.988"/>
+<path fill="#9268b3" d="M41.5 34.5q.71 2.11 3 2-.648 1.815-2 3-1.18-2.406-4-2l1-2z" style="opacity:1"/>
+<path fill="#53b0d2" d="M21.5 36.5h6q-.5 1.5-2 2-2.687-.2-5 1v-2q1 0 1-1" style="opacity:1"/>
+<path fill="#2a4e85" d="M35.5 35.5q-.356 1.936 1 3v1q-1.815.648-3 2h-1q-1.258-.513-1-2 1.5-2.5 4-4" style="opacity:1"/>
+<path fill="#8681c6" d="M37.5 37.5h1q2.82-.406 4 2 0 1-1 1-2.128-1.427-5-1v-1q1 0 1-1" style="opacity:1"/>
+<path fill="#db91b2" d="M45.5 31.5q1.845 5.014-1 10h-3v-1q1 0 1-1 1.352-1.185 2-3 1.427-2.128 1-5" style="opacity:1"/>
+<path fill="#8dc1ed" d="M18.5 31.5v1q-.634 3.422 2 5v5q-4.353-4.99-2-11" style="opacity:.984"/>
+<path fill="#3bd5ef" d="m25.5 38.5-2 4a5.73 5.73 0 0 1-3 1v-4q2.313-1.2 5-1" style="opacity:1"/>
+<path fill="#749cd6" d="M36.5 39.5q2.872-.427 5 1v1h-8q1.185-1.352 3-2" style="opacity:1"/>
+<path fill="#55b8e3" d="M32.5 41.5h2l2 2h-5z" style="opacity:1"/>
+<path fill="#67aede" d="M34.5 41.5h5l-1 2h-2z" style="opacity:1"/>
+<path fill="#2b6b95" d="M31.5 39.5q-.258 1.487 1 2l-1 2q-1.5.5-2 2-1.258-.513-1-2 .789-2.596 3-4" style="opacity:1"/>
+<path fill="#77e5ee" d="M23.5 42.5q2.367 9.42-3 1a5.73 5.73 0 0 0 3-1" style="opacity:.631"/>
+<path fill="#46c6ec" d="M31.5 43.5h2v2h-4q.5-1.5 2-2" style="opacity:1"/>
+<path fill="#54c2e5" d="M33.5 43.5h4l-1 2h-3z" style="opacity:1"/>
+<path fill="#b6b4d0" d="M39.5 41.5h5l-3 4q-1.815-.648-3-2z" style="opacity:1"/>
+<path fill="#46d1f0" d="M29.5 45.5h6q-.5 1.5-2 2-2.398.401-4-1z" style="opacity:1"/>
+<path fill="#accbde" d="M37.5 43.5h1q1.185 1.352 3 2 0 2-2 2h-1q-.5-1.5-2-2z" style="opacity:1"/>
+<path fill="#4491b2" d="M28.5 43.5q-.258 1.487 1 2v1q-2.11.71-2 3h-1q.143-3.429 2-6" style="opacity:.984"/>
+<path fill="#42d8f3" d="M29.5 46.5q1.602 1.401 4 1v2h-6q-.11-2.29 2-3" style="opacity:1"/>
+<path fill="#87daed" d="M35.5 45.5h1q1.5.5 2 2-.607 1.575-2 0-1.195.686-1 2h-2v-2q1.5-.5 2-2" style="opacity:1"/>
+<path fill="#b5ecf5" d="M38.5 47.5h1q-1 3-4 4v-2q-.195-1.314 1-2 1.393 1.575 2 0" style="opacity:1"/>
+<path fill="#46e1f7" d="M26.5 49.5h6v2h-6z" style="opacity:1"/>
+<path fill="#97ecf5" d="M32.5 49.5h3v2a303 303 0 0 1-3 4q.639-2.458 0-4z" style="opacity:1"/>
+<path fill="#48e9fc" d="M27.5 51.5h4v3h-1q-2.535-.534-3-3" style="opacity:1"/>
+<path fill="#95ebf1" d="M31.5 51.5h1q.639 1.542 0 4a9.86 9.86 0 0 1-1 6q-.91-.186-1-1 1.442-2.648 1-6z" style="opacity:1"/>
+<path fill="#58eefa" d="M26.5 51.5h1q.465 2.466 3 3 .402 2.398-1 4-3.501-2.514-3-7" style="opacity:1"/>
+<path fill="#6ef0f7" d="M30.5 54.5h1q.442 3.352-1 6-1.258-.513-1-2 1.402-1.602 1-4" style="opacity:1"/>
+</svg>

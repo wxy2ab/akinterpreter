@@ -95,6 +95,11 @@ baichuan_api_key =              #百川API 需要的key，非百川API不用管
 volcengine_api_key =            #火山引擎API 需要的key，非火山引擎API不用管
 volcengine_embedding =          #火山引擎API 需要的key，非火山引擎API不用管
 volcengine_doubao =             #火山引擎API 需要的key，非火山引擎API不用管
+minimax_api_key =               #上海稀宇科技的API 需要的key，非上海稀宇科技的API不用管
+zero_one_api_key =              #零一API 需要的key，非零一API不用管
+OPENAI_API_KEY =                #OPENAI API 需要的key，非OPENAIAPI不用管
+hunyuan_SecretId =              #腾讯混元API 需要的key，非腾讯混元API不用管
+hunyuan_SecretKey =             #腾讯混元API 需要的key，非腾讯混元API不用管
 ```
 
 ## 支持的LLM API列表
@@ -106,15 +111,15 @@ volcengine_doubao =             #火山引擎API 需要的key，非火山引擎A
 | DeepSeekClient       | DeepSeek                    | openai     |
 | QianWenClient        | 同义千问                     | dashscope  |
 | MoonShotClient       | MooonShot                   | openai     |
-| GLMClient            | 智谱                        | zhipuai    |
+| GLMClient            | 智谱                        | zhipuai(需自行安装)    |
 | ErnieApiClient       | 百度文心一言                 | 无依赖     |
-| DoubaoApiClient      | 字节的火山引擎               | 火山 SDK   |
-| GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud |
-| BaichuanClient      | 百川 | 无依赖 |
-| HunyuanClient        | 腾讯混元 | tencentcloud-sdk-python-hunyuan |
-| MiniMaxClient        | 上海稀宇科技 | 无依赖 |
-| OpenAIClient         | OPENAI | openai |
-| Zero1LLamaImproverClient| 零一 | openai |
+| DoubaoApiClient      | 字节的火山引擎               | 火山 SDK(需自行安装)   |
+| GeminiAPIClient      | Google的Gemini(国内无法访问) | google cloud(需自行安装) |
+| BaichuanClient      | 百川                          | 无依赖      |
+| HunyuanClient        | 腾讯混元 | 腾讯云hunyuan sdk (需自行安装) |
+| MiniMaxClient        | 上海稀宇科技                   | 无依赖      |
+| OpenAIClient         | OPENAI                        | openai    |
+| Zero1LLamaImproverClient| 零一                        | openai    |
 
 __陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
 
