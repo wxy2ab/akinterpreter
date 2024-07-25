@@ -76,11 +76,10 @@ akinterpreter
  ./run.sh
  ```
 
-{% callout title="第一次运行很慢" %}
+
 注意，第一次运行会很慢，因为要下载python虚拟环境，还有很多依赖项。  
 如果第一次安装依赖项失败，会导致无法运行   
 这个时候删除 ./env 目录。然后重新运行`run.sh` or `run.bat`  
-{% /callout %}
 
 
 ---
