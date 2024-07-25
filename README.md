@@ -24,8 +24,14 @@ git clone git@github.com:wxy2ab/akinterpreter.git
 # 进入项目目录
 cd akinterpreter
 
+# 可选，创建虚拟环境
+conda create -p ./env python=3.12
+
+# 激活虚拟环境
+conda activate ./env
+
 # 安装依赖
-npm install -r requirments.txt
+pip install -r requirments.txt
 
 # 启动cli
 python cli.py
@@ -35,12 +41,22 @@ python main.py
 ```
 
 ### 没有python环境的安装方案
-- 下载release版本，解压到任意目录,目录不要包含中文  
-- 把settings.ini.template 修改为 settings.ini
-- 修改settings.ini中的llm_api，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表
-- 修改settings.ini中的   对应你的llm api的api_key  
-- windows: 执行run.bat
-- linux & mac: 执行chmod +x ./run.sh  &&  ./run.sh
+- **下载release版本**  
+解压到任意目录,目录不要包含中文  
+- **获得setting.ini**  
+把settings.ini.template 修改为 ***settings.ini***  
+- **配置llm_api**   
+修改settings.ini中的***llm_api***，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表  
+- **添加api_key**   
+修改settings.ini中的   对应你的llm api的api_key  
+- **windows环境:**  
+执行 **run.bat**  
+- **linux & mac:**   
+执行 chmod +x ./run.sh  &&  ./run.sh  
+- **windows更新**   
+执行 **update.bat**   
+- **linux & mac更新**   
+执行chmod +x ./update.sh  &&  ./update.sh  
 
 ## 生成配置文件
 windows:
