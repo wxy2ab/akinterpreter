@@ -19,9 +19,6 @@ jobs:
       - name: Build
         working-directory: ./docs
         run: npm run build
-      - name: Export
-        working-directory: ./docs
-        run: npm run export
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
         with:
