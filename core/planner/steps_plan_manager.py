@@ -641,9 +641,17 @@ class StepsPlanManager:
                 "results_summary": results_summary
             }, "report_data")
 
+            self.clear_stage()
+
         except Exception as e:
             yield send_message(f"生成最终报告时发生错误: {str(e)}", "error")
             yield send_message(f"错误详情: {traceback.format_exc()}", "error")
+
+    def clear_stage(self):
+            self.current_step_number = 0
+            self.is_plan_confirmed = False
+            self.execution_results = []
+            self.step_vars = {}  # 清空 step_vars
 
     def save_to_file(self, filename: str) -> None:
         """
