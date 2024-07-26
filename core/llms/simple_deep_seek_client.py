@@ -5,7 +5,7 @@ from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
 
-class SimpleDeekSeekClient(LLMApiClient):
+class SimpleDeepSeekClient(LLMApiClient):
     def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com/beta",
                  max_tokens: int = 8000, temperature: float = 0.0, top_p: float = 1,
                  presence_penalty: float = 0, frequency_penalty: float = 0, stop: Union[str, List[str]] = None):
@@ -218,7 +218,6 @@ class SimpleDeekSeekClient(LLMApiClient):
 
     def _update_stats(self, usage: Dict):
         self.chat_count += 1
-        self.token_count += usage.get('total_tokens', 0)
 
     def get_stats(self) -> Dict[str, Any]:
         return {

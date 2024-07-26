@@ -1,5 +1,5 @@
 [Default]
-llm_api = SimpleDeekSeekClient
+llm_api = SimpleDeepSeekClient
 llm_cheap_api = CheapClaude
 embedding_api = BGELargeZhAPI
 ranker_api = BaiduBCEReranker
