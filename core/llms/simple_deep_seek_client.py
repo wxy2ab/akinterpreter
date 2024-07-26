@@ -32,7 +32,7 @@ class SimpleDeepSeekClient(LLMApiClient):
     def set_task(self, task: str, model: Optional[str] = None) -> None:
         if task == "代码":
             self.model = "deepseek-coder"
-            self.temperature = 0.0
+            self.temperature = 1.0
         elif task == "数据分析":
             self.model = "deepseek-chat"
             self.temperature = 0.7
