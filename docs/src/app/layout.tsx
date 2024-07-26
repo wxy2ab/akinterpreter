@@ -24,10 +24,10 @@ const lexend = localFont({
 export const metadata: Metadata = {
   title: {
     template: '%s - Docs',
-    default: 'CacheAdvance - Never miss the cache again.',
+    default: 'akinterpreter.让不会代码的人也能用解释器',
   },
   description:
-    'Cache every single thing your app could ever do ahead of time, so your code never even has to run at all.',
+    'akinterpreter 让你的与生俱来的能力提升万倍.',
 }
 
 export default function RootLayout({
