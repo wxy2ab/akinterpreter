@@ -7,7 +7,7 @@ nextjs:
 ---
 
 这些文档是用使用tailwindui的文档模板创建的。在这里附上其完整的协议。虽然协议我没有看完。但是我会遵守这份协议的。
-这个协议的大概意思就是，这只是一个个人许可。这不是一份具有"再发行"条款的协议。因此，当你使用akinterpreter的时候。你应该排除文档的源代码。或者你可以自己找Tailwind Labs Inc.获得一份许可。The gist of this agreement is that it's a personal license only. It doesn't include a "redistribution" clause. So, when you use akinterpreter, you should exclude the documentation's source code. Alternatively, you can seek a license directly from Tailwind Labs Inc.
+这个协议的大概意思就是，这只是一个个人许可。这不是一份具有"再发行"条款的协议。因此，当你再发行akinterpreter的时候。你应该排除文档的源代码。或者你可以自己找Tailwind Labs Inc.获得一份许可。The gist of this agreement is that it's a personal license only. It doesn't include a "redistribution" clause. So, when you redistribute akinterpreter, you should exclude the documentation's source code. Alternatively, you can seek a license directly from Tailwind Labs Inc.
 ---
 
 # Tailwind UI License
