@@ -66,7 +66,7 @@ class APIService:
     def load_middle_ware(self):
         self.app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 允许所有源，您可能想要限制这个
+        allow_origins=["*"], 
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
