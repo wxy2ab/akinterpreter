@@ -1,84 +1,50 @@
-import * as Headless from '@headlessui/react'
-import clsx from 'clsx'
-import React, { forwardRef } from 'react'
-import { TouchTarget } from './button'
-import { Link } from './link'
+"use client"
 
-type AvatarProps = {
-  src?: string | null
-  square?: boolean
-  initials?: string
-  alt?: string
-  className?: string
-}
+import * as React from "react"
+import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
-export function Avatar({
-  src = null,
-  square = false,
-  initials,
-  alt = '',
-  className,
-  ...props
-}: AvatarProps & React.ComponentPropsWithoutRef<'span'>) {
-  return (
-    <span
-      data-slot="avatar"
-      {...props}
-      className={clsx(
-        className,
-        // Basic layout
-        'inline-grid shrink-0 align-middle [--avatar-radius:20%] [--ring-opacity:20%] *:col-start-1 *:row-start-1',
-        'outline outline-1 -outline-offset-1 outline-black/[--ring-opacity] dark:outline-white/[--ring-opacity]',
-        // Add the correct border radius
-        square ? 'rounded-[--avatar-radius] *:rounded-[--avatar-radius]' : 'rounded-full *:rounded-full'
-      )}
-    >
-      {initials && (
-        <svg
-          className="size-full select-none fill-current p-[5%] text-[48px] font-medium uppercase"
-          viewBox="0 0 100 100"
-          aria-hidden={alt ? undefined : 'true'}
-        >
-          {alt && <title>{alt}</title>}
-          <text x="50%" y="50%" alignmentBaseline="middle" dominantBaseline="middle" textAnchor="middle" dy=".125em">
-            {initials}
-          </text>
-        </svg>
-      )}
-      {src && <img className="size-full" src={src} alt={alt} />}
-    </span>
-  )
-}
+import { cn } from "@/lib/utils"
 
-export const AvatarButton = forwardRef(function AvatarButton(
-  {
-    src,
-    square = false,
-    initials,
-    alt,
-    className,
-    ...props
-  }: AvatarProps &
-    (Omit<Headless.ButtonProps, 'className'> | Omit<React.ComponentPropsWithoutRef<typeof Link>, 'className'>),
-  ref: React.ForwardedRef<HTMLElement>
-) {
-  let classes = clsx(
-    className,
-    square ? 'rounded-[20%]' : 'rounded-full',
-    'relative inline-grid focus:outline-none data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-offset-2 data-[focus]:outline-blue-500'
-  )
+const Avatar = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Root>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Root
+    ref={ref}
+    className={cn(
+      "relative flex h-10 w-10 shrink-0 overflow-hidden rounded-full",
+      className
+    )}
+    {...props}
+  />
+))
+Avatar.displayName = AvatarPrimitive.Root.displayName
 
-  return 'href' in props ? (
-    <Link {...props} className={classes} ref={ref as React.ForwardedRef<HTMLAnchorElement>}>
-      <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
-      </TouchTarget>
-    </Link>
-  ) : (
-    <Headless.Button {...props} className={classes} ref={ref}>
-      <TouchTarget>
-        <Avatar src={src} square={square} initials={initials} alt={alt} />
-      </TouchTarget>
-    </Headless.Button>
-  )
-})
+const AvatarImage = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Image>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Image
+    ref={ref}
+    className={cn("aspect-square h-full w-full", className)}
+    {...props}
+  />
+))
+AvatarImage.displayName = AvatarPrimitive.Image.displayName
+
+const AvatarFallback = React.forwardRef<
+  React.ElementRef<typeof AvatarPrimitive.Fallback>,
+  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback>
+>(({ className, ...props }, ref) => (
+  <AvatarPrimitive.Fallback
+    ref={ref}
+    className={cn(
+      "flex h-full w-full items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800",
+      className
+    )}
+    {...props}
+  />
+))
+AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName
+
+export { Avatar, AvatarImage, AvatarFallback }

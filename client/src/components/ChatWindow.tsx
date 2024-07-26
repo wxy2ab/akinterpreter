@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import ChatMessage from './ChatMessage';
 import { getSessionId, sendChatMessage, getChatStream, savePlan } from '@/lib/api';
+import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 
 interface Message {
   type: string;
@@ -137,13 +139,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
         <div ref={messagesEndRef} />
       </div>
       <div className="flex-shrink-0 border-t border-gray-700 p-2">
-        <div className="flex items-center">
-          <textarea
+        <div className="flex items-center space-x-2">
+          <Textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-grow p-2 bg-gray-800 border border-gray-700 rounded-l-md resize-none"
+            className="flex-grow p-2 bg-gray-800 border border-gray-700 rounded-md resize-none"
             placeholder="输入消息... (Shift+Enter 换行)"
             disabled={isLoading}
             rows={1}
@@ -153,13 +155,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
               overflow: 'auto',
             }}
           />
-          <button
+          <Button
             onClick={() => handleSendMessage(input)}
-            className="p-2 bg-blue-600 text-white rounded-r-md h-[38px]"
+            className="p-2 bg-blue-600 text-white rounded-md"
             disabled={isLoading}
           >
             发送
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -1,6 +1,12 @@
 import React, { useState, useMemo, useCallback, useRef } from 'react';
 import JsonEditor from './JsonEditor';
 import CodeEditor from './CodeEditor';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface MainWindowProps {
   currentPlan: any;
@@ -53,65 +59,42 @@ const MainWindow: React.FC<MainWindowProps> = ({
     }, 2000); // 2秒后调用API
   };
 
-  const tabStyle = {
-    padding: '10px 15px',
-    cursor: 'pointer',
-    backgroundColor: '#2d3748',
-    color: '#a0aec0',
-    border: 'none',
-    borderRadius: '5px 5px 0 0',
-    marginRight: '5px',
-  };
-
-  const activeTabStyle = {
-    ...tabStyle,
-    backgroundColor: '#4299e1',
-    color: 'white',
-  };
-
-  const contentStyle = {
-    height: 'calc(100% - 50px)',
-    overflowY: 'auto' as const,
-    padding: '20px',
-    backgroundColor: '#1a202c',
-    color: 'white',
-  };
 
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' as const, backgroundColor: '#2d3748' }}>
-      <div style={{ display: 'flex', borderBottom: '1px solid #4a5568', padding: '10px' }}>
-        <button
-          style={activeTab === 'plan' ? activeTabStyle : tabStyle}
-          onClick={() => setActiveTab('plan')}
-        >
-          Plan
-        </button>
-        {Object.keys(stepCodes).map((step, index) => (
-          <button
-            key={step}
-            style={activeTab === step ? activeTabStyle : tabStyle}
-            onClick={() => setActiveTab(step)}
-          >
-            Step {index + 1}
-          </button>
-        ))}
-      </div>
-      <div style={contentStyle}>
-        {error && <div className="error-message">{error}</div>}
-        {activeTab === 'plan' ? (
-          <JsonEditor 
-            key={JSON.stringify(validCurrentPlan)}  // Force re-render on plan change
-            initialJson={validCurrentPlan} 
-            onJsonChange={handleJsonChange}  
-          />
-        ) : (
-          <CodeEditor
-            value={stepCodes[activeTab]}
-            onChange={(newCode) => onCodeUpdate(activeTab, newCode)}
-            language="python"
-          />
-        )}
-      </div>
+    <div className="h-full flex flex-col bg-gray-800">
+      <Tabs defaultValue="plan" className="w-full h-full flex flex-col">
+        <TabsList className="flex justify-start border-b border-gray-700 bg-gray-800">
+          <TabsTrigger value="plan" className="px-4 py-2">Plan</TabsTrigger>
+          {Object.keys(stepCodes).map((step, index) => (
+            <TabsTrigger key={step} value={step} className="px-4 py-2">
+              Step {index + 1}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        {error && <div className="error-message text-red-500 p-2">{error}</div>}
+        <div className="flex-grow overflow-hidden">
+          <TabsContent value="plan" className="h-full">
+            <div className="h-full p-4">
+              <JsonEditor 
+                key={JSON.stringify(validCurrentPlan)}
+                initialJson={validCurrentPlan} 
+                onJsonChange={handleJsonChange}  
+              />
+            </div>
+          </TabsContent>
+          {Object.entries(stepCodes).map(([step, code]) => (
+            <TabsContent key={step} value={step} className="h-full">
+              <div className="h-full p-4">
+                <CodeEditor
+                  value={code}
+                  onChange={(newCode) => onCodeUpdate(step, newCode)}
+                  language="python"
+                />
+              </div>
+            </TabsContent>
+          ))}
+        </div>
+      </Tabs>
     </div>
   );
 };
