@@ -3,9 +3,17 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
 }
 
 body {
@@ -16,97 +24,4 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
-}
-
-@layer base {
-  body {
-    @apply bg-gray-900 text-gray-100;
-  }
-
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-bold mb-2;
-  }
-
-  h1 {
-    @apply text-3xl;
-  }
-
-  h2 {
-    @apply text-2xl;
-  }
-
-  h3 {
-    @apply text-xl;
-  }
-
-  a {
-    @apply text-blue-400 hover:text-blue-300;
-  }
-
-  button {
-    @apply bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded;
-  }
-
-  input, textarea {
-    @apply bg-gray-800 text-white border border-gray-700 rounded px-3 py-2 focus:outline-none focus:border-blue-500;
-  }
-}
-
-@layer components {
-  .card {
-    @apply bg-gray-800 rounded-lg shadow-lg p-6;
-  }
-
-  .btn-primary {
-    @apply bg-blue-500 hover:bg-blue-400 text-white font-bold py-2 px-4 rounded;
-  }
-
-  .btn-secondary {
-    @apply bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded;
-  }
-}
-
-/* React Tabs Styles */
-.react-tabs__tab-list {
-  @apply m-0 p-0 list-none flex flex-row;
-}
-
-.react-tabs__tab {
-  @apply inline-block border-none relative list-none py-1 px-3 cursor-pointer;
-}
-
-.react-tabs__tab--selected {
-  @apply bg-blue-600 text-white rounded-t;
-}
-
-.react-tabs__tab-panel {
-  @apply hidden;
-}
-
-.react-tabs__tab-panel--selected {
-  @apply block;
-}
-
-/* Custom scrollbar styles */
-::-webkit-scrollbar {
-  width: 12px;
-}
-
-::-webkit-scrollbar-track {
-  background: #1a202c;
-}
-
-::-webkit-scrollbar-thumb {
-  background-color: #4a5568;
-  border-radius: 6px;
-  border: 3px solid #1a202c;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background-color: #718096;
-}
-
-/* Ensure full height for app container */
-#__next {
-  height: 100vh;
 }
