@@ -4,10 +4,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { getSession, updateCurrentPlan, updateStepCodes, getSSEStream } from '@/lib/api';
 import '../styles/custom-tabs.css';
-
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable"
 const ChatWindow = dynamic(() => import('@/components/ChatWindow'), { ssr: false });
 const MainWindow = dynamic(() => import('@/components/MainWindow'), { ssr: false });
-const Resizer = dynamic(() => import('../components/Resizer'), { ssr: false });
 
 interface SessionData {
   session_id: string;
@@ -139,23 +142,30 @@ const Home: React.FC = () => {
   console.log('Rendering Home component with session data:', sessionData);
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
-      <div style={{ width: `${leftWidth}%` }} className="h-full overflow-hidden">
-        <ChatWindow 
-          initialMessages={sessionData.chat_history} 
-          currentPlan={sessionData.current_plan}
-        />
-      </div>
-      <Resizer onResize={handleResize} />
-      <div style={{ width: `${100 - leftWidth}%` }} className="h-full overflow-hidden">
-        <MainWindow
-          currentPlan={sessionData.current_plan}
-          stepCodes={sessionData.step_codes}
-          onPlanUpdate={handlePlanUpdate}
-          onCodeUpdate={handleCodeUpdate}
-        />
-      </div>
-    </div>
+    <ResizablePanelGroup
+      direction="horizontal"
+      className="h-screen w-full bg-background text-foreground overflow-hidden"
+    >
+      <ResizablePanel defaultSize={25} minSize={20}>
+        <div className="h-full overflow-hidden">
+          <ChatWindow 
+            initialMessages={sessionData.chat_history} 
+            currentPlan={sessionData.current_plan}
+          />
+        </div>
+      </ResizablePanel>
+      <ResizableHandle />
+      <ResizablePanel defaultSize={75} minSize={30}>
+        <div className="h-full overflow-hidden">
+          <MainWindow
+            currentPlan={sessionData.current_plan}
+            stepCodes={sessionData.step_codes}
+            onPlanUpdate={handlePlanUpdate}
+            onCodeUpdate={handleCodeUpdate}
+          />
+        </div>
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 };
 
