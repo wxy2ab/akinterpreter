@@ -1,9 +1,12 @@
 name: Deploy Docs to GitHub Pages
 
 on:
-  push:
-    branches:
-      - main  # 设置为您的默认分支
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to deploy'
+        required: true
+        default: 'latest'
 
 jobs:
   deploy:
