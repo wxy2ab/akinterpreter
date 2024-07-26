@@ -7,7 +7,7 @@
         },
         {
             "applyto": "matplotlib",
-            "content": "如果使用 matplotlib 的代码不包括处理中文的代码，加入下面的代码： if os.name == 'nt':\n    font_path = 'C:/Windows/Fonts/msyh.ttc'\nelif os.name == 'posix':\n    if os.path.exists('/System/Library/Fonts/PingFang.ttc'):\n        font_path = '/System/Library/Fonts/PingFang.ttc'\n    else:\n        font_path = '/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc'\nelse:\n    font_path = None\nplt.rcParams['font.sans-serif'] = [font_path,'Arial Unicode MS', 'Microsoft YaHei', 'SimHei', 'SimSun', 'sans-serif'] "
+            "content": "如果使用 matplotlib 的代码不包括处理中文的代码，加入下面的代码：  llm_factory.configure_matplotlib_for_chinese()  "
         }
     ]
 }
