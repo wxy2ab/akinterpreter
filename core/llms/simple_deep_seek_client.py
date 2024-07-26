@@ -7,7 +7,7 @@ from ..utils.handle_max_tokens import handle_max_tokens
 
 class SimpleDeepSeekClient(LLMApiClient):
     def __init__(self, api_key: str = "", base_url: str = "https://api.deepseek.com/beta",
-                 max_tokens: int = 8000, temperature: float = 0.0, top_p: float = 1,
+                 max_tokens: int = 8000, temperature: float = 1.0, top_p: float = 1,
                  presence_penalty: float = 0, frequency_penalty: float = 0, stop: Union[str, List[str]] = None):
         config = Config()
         if api_key == "" and config.has_key("deep_seek_api_key"):
