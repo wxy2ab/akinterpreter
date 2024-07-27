@@ -48,16 +48,20 @@ llm_api 必须是`支持的llm_api 列表`里面的`类名`
 
 ## 推荐配置1
 推荐大家选择SimpleClaudeAwsClient,因为这个是开发用的   
+而且就目前而言，就写代码这个任务来说，Claude的产出能力还是显著高于其他的   
+所有有条件的，建议使用
 但是注意，你要去申请aws bedrock 的api   
 Google和anhtopic的api国内都是用不了的     
 
 ## 推荐配置2
-DeepSeekClient   
+SimpleDeepSeekClient   
 DeepSeek的API注册简单，费用也很低，非常推荐   
-虽然价格上，豆包的费用比Deepseek还便宜一些   
+DeepSeek 目前价格确实很有竞争力   
+而且有128k的上下文，最高8k的输出     
+就价格而言，豆包的价格也很低   
 但是真心不建议普通人去折腾火山引擎    
 还有配置子账号什么的，我觉得对普通人太不友好了    
-注册简单，配置简单，价格便宜的，就是DeepSeekClient
+注册简单，配置简单，价格便宜的，就是SimpleDeepSeekClient   
 
 ## 其他LLM API
 目前其他很多API都还没测试过    
