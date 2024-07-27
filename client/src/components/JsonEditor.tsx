@@ -1,7 +1,24 @@
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import Editor from '@monaco-editor/react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import ReactFlow, { Node, Edge, Controls, Background, NodeProps, useNodesState, useEdgesState, MarkerType, useReactFlow, ReactFlowProvider } from 'reactflow';
+import ReactFlow, {
+  Node,
+  Edge,
+  Controls,
+  Background,
+  NodeProps,
+  useNodesState,
+  useEdgesState,
+  MarkerType,
+  useReactFlow,
+  ReactFlowProvider,
+  applyNodeChanges,
+  applyEdgeChanges,
+  NodeChange,
+  EdgeChange,
+  Connection,
+  addEdge
+} from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Code, GitBranch } from 'lucide-react';
 
@@ -13,7 +30,7 @@ interface JsonEditorProps {
 const NODE_WIDTH = 300;
 const NODE_HEIGHT = 200;
 const NODE_VERTICAL_SPACING = 150;
-const QUERY_SUMMARY_SPACING = 50; // Reduced spacing for query_summary node
+const QUERY_SUMMARY_SPACING = 50;
 
 const CustomNode: React.FC<NodeProps> = ({ data }) => {
   return (
@@ -48,26 +65,42 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
   return { nodes: layoutedNodes, edges };
 };
 
-const FlowChart: React.FC<{ nodes: Node[], edges: Edge[] }> = ({ nodes, edges }) => {
+const FlowChart: React.FC<{ initialNodes: Node[], initialEdges: Edge[] }> = ({ initialNodes, initialEdges }) => {
   const { fitView } = useReactFlow();
-  const [localNodes, setLocalNodes, onNodesChange] = useNodesState(nodes);
-  const [localEdges, setLocalEdges, onEdgesChange] = useEdgesState(edges);
+  const [nodes, setNodes] = useState<Node[]>(initialNodes);
+  const [edges, setEdges] = useState<Edge[]>(initialEdges);
 
   useEffect(() => {
-    setLocalNodes(nodes);
-    setLocalEdges(edges);
-  }, [nodes, edges, setLocalNodes, setLocalEdges]);
+    setNodes(initialNodes);
+    setEdges(initialEdges);
+  }, [initialNodes, initialEdges]);
+
+  const onNodesChange = useCallback(
+    (changes: NodeChange[]) => setNodes((nds) => applyNodeChanges(changes, nds)),
+    [setNodes]
+  );
+  
+  const onEdgesChange = useCallback(
+    (changes: EdgeChange[]) => setEdges((eds) => applyEdgeChanges(changes, eds)),
+    [setEdges]
+  );
+
+  const onConnect = useCallback(
+    (connection: Connection) => setEdges((eds) => addEdge(connection, eds)),
+    [setEdges]
+  );
 
   useEffect(() => {
     fitView({ padding: 0.2 });
-  }, [fitView, localNodes, localEdges]);
+  }, [fitView, nodes, edges]);
 
   return (
     <ReactFlow
-      nodes={localNodes}
-      edges={localEdges}
+      nodes={nodes}
+      edges={edges}
       onNodesChange={onNodesChange}
       onEdgesChange={onEdgesChange}
+      onConnect={onConnect}
       nodeTypes={nodeTypes}
       fitView
       minZoom={0.1}
@@ -119,6 +152,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
           content: `<p>${data.query_summary}</p>`
         },
         position: { x: 0, y: 0 },
+        draggable: true,
       });
 
       if (Array.isArray(data.steps)) {
@@ -140,6 +174,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
               content: stepContent
             },
             position: { x: 0, y: 0 },
+            draggable: true,
           });
 
           if (index === 0) {
@@ -176,6 +211,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
             content: '<p>基于以上步骤的分析总结</p>'
           },
           position: { x: 0, y: 0 },
+          draggable: true,
         });
 
         edges.push({
@@ -226,7 +262,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
           />
         ) : (
           <ReactFlowProvider>
-            <FlowChart nodes={flowElements.nodes} edges={flowElements.edges} />
+            <FlowChart initialNodes={flowElements.nodes} initialEdges={flowElements.edges} />
           </ReactFlowProvider>
         )}
       </div>
