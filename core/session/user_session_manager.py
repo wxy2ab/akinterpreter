@@ -18,7 +18,7 @@ class UserSessionManager(metaclass= Singleton):
             session_id=session_id,
             chat_list_id=str(uuid.uuid4()),
             created_at=now,
-            expires_at=now + timedelta(hours=1),
+            expires_at=now + timedelta(hours=1000),
             last_request_time=now
         )
         self.db.add_session(session)
@@ -30,7 +30,7 @@ class UserSessionManager(metaclass= Singleton):
             session_id=session_id,
             chat_list_id=str(uuid.uuid4()),
             created_at=now,
-            expires_at=now + timedelta(hours=1),
+            expires_at=now + timedelta(hours=1000),
             last_request_time=now
         )
         self.db.update_session(session)
@@ -44,7 +44,7 @@ class UserSessionManager(metaclass= Singleton):
             session_id=session_id,
             chat_list_id=str(uuid.uuid4()),
             created_at=now,
-            expires_at=now + timedelta(hours=1),
+            expires_at=now + timedelta(hours=1000),
             last_request_time=now
         )
         self.db.add_session(session)

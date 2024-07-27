@@ -53,20 +53,53 @@ class SessionDb(metaclass=Singleton):
             return json.loads(data)
 
     def add_session(self, session: UserSession):
-        self.conn.execute(
-            "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                session.session_id,
-                session.created_at,
-                session.expires_at,
-                session.last_request_time,
-                self._safe_serialize(session.chat_history),
-                self._safe_serialize(session.current_plan),
-                self._safe_serialize(session.step_codes),
-                self._safe_serialize(session.data),
-                session.chat_list_id
+        """
+        Adds a new user session or updates an existing one if the session_id already exists.
+
+        Args:
+            session (UserSession): The UserSession object to add or update.
+        """
+        cursor = self.conn.cursor()
+        # Check if the session_id already exists
+        cursor.execute("SELECT session_id FROM user_sessions WHERE session_id = ?", (session.session_id,))
+        existing_session = cursor.fetchone()
+
+        if existing_session:
+            # Session exists, perform an UPDATE
+            cursor.execute(
+                "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, "
+                "chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? "
+                "WHERE session_id = ?",
+                (
+                    session.created_at,
+                    session.expires_at,
+                    session.last_request_time,
+                    self._safe_serialize(session.chat_history),
+                    self._safe_serialize(session.current_plan),
+                    self._safe_serialize(session.step_codes),
+                    self._safe_serialize(session.data),
+                    session.chat_list_id,
+                    session.session_id,
+                ),
             )
-        )
+        else:
+            # Session does not exist, perform an INSERT
+            cursor.execute(
+                "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    session.session_id,
+                    session.created_at,
+                    session.expires_at,
+                    session.last_request_time,
+                    self._safe_serialize(session.chat_history),
+                    self._safe_serialize(session.current_plan),
+                    self._safe_serialize(session.step_codes),
+                    self._safe_serialize(session.data),
+                    session.chat_list_id,
+                ),
+            )
+
 
     def get_session(self, session_id: str) -> Optional[UserSession]:
         result = self.conn.execute(
