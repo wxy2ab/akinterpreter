@@ -3,6 +3,14 @@ import ChatMessage from './ChatMessage';
 import { getSessionId, sendChatMessage, getChatStream, savePlan } from '@/lib/api';
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
+import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarSeparator,
+  MenubarTrigger,
+} from "@/components/ui/menubar";
 
 interface Message {
   type: string;
@@ -12,7 +20,7 @@ interface Message {
 
 interface ChatWindowProps {
   initialMessages: Message[];
-  currentPlan: any;  // 保留这个 prop
+  currentPlan: any;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan }) => {
@@ -25,6 +33,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
   const messagesEndRef = useRef<null | HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const messageContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const fetchAppSessionId = async () => {
@@ -38,6 +47,16 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
   useEffect(() => {
     adjustTextareaHeight();
   }, [input]);
+
+  const scrollToBottom = useCallback(() => {
+    if (messageContainerRef.current) {
+      messageContainerRef.current.scrollTop = messageContainerRef.current.scrollHeight;
+    }
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   const adjustTextareaHeight = () => {
     if (textareaRef.current) {
@@ -120,7 +139,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
       console.error('Error sending message:', error);
       setIsLoading(false);
     }
-  }, [isLoading, currentPlan]);  // 添加 currentPlan 到依赖数组
+  }, [isLoading, currentPlan]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -129,16 +148,57 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ initialMessages, currentPlan })
     }
   };
 
+  const handleMenuCommand = (command: string) => {
+    switch (command) {
+      case 'help':
+      case 'go':
+      case 'clear_history':
+      case 'redo':
+      case 'export':
+        handleSendMessage(command);
+        break;
+      case 'modify_code':
+        setInput('modify_step_code=<step> query');
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+        }
+        break;
+    }
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-900 text-white">
-      <div className="flex-grow overflow-y-auto p-4 space-y-4">
+      <div ref={messageContainerRef} className="flex-grow overflow-y-auto p-4 space-y-4">
         {messages.map((msg, index) => (
-          <ChatMessage key={index} type={msg.type} content={msg.content} isBot={msg.isBot} />
+          <ChatMessage 
+            key={index} 
+            type={msg.type} 
+            content={msg.content} 
+            isBot={msg.isBot}
+            isLatest={index === messages.length - 1}
+            onContentRendered={scrollToBottom}
+          />
         ))}
         {isLoading && <p className="italic text-gray-500">🤖在努力思考。。。</p>}
         <div ref={messagesEndRef} />
       </div>
       <div className="flex-shrink-0 border-t border-gray-700 p-2">
+        <div className="flex justify-start mb-0.5">
+          <Menubar className="bg-gray-800 text-white inline-flex rounded-md">
+            <MenubarMenu>
+              <MenubarTrigger className="text-white px-3 py-1">命令</MenubarTrigger>
+              <MenubarContent className="bg-gray-800 text-white">
+                <MenubarItem onSelect={() => handleMenuCommand('help')}>帮助</MenubarItem>
+                <MenubarItem onSelect={() => handleMenuCommand('go')}>执行计划</MenubarItem>
+                <MenubarItem onSelect={() => handleMenuCommand('clear_history')}>清空聊天记录</MenubarItem>
+                <MenubarItem onSelect={() => handleMenuCommand('modify_code')}>修改代码</MenubarItem>
+                <MenubarItem onSelect={() => handleMenuCommand('redo')}>重新执行</MenubarItem>
+                <MenubarSeparator />
+                <MenubarItem onSelect={() => handleMenuCommand('export')}>导出</MenubarItem>
+              </MenubarContent>
+            </MenubarMenu>
+          </Menubar>
+        </div>
         <div className="flex items-center space-x-2">
           <Textarea
             ref={textareaRef}

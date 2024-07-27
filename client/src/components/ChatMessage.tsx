@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import Image from 'next/image';
 import SyntaxHighlighter from 'react-syntax-highlighter';
 import { dracula } from 'react-syntax-highlighter/dist/esm/styles/hljs';
@@ -7,9 +7,18 @@ interface MessageProps {
   type: string;
   content: any;
   isBot: boolean;
+  isLatest: boolean; // New prop to indicate if this is the latest message
+  onContentRendered: () => void; // New callback prop
 }
 
-const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
+const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot, isLatest, onContentRendered }) => {
+  const messageRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isLatest && messageRef.current) {
+      onContentRendered();
+    }
+  }, [content, isLatest, onContentRendered]);
   const renderContent = () => {
     if (typeof content === 'object') {
       return (
@@ -94,7 +103,10 @@ const ChatMessage: React.FC<MessageProps> = ({ type, content, isBot }) => {
   };
 
   return (
-    <div className={`max-w-3/4 ${isBot ? 'ml-0 mr-auto' : 'ml-auto mr-0'}`}>
+    <div 
+      ref={messageRef}
+      className={`max-w-3/4 ${isBot ? 'ml-0 mr-auto' : 'ml-auto mr-0'}`}
+    >
       <div className={`p-3 rounded-lg ${isBot ? 'bg-gray-700 text-white' : 'bg-blue-500 text-white'} max-h-[80vh] overflow-y-auto`}>
         {renderContent()}
       </div>
