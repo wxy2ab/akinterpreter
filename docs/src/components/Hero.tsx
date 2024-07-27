@@ -54,12 +54,12 @@ export function Hero() {
             />
             <div className="relative">
               <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent">
-               AI让你与生俱来的本领强大一万倍
+               AI让你的天赋强大一万倍
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
                 你的直觉，语言，分析，思考，都是与生俱来的卓越本领。   
-                受限于技能，时间，工具，你的潜能无法完全释放。
-                akinterprerter 用你与生俱来的本领做分析。让你天生的能力更强大。
+                受限于技能，时间，工具，天赋扼腕于束缚。
+                akinterprerter 尝试让你摆脱束缚。让天赋更强大。
 
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
