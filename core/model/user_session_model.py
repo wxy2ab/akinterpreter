@@ -5,6 +5,7 @@ from typing import Any, Optional, List, Dict
 
 class UserSession(BaseModel):
     session_id: str
+    chat_list_id: str
     created_at: datetime
     expires_at: datetime
     last_request_time: datetime

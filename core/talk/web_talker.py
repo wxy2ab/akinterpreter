@@ -3,6 +3,8 @@ from datetime import datetime
 import json
 from typing import Generator, Optional, Union, Dict, Any
 
+from core.model.user_session_model import UserSession
+
 from ..llms.llm_factory import LLMFactory
 from ..llms._llm_api_client import LLMApiClient
 from ..planner.akshare_fun_planner import AkshareFunPlanner
@@ -27,6 +29,14 @@ class WebTalker(Talker):
         self.chat_history.append({"role":"user","content":message})
         self.sessions.update_chat_history(self.session_id, self.chat_history)
         self.sessions.update_last_request_time(self.session_id)
+        session_data = self.sessions.get_session(self.session_id)
+        chat_id = session_data.chat_list_id
+        is_chat_exists = self.sessions.chat_list_is_id_exists(chat_id)
+        if not is_chat_exists:
+            self.sessions.chat_list_save_or_update(user_session=session_data)
+            chat_list = self.sessions.chat_list_get_list(self.session_id)
+            data = [ {"session_id":self.session_id,"chat_list_id":chat.chat_list_id ,"name":chat.name,"date":chat.created_at} for chat in chat_list ]
+            self.message_queue.put(self.session_id, {"type": "chat_list", "chat_list": data})
         
         if not self.use_akshare:
             # 只在第一次判断是否是金融数据查询
@@ -167,4 +177,3 @@ class WebTalker(Talker):
     def validate_plan(self,plan:dict) -> tuple[ str ,bool]:
         return  self.akshare_planner.validate_plan(plan)
 
-        
