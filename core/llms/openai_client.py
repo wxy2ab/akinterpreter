@@ -304,7 +304,6 @@ class OpenAIClient(LLMApiClient):
 
     def _update_stats(self, usage: Dict):
         self.chat_count += 1
-        self.token_count += usage.get('total_tokens', 0)
 
     def get_stats(self) -> Dict[str, Any]:
         return {
