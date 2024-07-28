@@ -16,6 +16,7 @@ export const navigation = [
         href: '/docs/setting_api_keys',
       },
       {title: '安装依赖', href: '/docs/requirement_install' },
+      {title: 'LLM排序', href: '/docs/llms_test' },
     ],
   },
   {
