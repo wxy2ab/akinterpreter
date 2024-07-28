@@ -49,6 +49,7 @@ class LLMFactory(metaclass=Singleton):
         if hasattr(instance, "set_report"):
             instance.set_report()
         return instance
+    
 
     def list_available_llms(self) -> list[str]:
         return list(self.llm_classes.keys())
