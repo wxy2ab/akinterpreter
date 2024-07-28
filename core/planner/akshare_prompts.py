@@ -198,7 +198,9 @@ class AksharePrompts:
         """
 
         return f"""
-        生成一个Python代码块来分析以下数据：
+        生成Python代码来分析以下数据：
+        访问数据用的变量名：
+        {', '.join(step['required_data'])}
 
         数据摘要：
         {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
