@@ -25,6 +25,11 @@ class SimpleDoubaoClient(LLMApiClient):
         self.top_p = 1
         self.frequency_penalty = 1
 
+    def set_report(self):
+        config = Config()
+        self.model = config.get("volcengine_doubao_32k")
+
+
     def _make_request(self, payload: Dict[str, Any], stream: bool = False) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
         headers = {
             "Content-Type": "application/json",
