@@ -52,7 +52,7 @@ class ClaudeClient(LLMApiClient):
     @handle_max_tokens
     def text_chat(self, message: str, max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         copy_history = self.history.copy()
-        copy_history.append({"role": "human", "content": message})
+        copy_history.append({"role": "user", "content": message})
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens or self.max_tokens,
@@ -69,7 +69,7 @@ class ClaudeClient(LLMApiClient):
             return self._handle_stream_response(response, message)
         else:
             assistant_message = response.content[0].text
-            self.history.append({"role": "human", "content": message})
+            self.history.append({"role": "user", "content": message})
             self.history.append({"role": "assistant", "content": assistant_message})
             return assistant_message
 
@@ -86,11 +86,11 @@ class ClaudeClient(LLMApiClient):
                     text = chunk.delta.text
                     full_response += text
                     yield text
-        self.history.append({"role": "human", "content": message})
+        self.history.append({"role": "user", "content": message})
         self.history.append({"role": "assistant", "content": full_response})
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        self.history.append({"role": "human", "content": user_message})
+        self.history.append({"role": "user", "content": user_message})
         cleaned_tools = [tool.copy() for tool in tools]
         for tool in cleaned_tools:
             tool.pop('output_schema', None)
@@ -269,7 +269,7 @@ class ClaudeClient(LLMApiClient):
             return assistant_message
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], max_tokens: Optional[int] = None, is_stream: bool = False) -> Union[str, Iterator[str]]:
-        messages = [{"role": "human", "content": message}] if isinstance(message, str) else message
+        messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
         response = self.client.messages.create(
             model=self.model,
             max_tokens=max_tokens or self.max_tokens,
@@ -294,7 +294,7 @@ class ClaudeClient(LLMApiClient):
             base64_image = base64.b64encode(buffered.getvalue()).decode('utf-8')
 
         image_message = {
-            "role": "human", 
+            "role": "user", 
             "content": [
                 {"type": "image", "source": {"type": "base64", "media_type": f"image/{img.format.lower()}", "data": base64_image}},
                 {"type": "text", "text": message}
