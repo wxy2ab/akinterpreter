@@ -21,7 +21,7 @@ class QianWenClient(LLMApiClient):
         self.successful_requests = 0
         self.failed_requests = 0
         self.models = ['qwen-max', 'qwen-plus', 'qwen-max-longcontext']
-        self.model = self.models[0]
+        self.model = self.models[2]
         self.max_tokens = max_tokens
         self.top_p = top_p
         self.repetition_penalty = repetition_penalty

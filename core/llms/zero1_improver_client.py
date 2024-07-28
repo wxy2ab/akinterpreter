@@ -1,7 +1,10 @@
 
 from .moonshot_client import MoonShotClient
 from ..utils.config_setting import Config
+from ._llm_api_client import LLMApiClient
 
+class Zero1LLamaImproverClient(LLMApiClient):
+    pass
 
 class Zero1LLamaImproverClient(MoonShotClient):
     def __init__(self, model: str = "zero1-improver"):
