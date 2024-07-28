@@ -44,6 +44,12 @@ class LLMFactory(metaclass=Singleton):
         except AttributeError:
             raise ValueError(f"Class {name} not found in module {module_name}")
 
+    def get_reporter(self, name: str = "", **kwargs) -> LLMApiClient:
+        instance:LLMApiClient = self.get_instance(name,**kwargs)
+        if hasattr(instance, "set_report"):
+            instance.set_report()
+        return instance
+
     def list_available_llms(self) -> list[str]:
         return list(self.llm_classes.keys())
     

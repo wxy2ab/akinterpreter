@@ -230,6 +230,7 @@ class AkshareFunPlanner(SSEPlanner):
             yield send_message(chunk, "plan")
 
     def get_final_report(self) -> Generator[Dict[str, Any], None, None]:
+        reporter = self.llm_factory.get_reporter()
         try:
             report_generator = self.plan_manager.get_final_report()
             report_data = None
@@ -248,7 +249,7 @@ class AkshareFunPlanner(SSEPlanner):
                 report_data['initial_query'], 
                 report_data['results_summary']
             )
-            for chunk in self.llm_client.text_chat(report_prompt, is_stream=True):
+            for chunk in reporter.text_chat(report_prompt, is_stream=True):
                 yield send_message(chunk, "report")
 
             self._save_task()

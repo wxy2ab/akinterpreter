@@ -52,6 +52,9 @@ class SimpleDeepSeekClient(LLMApiClient):
             self.model = model
         self.task = task
         self.messages = []
+    
+    def set_report(self):
+        self.set_task(task = "数据分析" )
         
     @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
