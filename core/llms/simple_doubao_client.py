@@ -1,18 +1,15 @@
 import json
-from typing import Iterator, List, Dict, Any, Optional, Tuple, Union
-from ._llm_api_client import LLMApiClient
+import requests
+from typing import Iterator, List, Dict, Any, Union
 from ..utils.config_setting import Config
-from volcenginesdkarkruntime import Ark
 from ..utils.handle_max_tokens import handle_max_tokens
 
-class DoubaoApiClient(LLMApiClient):
+class SimpleDoubaoClient:
     def __init__(self):
         config = Config()
         self.api_key = config.get("volcengine_api_key")
         self.model = config.get("volcengine_doubao")
-        
-        # 使用自定义配置初始化 Ark 客户端
-        self.client = Ark(api_key=self.api_key)
+        self.base_url = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
         
         self.history: List[Dict[str, str]] = []
         self.stats: Dict[str, int] = {
@@ -20,32 +17,64 @@ class DoubaoApiClient(LLMApiClient):
             "total_tokens": 0
         }
         
-        # 设置默认参数
+        # Set default parameters
         self.max_tokens = 4096
         self.stop = None
         self.temperature = 1
         self.top_p = 1
         self.frequency_penalty = 1
+
+    def _make_request(self, payload: Dict[str, Any], stream: bool = False) -> Union[Dict[str, Any], Iterator[Dict[str, Any]]]:
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}"
+        }
+        
+        response = requests.post(self.base_url, json=payload, headers=headers, stream=stream)
+        response.raise_for_status()
+        
+        if stream:
+            return self._parse_stream_response(response)
+        else:
+            return response.json()
+
+    def _parse_stream_response(self, response: requests.Response) -> Iterator[Dict[str, Any]]:
+        for line in response.iter_lines():
+            if line:
+                line = line.decode('utf-8')
+                if line.startswith('data: '):
+                    line = line[6:]  # Remove 'data: ' prefix
+                    if line == '[DONE]':
+                        break  # End of stream
+                    else:
+                        try:
+                            yield json.loads(line)
+                        except json.JSONDecodeError:
+                            print(f"Failed to parse JSON: {line}")
+
     @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
         
+        payload = {
+            "model": self.model,
+            "messages": self.history,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+            "stream": is_stream
+        }
+        
         if is_stream:
-            return self._stream_response(self.history)
+            return self._stream_response(payload)
         else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=self.history,
-                max_tokens=self.max_tokens,
-                stop=self.stop,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty
-            )
-            assistant_message = response.choices[0].message.content
+            response = self._make_request(payload)
+            assistant_message = response['choices'][0]['message']['content']
             self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["call_count"]["text_chat"] += 1
-            self.stats["total_tokens"] += response.usage.total_tokens
+            self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
     def image_chat(self, message: str, image_path: str) -> str:
@@ -58,63 +87,60 @@ class DoubaoApiClient(LLMApiClient):
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
         ]
         self.history.append({"role": "user", "content": content})
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-            max_tokens=self.max_tokens,
-            stop=self.stop,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            frequency_penalty=self.frequency_penalty
-        )
-        assistant_message = response.choices[0].message.content
+        
+        payload = {
+            "model": self.model,
+            "messages": self.history,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty
+        }
+        
+        response = self._make_request(payload)
+        assistant_message = response['choices'][0]['message']['content']
         self.history.append({"role": "assistant", "content": assistant_message})
         self.stats["call_count"]["image_chat"] += 1
-        self.stats["total_tokens"] += response.usage.total_tokens
+        self.stats["total_tokens"] += response['usage']['total_tokens']
         return assistant_message
 
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
         
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+            "stream": is_stream
+        }
+        
         if is_stream:
-            return self._stream_response(messages)
+            return self._stream_response(payload)
         else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=self.max_tokens,
-                stop=self.stop,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty
-            )
-            assistant_message = response.choices[0].message.content
+            response = self._make_request(payload)
+            assistant_message = response['choices'][0]['message']['content']
             self.stats["call_count"]["text_chat"] += 1
-            self.stats["total_tokens"] += response.usage.total_tokens
+            self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
-    def _stream_response(self, messages: List[Dict[str, str]]) -> Iterator[str]:
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            stream=True,
-            max_tokens=self.max_tokens,
-            stop=self.stop,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            frequency_penalty=self.frequency_penalty
-        )
+    def _stream_response(self, payload: Dict[str, Any]) -> Iterator[str]:
+        stream = self._make_request(payload, stream=True)
         full_response = ""
         for chunk in stream:
-            if chunk.choices:
-                content = chunk.choices[0].delta.content
+            if 'choices' in chunk and chunk['choices']:
+                content = chunk['choices'][0].get('delta', {}).get('content')
                 if content:
                     full_response += content
                     yield content
         self.history.append({"role": "assistant", "content": full_response})
         
         self.stats["call_count"]["text_chat"] += 1
-        self.stats["total_tokens"] += sum(chunk.usage.total_tokens for chunk in stream)
+        # Note: We can't accurately count tokens for streaming responses without additional API calls
 
     def clear_chat(self):
         self.history.clear()
@@ -134,7 +160,7 @@ class DoubaoApiClient(LLMApiClient):
 
         self.history.append({"role": "user", "content": user_message})
         
-        request = {
+        payload = {
             "model": self.model,
             "messages": self.history,
             "tools": tools,
@@ -145,15 +171,15 @@ class DoubaoApiClient(LLMApiClient):
             "frequency_penalty": self.frequency_penalty
         }
 
-        completion = self.client.chat.completions.create(**request)
+        response = self._make_request(payload)
         
-        if completion.choices[0].message.tool_calls:
-            tool_call = completion.choices[0].message.tool_calls[0]
-            self.history.append(completion.choices[0].message.dict())
+        if 'tool_calls' in response['choices'][0]['message']:
+            tool_call = response['choices'][0]['message']['tool_calls'][0]
+            self.history.append(response['choices'][0]['message'])
 
             # Execute the function
-            function_name = tool_call.function.name
-            function_args = json.loads(tool_call.function.arguments)
+            function_name = tool_call['function']['name']
+            function_args = json.loads(tool_call['function']['arguments'])
             if hasattr(function_module, function_name):
                 function = getattr(function_module, function_name)
                 try:
@@ -166,24 +192,24 @@ class DoubaoApiClient(LLMApiClient):
             # Add the function result to the conversation
             self.history.append({
                 "role": "tool",
-                "tool_call_id": tool_call.id,
+                "tool_call_id": tool_call['id'],
                 "content": str(result),
                 "name": function_name,
             })
 
             # Get the final response from the model
-            final_completion = self.client.chat.completions.create(**request)
-            final_response = final_completion.choices[0].message.content
+            final_response = self._make_request(payload)
+            final_message = final_response['choices'][0]['message']['content']
 
-            self.history.append({"role": "assistant", "content": final_response})
+            self.history.append({"role": "assistant", "content": final_message})
             self.stats["call_count"]["tool_chat"] += 1
-            self.stats["total_tokens"] += completion.usage.total_tokens + final_completion.usage.total_tokens
+            self.stats["total_tokens"] += response['usage']['total_tokens'] + final_response['usage']['total_tokens']
 
-            return final_response
+            return final_message
         else:
             # If no tool was called, return the initial response
-            assistant_message = completion.choices[0].message.content
+            assistant_message = response['choices'][0]['message']['content']
             self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["call_count"]["tool_chat"] += 1
-            self.stats["total_tokens"] += completion.usage.total_tokens
+            self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
