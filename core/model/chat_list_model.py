@@ -12,7 +12,7 @@ class ChatListModel(BaseModel):
     last_request_time: datetime
     chat_history: List[Dict[str, Any]]
     current_plan: Dict[str, Any]
-    step_codes: Dict[str, Any]
+    step_codes: Dict[int, Any]
     data: Dict[str, Any]
 
     @staticmethod
