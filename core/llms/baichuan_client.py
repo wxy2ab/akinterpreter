@@ -3,11 +3,12 @@ import requests
 from typing import Generator, Iterator, List, Dict, Any, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.handle_max_tokens import handle_max_tokens
+from ..utils.config_setting import Config
 
 class BaichuanClient(LLMApiClient):
-    def __init__(self, api_key: str, secret_key: str, model: str = "Baichuan2-53B"):
-        self.api_key = api_key
-        self.secret_key = secret_key
+    def __init__(self, api_key: str ="", model: str = "Baichuan4"):
+        config = Config()
+        self.api_key = api_key if api_key else config.get("baichuan_api_key")
         self.model = model
         self.base_url = "https://api.baichuan-ai.com/v1/chat"
         self.history: List[Dict[str, str]] = []
@@ -28,7 +29,7 @@ class BaichuanClient(LLMApiClient):
         url = f"{self.base_url}/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {self.api_key}:{self.secret_key}"
+            "Authorization": f"Bearer {self.api_key}"
         }
         payload = {
             "model": self.model,
