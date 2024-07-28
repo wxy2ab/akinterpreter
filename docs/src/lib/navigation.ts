@@ -15,6 +15,7 @@ export const navigation = [
         title: '配置API_KEY',
         href: '/docs/setting_api_keys',
       },
+      {title: '安装依赖', href: '/docs/requirement_install' },
     ],
   },
   {
