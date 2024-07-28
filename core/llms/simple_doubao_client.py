@@ -3,8 +3,9 @@ import requests
 from typing import Iterator, List, Dict, Any, Union
 from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
+from ._llm_api_client import LLMApiClient
 
-class SimpleDoubaoClient:
+class SimpleDoubaoClient(LLMApiClient):
     def __init__(self):
         config = Config()
         self.api_key = config.get("volcengine_api_key")
