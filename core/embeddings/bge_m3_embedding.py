@@ -10,3 +10,8 @@ class BGEM3Embedding(Embedding):
 
     def convert_to_embedding(self, input_strings: List[str]) -> List[List[float]]:
         return self.model.encode(input_strings).tolist()
+
+    @property
+    def vector_size(self) -> int:
+        return 1024
+    

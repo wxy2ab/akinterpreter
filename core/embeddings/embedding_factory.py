@@ -22,14 +22,14 @@ class EmbeddingFactory(metaclass=Singleton):
                     content = file.read()
                     matches = embedding_pattern.findall(content)
                     for class_name in matches:
-                        self.embedding_classes[class_name.lower()] = filename[:-3]  # 存储类名和模块名的映射
+                        self.embedding_classes[class_name] = filename[:-3]  # 存储类名和模块名的映射
 
     def get_instance(self, name: str = "") -> Embedding:
         config = Config()
         if name == "" and config.has_key("embedding_api"):
             name = config.get("embedding_api")
             
-        module_name = self.embedding_classes.get(name.lower())
+        module_name = self.embedding_classes.get(name)
         if module_name is None:
             raise ValueError(f"No Embedding implementation found for name: {name}")
         

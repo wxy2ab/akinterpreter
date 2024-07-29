@@ -27,3 +27,4 @@ pdfplumber
 python-docx
 seaborn
 markdown
+BCEmbedding

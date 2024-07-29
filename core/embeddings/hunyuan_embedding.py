@@ -116,3 +116,7 @@ class HunyuanEmbedding(Embedding):
             }
         else:
             raise ValueError(f"Unexpected response format: {response}")
+        
+    @property
+    def vector_size(self) -> int:
+        return 1024

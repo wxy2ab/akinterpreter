@@ -54,3 +54,7 @@ class ZhipuAIEmbeddings(Embedding):
         resp = self.client.embeddings.create(model=self.model, input=input_strings)
         embeddings = [r.embedding for r in resp.data]
         return embeddings
+
+    @property
+    def vector_size(self) -> int:
+        return 1024

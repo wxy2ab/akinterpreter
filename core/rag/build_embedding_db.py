@@ -1,4 +1,7 @@
 import os
+import re
+
+import tqdm
 from core.akshare_doc.akshare_tool_info import AkshareToolInfo
 from core.embeddings._embedding import Embedding
 from core.embeddings.embedding_factory import EmbeddingFactory
@@ -19,9 +22,9 @@ def build_embedding_db():
     # 初始化 EmbeddingFactory 并获取 Embedding 实例
     embedding_factory = EmbeddingFactory()
     embedding: Embedding = embedding_factory.get_instance()
-
+    url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  
     # 过滤包含 'http' 的文档首行
-    filtered_funcs = [f for f in funcs if 'http' not in f['docstring'].splitlines()[0]]
+    filtered_funcs = [ {"name":f['name'],"docstring":re.sub(url_pattern, '', f['docstring'])}  for f in funcs]
 
     # 准备数据
     names = [f['name'] for f in filtered_funcs]
@@ -43,25 +46,28 @@ def build_embedding_db():
     # 确保集合存在
     collection_name = 'akshare_embeddings'
         # 创建或重新创建集合
-    if client.collection_exists('akshare_embeddings'):
-        client.delete_collection('akshare_embeddings')
+    if client.collection_exists(collection_name):
+        client.delete_collection(collection_name)
+    
+    dimensions = embedding.vector_size
 
     client.create_collection(
-    collection_name='akshare_embeddings',
-    vectors_config=VectorParams(size=768, distance=Distance.COSINE)
+    collection_name=collection_name,
+    vectors_config=VectorParams(size=dimensions, distance=Distance.COSINE)
 )
 
-    points = [
-    PointStruct(
-        id=i,
-        vector=embedding,  # 直接使用向量，不需要命名
-        payload={"name": name, "content": content}
-    )
-    for i, (embedding, name, content) in enumerate(zip(embeddings, names, contents))
-]
+    points = []
+    for i, (embedding, name, content) in tqdm(enumerate(zip(embeddings, names, contents))):
+        points.append(
+            PointStruct(
+                id=i,
+                vector=embedding,
+                payload={"name": name, "content": content}
+            )
+        )
 
     client.upsert(
-        collection_name='akshare_embeddings',
+        collection_name=collection_name,
         points=points
     )
 

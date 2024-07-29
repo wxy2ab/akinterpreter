@@ -15,3 +15,14 @@ class Embedding(ABC):
             List[List[float]]: A list of embeddings, where each embedding is a list of floats.
         """
         pass
+    
+    @property
+    @abstractmethod
+    def vector_size(self) -> int:
+        """
+        Get the size of the embeddings.
+
+        Returns:
+            int: The size of the embeddings.
+        """
+        pass

@@ -50,3 +50,7 @@ class VolcengineEmbedding(Embedding):
         print(f"Total tokens used: {self.stats['total_tokens']}")
         print(f"Total successful requests: {self.stats['total_successful_requests']}")
         print(f"Total failed requests: {self.stats['total_failed_requests']}")
+
+    @property
+    def vector_size(self) -> int:
+        return 2048

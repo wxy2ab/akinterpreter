@@ -144,3 +144,7 @@ class DashScopeEmbeddings(Embedding):
             self, input=text, text_type="query", model=self.model
         )[0]["embedding"]
         return embedding
+
+    @property
+    def vector_size(self) -> int:
+        return 1536

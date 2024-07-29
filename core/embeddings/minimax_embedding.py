@@ -74,3 +74,7 @@ class MiniMaxEmbedding(Embedding):
         except requests.exceptions.RequestException as e:
             print(f"Error occurred while fetching embedding: {e}")
             return []
+
+    @property
+    def vector_size(self) -> int:
+        return 1536

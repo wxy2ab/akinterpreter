@@ -40,6 +40,10 @@ class BaiChuanEmbedding(Embedding):
 
         #return result["data"]
         return [item["embedding"] for item in result["data"]]
+    
+    @property
+    def vector_size(self) -> int:
+        return 1024
 
     def get_stats(self):
         return {

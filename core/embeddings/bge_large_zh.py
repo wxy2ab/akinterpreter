@@ -73,3 +73,7 @@ class BGELargeZhAPI(Embedding):
     def convert_to_embedding(self, input_strings: List[str]) -> List[List[float]]:
         result = self.generate_embeddings(input_strings)
         return [embedding["embedding"] for embedding in result.get("data", [])]
+    
+    @property
+    def vector_size(self) -> int:
+        return 1024
