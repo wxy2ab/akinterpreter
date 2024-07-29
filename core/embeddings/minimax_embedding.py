@@ -11,8 +11,9 @@ class MiniMaxEmbedding(Embedding):
         #self.group_id = config.get("minimax_group_id")
         self.model = "embo-01"
         self.base_url = "https://api.minimax.chat/v1/embeddings"
+        self.emb_type = "query"
 
-    def convert_to_embedding(self, input_strings: List[str], embed_type:str = "db") -> List[List[float]]:
+    def convert_to_embedding(self, input_strings: List[str], embed_type:str = "") -> List[List[float]]:
         """
         Convert input strings to embeddings using MiniMax API.
 
@@ -31,7 +32,7 @@ class MiniMaxEmbedding(Embedding):
         data = {
             "texts": input_strings,
             "model": self.model,
-            "type": embed_type  # Using 'db' type as default, can be changed to 'query' if needed
+            "type": embed_type  if embed_type else self.emb_type # Using 'db' type as default, can be changed to 'query' if needed
         }
 
         try:

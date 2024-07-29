@@ -22,6 +22,9 @@ def build_embedding_db():
     # 初始化 EmbeddingFactory 并获取 Embedding 实例
     embedding_factory = EmbeddingFactory()
     embedding: Embedding = embedding_factory.get_instance()
+    if hasattr(embedding, 'emb_type'):
+        embedding.emb_type = 'db'
+
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  
     # 过滤包含 'http' 的文档首行
     filtered_funcs = [ {"name":f['name'],"docstring":re.sub(url_pattern, '', f['docstring'])}  for f in funcs]
