@@ -1,20 +1,24 @@
 
 
 from abc import ABC, abstractmethod
-from typing import ClassVar
+from typing import ClassVar, Optional
 from pydantic import BaseModel, Field, field_validator
 from pydantic import BaseModel
 from typing import Type, Dict, Any
 
 class BaseStepModel(BaseModel):
-    step_number: int
-    description: str
-    save_data_to: str
+    step_number: int = -1
+    description: str = ""
+    save_data_to: list[str] =  Field(default_factory=list)
     required_data: list[str] = Field(default_factory=list)
-    type: str = Field(init=False) 
+    type: str = Field(default="")  
 
     # 类变量，子类必须覆盖这个值
     step_type: ClassVar[str]
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        self.type = self.step_type 
 
     @field_validator('type', mode='before')
     @classmethod
@@ -22,7 +26,8 @@ class BaseStepModel(BaseModel):
         if not hasattr(cls, 'step_type'):
             raise ValueError(f"step_type must be defined for {cls.__name__}")
         return cls.step_type
-
+    
+    model_config = { "populate_by_name": True }
 
 class StepModelTools:
 
