@@ -10,7 +10,7 @@ class BaseStepModel(BaseModel):
     step_number: int
     description: str
     save_data_to: str
-    required_data: list[str]
+    required_data: list[str] = Field(default_factory=list)
     type: str = Field(init=False) 
 
     # 类变量，子类必须覆盖这个值

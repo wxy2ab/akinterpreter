@@ -10,6 +10,11 @@ class StepInfoGenerator(ABC):
     @abstractmethod
     def step_description(self) -> str:
         pass
+    
+    @property
+    @abstractmethod
+    def step_model(self) -> Type[BaseStepModel]:
+        pass
 
     @abstractmethod
     def gen_step_info(self, step_data_type: Type[BaseStepModel], query: str) -> Generator[Dict[str, Any], None, None]:
