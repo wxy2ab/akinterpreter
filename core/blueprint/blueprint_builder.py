@@ -13,8 +13,15 @@ class BluePrintBuilder:
         self.llm_provider = LLMProvider()
         self.provider = StepInfoProvider() 
         self.blueprint=StepModelCollection()
+        self.llm_client = self.llm_provider.new_llm_client()
 
     def build_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
-        pass
+        prompt = self.provider.get_build_prompt(query)
+        generator = self.llm_client.one_chat(prompt,is_stream=True)
+        plan_text = ""
+        for chunk in generator:
+            plan_text += chunk
+            yield {"type": "plan", "content": chunk}
+            
     def modify_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
         pass
