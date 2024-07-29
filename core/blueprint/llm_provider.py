@@ -1,4 +1,7 @@
 
+from ..embeddings._embedding import Embedding
+from ..llms._llm_api_client import LLMApiClient
+from ..embeddings.embedding_factory import EmbeddingFactory
 from ..llms_cheap.llms_cheap_factory import LLMCheapFactory
 from ..llms.llm_factory import LLMFactory
 
@@ -7,8 +10,9 @@ class LLMProvider:
     _instance = None
     def __new__(cls):
         if cls._instance is None:
-            cls._instance._initialized = False
             cls._instance = super(LLMProvider, cls).__new__(cls)
+            cls._instance._initialized = False
+            cls._instance.__init__()
             
         return cls._instance
 
@@ -17,9 +21,17 @@ class LLMProvider:
             return
         self._llm_factory = LLMFactory()
         self._cheap_factory = LLMCheapFactory()
+        self._embedding_factory = EmbeddingFactory()
         self._llm_client = None
         self._cheap_client = None
+        self._embedding_client = None
         self._initialized = True
+
+    @property
+    def embedding_client(self):
+        if self._embedding_client is None:
+            self._embedding_client = self._embedding_factory.get_instance()
+        return self._embedding_client
 
     @property
     def llm_factory(self):
@@ -41,8 +53,11 @@ class LLMProvider:
             self._cheap_client = self._cheap_factory.get_instance()
         return self._cheap_client
     
-    def new_llm_client(self):
+    def new_llm_client(self)->LLMApiClient:
         return self._llm_factory.get_instance()
     
-    def new_cheap_client(self):
+    def new_cheap_client(self)->LLMApiClient:
         return self._cheap_factory.get_instance()
+    
+    def new_embedding_client(self)->Embedding:
+        return self._embedding_factory.get_instance()

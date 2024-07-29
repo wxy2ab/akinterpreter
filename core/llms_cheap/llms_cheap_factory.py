@@ -21,10 +21,11 @@ class LLMCheapFactory(metaclass=Singleton):
                 with open(file_path, 'r', encoding='utf-8') as file:
                     content = file.read()
                     matches = llm_api_client_pattern.findall(content)
-                    for class_name in matches:
-                        self.llm_classes[class_name.lower()] = filename[:-3]  # 存储类名和模块名的映射
+                    for class_name, client_name in matches:
+                        if client_name.endswith('Client'):
+                            self.llm_classes[class_name.lower()] = filename[:-3]  # 存储类名和模块名的映射
 
-    def get_instance(self, name: str = "",**kwargs) -> LLMApiClient:
+    def get_instance(self, name: str = "", **kwargs) -> LLMApiClient:
         config = Config()
         if name == "" and config.has_key("llm_cheap_api"):
             name = config.get("llm_cheap_api")
