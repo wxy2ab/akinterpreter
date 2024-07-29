@@ -15,7 +15,10 @@ class DataAnalysisStepInfoGenerator(StepInfoGenerator):
     def step_model(self) -> Type[BaseStepModel]:
         return DataAnalysisStepModel
     
-    def gen_step_info(self, step_data_type, query):
+    def get_step_model(self) -> BaseStepModel:
+        return DataAnalysisStepModel()
+
+    def gen_step_info(self, step_info :dict, query:str,step_model:BaseStepModel):
         pass
 
     def validate_step_info(self, step_data):

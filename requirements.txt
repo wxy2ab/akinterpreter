@@ -26,3 +26,4 @@ tenacity
 pdfplumber
 python-docx
 seaborn
+markdown
