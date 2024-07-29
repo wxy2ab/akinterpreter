@@ -54,7 +54,7 @@ class MiniMaxEmbedding(Embedding):
         Returns:
             List[float]: The embedding as a list of floats.
         """
-        url = f"{self.base_url}?GroupId={self.group_id}"
+        url = f"{self.base_url}"#?GroupId={self.group_id}"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"

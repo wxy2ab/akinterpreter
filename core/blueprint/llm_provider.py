@@ -26,6 +26,10 @@ class LLMProvider:
         self._cheap_client = None
         self._embedding_client = None
         self._initialized = True
+    
+    @property
+    def embedding_factory(self):
+        return self._embedding_factory
 
     @property
     def embedding_client(self):
