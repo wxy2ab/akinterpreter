@@ -1,7 +1,7 @@
 import os
 import re
 
-import tqdm
+from tqdm import tqdm
 from core.akshare_doc.akshare_tool_info import AkshareToolInfo
 from core.embeddings._embedding import Embedding
 from core.embeddings.embedding_factory import EmbeddingFactory
