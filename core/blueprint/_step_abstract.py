@@ -21,7 +21,7 @@ class StepInfoGenerator(ABC):
         pass
 
     @abstractmethod
-    def gen_step_info(self, step_info :dict , query: str ,step_model:BaseStepModel) -> Generator[Dict[str, Any], None, None]:
+    def gen_step_info(self, step_info :dict , query: str ) -> Generator[Dict[str, Any], None, BaseStepModel]:
         pass
 
     @abstractmethod

@@ -8,7 +8,7 @@ from core.embeddings.embedding_factory import EmbeddingFactory
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, VectorParams, Distance
 
-def build_embedding_db():
+def build_akshare_embedding_db():
     # 创建目录和文件路径
     db_directory = './database/embedding'
     db_path = os.path.join(db_directory, 'akshare.db')
@@ -78,4 +78,4 @@ def build_embedding_db():
 
 # 示例使用
 if __name__ == "__main__":
-    build_embedding_db()
+    build_akshare_embedding_db()

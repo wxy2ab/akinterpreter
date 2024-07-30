@@ -18,8 +18,10 @@ class AkShareDataRetrievalStepInfoGenerator(StepInfoGenerator):
     def get_step_model(self) -> BaseStepModel:
         return AkShareDataRetrievalStepModel()
 
-    def gen_step_info(self, step_info:dict, query:str,step_model:BaseStepModel)-> Generator[Dict[str, Any], None, None]:
-        pass
+    def gen_step_info(self, step_info:dict, query:str)-> Generator[Dict[str, Any], None, AkShareDataRetrievalStepModel]:
+        step = AkShareDataRetrievalStepModel()
+        
+        return step
 
     def validate_step_info(self, step_data) -> Generator[Dict[str, Any], None, None]:
         pass

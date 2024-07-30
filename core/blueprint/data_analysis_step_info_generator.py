@@ -1,5 +1,5 @@
 
-from typing import Type
+from typing import Any, Dict, Generator, Type
 
 from core.blueprint._base_step_model import BaseStepModel
 from ._step_abstract import StepInfoGenerator
@@ -18,7 +18,7 @@ class DataAnalysisStepInfoGenerator(StepInfoGenerator):
     def get_step_model(self) -> BaseStepModel:
         return DataAnalysisStepModel()
 
-    def gen_step_info(self, step_info :dict, query:str,step_model:BaseStepModel):
+    def gen_step_info(self, step_info :dict, query:str)-> Generator[Dict[str, Any], None, BaseStepModel]:
         pass
 
     def validate_step_info(self, step_data):

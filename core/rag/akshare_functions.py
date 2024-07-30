@@ -1,5 +1,5 @@
 import re
-from typing import List, Dict, Any
+from typing import Generator, List, Dict, Any, Union
 from core.llms.llm_factory import LLMFactory
 from core.llms._llm_api_client import LLMApiClient
 from core.embeddings.embedding_factory import EmbeddingFactory
@@ -8,7 +8,7 @@ from core.embeddings.ranker_factory import RankerFactory
 from core.embeddings._ranker import Ranker
 from qdrant_client import QdrantClient
 from core.llms_cheap.llms_cheap_factory import LLMCheapFactory
-from .build_embedding_db import build_embedding_db
+from .build_embedding_db import build_akshare_embedding_db
 import os
 
 class AkshareFunctions:
@@ -30,7 +30,7 @@ class AkshareFunctions:
         
         #检查数据库是否存在，不存在创建数据库
         if not os.path.exists(db_path):
-            build_embedding_db()
+            build_akshare_embedding_db()
 
         #初始化 Qdrant 客户端
         self.client = QdrantClient(path=db_path)
@@ -67,15 +67,16 @@ class AkshareFunctions:
         ranked_documents = [{"document": doc, "score": score} for doc, score in zip(documents, scores)]
         return sorted(ranked_documents, key=lambda x: x["score"], reverse=True)
 
-    def preprocess_query(self, query: str) -> str:
+    def preprocess_query(self, query: str, is_stream: bool = False) -> str | Generator[str, None, None]:
         """
         使用 LLM 对查询进行预处理和聚焦。
 
         Args:
             query (str): 原始查询语句。
+            is_stream (bool): 是否使用流式调用，默认为 False。
 
         Returns:
-            str: 预处理后的查询语句。
+            str | Generator[str, None, None]: 预处理后的查询语句，或生成器（如果 is_stream 为 True）。
         """
         preprocess_prompt = f"""原始查询：{query}
 
@@ -95,33 +96,51 @@ class AkshareFunctions:
 数据类型：[填写]
 关键词：[填写]
 """
-        focused_query = self.llm_cheap.one_chat(preprocess_prompt).strip()
-        
-        # 额外处理：将可能遗漏的股票代码替换为"个股"
-        lines = focused_query.split('\n')
+        if is_stream:
+            return self._process_stream_result(self.llm_cheap.one_chat(preprocess_prompt, is_stream=True))
+        else:
+            focused_query = self.llm_cheap.one_chat(preprocess_prompt).strip()
+            return self._process_result(focused_query)
+
+    def _process_result(self, result: str) -> str:
+        lines = result.split('\n')
         for i, line in enumerate(lines):
             if line.startswith("关键词："):
                 keywords = line.split('：')[1]
-                # 使用正则表达式替换股票代码
                 keywords = re.sub(r'\b\d{6}\b', '个股', keywords)
                 lines[i] = f"关键词：{keywords}"
-        
         return '\n'.join(lines)
 
-    def get_functions(self, query: str, n: int = 5) -> List[str]:
+    def _process_stream_result(self, stream: Generator[str, None, None]) -> Generator[str, None, None]:
+        buffer = ""
+        for chunk in stream:
+            buffer += chunk
+            lines = buffer.split('\n')
+            for line in lines[:-1]:
+                if line.startswith("关键词："):
+                    line = re.sub(r'\b\d{6}\b', '个股', line)
+                yield line + '\n'
+            buffer = lines[-1]
+        if buffer:
+            if buffer.startswith("关键词："):
+                buffer = re.sub(r'\b\d{6}\b', '个股', buffer)
+            yield buffer
+
+    def get_functions(self, query: str, n: int = 5, is_stream: bool = False) -> Generator[str, None, List[str]]:
         """
         获取经过 llm_cheap reranker 排序后前 n 个最相关的函数名。
 
         Args:
             query (str): 查询语句。
             n (int): 返回的函数数量，默认为5。
+            is_stream (bool): 是否使用流式调用，默认为 False。
 
         Returns:
-            List[str]: 前 n 个最相关的函数名列表。
+            Union[List[str], Generator[List[str], None, None]]: 函数名列表或生成器（如果 is_stream 为 True）。
         """
         try:
             # 预处理查询
-            focused_query = self.preprocess_query(query)
+            focused_query = self.preprocess_query(query, is_stream=False)  # 为简化处理，这里不使用流式
             print(f"聚焦后的查询:\n{focused_query}")
 
             # 从预处理后的消息生成嵌入
@@ -131,7 +150,7 @@ class AkshareFunctions:
             search_result = self.client.search(
                 collection_name='akshare_embeddings',
                 query_vector=query_embedding,
-                limit=max(30, n),  # 确保检索足够的候选函数
+                limit=max(30, n),
                 with_payload=True
             )
 
@@ -163,23 +182,69 @@ stock_zh_a_minute
 """
             for name, doc in zip(names, documents):
                 rerank_prompt += f"{name}: {doc}\n"
+                
+            if is_stream:
+                return self._process_stream_functions(self.llm_cheap.one_chat(rerank_prompt, is_stream=True), names, n)
+            else:
+                rerank_result = self.llm_cheap.one_chat(rerank_prompt)
+                return self._process_functions(rerank_result, names, n)
 
-            rerank_result = self.llm_cheap.one_chat(rerank_prompt)
-            
-            # 处理返回结果
-            result_lines = rerank_result.strip().split('\n')
-            top_names = [line.strip() for line in result_lines if line.strip() in names][:n]
-
-            # 如果返回的函数名少于n个，用原始顺序补充
-            if len(top_names) < n:
-                remaining_names = [name for name in names if name not in top_names]
-                top_names.extend(remaining_names[:n-len(top_names)])
-
-            return top_names
         except Exception as e:
             print(f"发生错误：{e}")
-            return []
+            return [] if not is_stream else ([] for _ in range(1))
 
+    def _process_stream_functions(self, stream: Generator[str, None, None], names: List[str], n: int) -> Generator[List[str], None, None]:
+        """
+        处理流式输出的函数名，只保留最终的函数列表。
+
+        Args:
+            stream (Generator[str, None, None]): 输入的字符流。
+            names (List[str]): 有效的函数名列表。
+            n (int): 需要返回的函数数量。
+
+        Yields:
+            List[str]: 最终的函数名列表。
+        """
+        full_text = ""
+        for chunk in stream:
+            full_text += chunk
+        
+        # 处理完整的文本
+        lines = full_text.split('\n')
+        top_names = []
+        for line in lines:
+            name = line.strip()
+            if name in names and name not in top_names:
+                top_names.append(name)
+                if len(top_names) == n:
+                    yield top_names
+                    return
+
+        # 如果流结束时仍未达到 n 个函数，用原始顺序补充
+        if len(top_names) < n:
+            remaining_names = [name for name in names if name not in top_names]
+            top_names.extend(remaining_names[:n-len(top_names)])
+
+        yield top_names
+
+    def _process_functions(self, result: str, names: List[str], n: int) -> List[str]:
+        """
+        处理非流式输出的函数名。
+
+        Args:
+            result (str): 完整的输出结果。
+            names (List[str]): 有效的函数名列表。
+            n (int): 需要返回的函数数量。
+
+        Returns:
+            List[str]: 处理后的函数名列表。
+        """
+        result_lines = result.strip().split('\n')
+        top_names = [line.strip() for line in result_lines if line.strip() in names][:n]
+        if len(top_names) < n:
+            remaining_names = [name for name in names if name not in top_names]
+            top_names.extend(remaining_names[:n-len(top_names)])
+        return top_names
 
 
 # 示例使用
