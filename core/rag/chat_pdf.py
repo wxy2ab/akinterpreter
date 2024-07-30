@@ -59,6 +59,7 @@ class SentenceSplitter:
         return chunks
 
     def _split_english_text(self, text: str) -> List[str]:
+        # 使用正则表达式按句子分割英文文本
         sentences = re.split(r'(?<=[.!?])\s+', text.replace('\n', ' '))
         chunks, current_chunk = [], ''
         for sentence in sentences:
@@ -67,7 +68,7 @@ class SentenceSplitter:
             else:
                 chunks.append(current_chunk)
                 current_chunk = sentence
-        if current_chunk:
+        if current_chunk:  # Add the last chunk
             chunks.append(current_chunk)
 
         if self.chunk_overlap > 0 and len(chunks) > 1:
@@ -76,9 +77,14 @@ class SentenceSplitter:
         return chunks
 
     def _is_has_chinese(self, text: str) -> bool:
-        return any("\u4e00" <= ch <= "\u9fff" for ch in text)
+        # check if contains chinese characters
+        if any("\u4e00" <= ch <= "\u9fff" for ch in text):
+            return True
+        else:
+            return False
 
     def _handle_overlap(self, chunks: List[str]) -> List[str]:
+        # 处理块间重叠
         overlapped_chunks = []
         for i in range(len(chunks) - 1):
             chunk = chunks[i] + ' ' + chunks[i + 1][:self.chunk_overlap]
@@ -95,8 +101,8 @@ class ChatPDF:
             chunk_overlap: int = 0,
             enable_history: bool = False,
             num_expand_context_chunk: int = 2,
-            similarity_top_k: int = 10,
-            rerank_top_k: int = 3,
+            similarity_top_k: int = 50,
+            rerank_top_k: int = 5,
     ):
         self.text_splitter = SentenceSplitter(chunk_size, chunk_overlap)
         
