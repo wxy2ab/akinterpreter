@@ -1,3 +1,4 @@
+from ._step_abstract import StepInfoGenerator
 from .current_generator_collection import CurrentGeneratorCollection
 
 
@@ -6,6 +7,9 @@ class StepInfoProvider:
     def __init__(self):
         self.generators = CurrentGeneratorCollection()
     
+    def select_generator(self, step_type:str)->StepInfoGenerator:
+        return self.generators[step_type]
+
     def get_build_prompt(self, query: str) -> str:
         generator_list = []
         for k,v in self.generators.items():
