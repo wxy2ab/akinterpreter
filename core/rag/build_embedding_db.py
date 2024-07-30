@@ -28,10 +28,11 @@ def build_akshare_embedding_db():
     url_pattern = r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+'  
     # 过滤包含 'http' 的文档首行
     filtered_funcs = [ {"name":f['name'],"docstring":re.sub(url_pattern, '', f['docstring'])}  for f in funcs]
+    filtered_funcs = [ {"name":f['name'],"docstring":re.sub(r'股本股东-|经济数据-|经济数据一览-|经济数据-|申万指数-|指数发布-|市场数据-|基金产品公示-|诚信信息公示-|信息公示-|概念板-|数据中心-|特色数据-|行情中心-|\n', '', f['docstring'])}  for f in filtered_funcs]
 
     # 准备数据
     names = [f['name'] for f in filtered_funcs]
-    contents = [f"{f['name']}: {f['docstring'].splitlines()[0]}" for f in filtered_funcs]
+    contents = [f"{f['name']}: {f['docstring'].split(":rtype")[0]}" for f in filtered_funcs]
 
     # 批处理大小
     batch_size = 16

@@ -67,7 +67,7 @@ class AkshareFunctions:
         ranked_documents = [{"document": doc, "score": score} for doc, score in zip(documents, scores)]
         return sorted(ranked_documents, key=lambda x: x["score"], reverse=True)
 
-    def preprocess_query(self, query: str, is_stream: bool = False) -> str | Generator[str, None, None]:
+    def preprocess_query(self, query: str, is_stream: bool = False) -> Union[str, Generator[str, None, None]]:
         """
         使用 LLM 对查询进行预处理和聚焦。
 
@@ -76,7 +76,7 @@ class AkshareFunctions:
             is_stream (bool): 是否使用流式调用，默认为 False。
 
         Returns:
-            str | Generator[str, None, None]: 预处理后的查询语句，或生成器（如果 is_stream 为 True）。
+            Union[str, Generator[str, None, None]]: 预处理后的查询语句，或生成器（如果 is_stream 为 True）。
         """
         preprocess_prompt = f"""原始查询：{query}
 
@@ -89,12 +89,16 @@ class AkshareFunctions:
 - 保持信息简洁，每项提供1-3个关键词。
 - 不要添加原始查询中没有的额外信息或推测。
 - 如果遇到具体的股票代码，请用"个股"替代。
-- 不要包含具体的时间范围。
+- 时间信息，比如2024年，时间范围，比如1月到6月，是没有帮助的，不要提供。
+- 如果查询提及数据周期，需要添加周期关键词，比如"日线"、"分钟"等。
 
-请按以下格式提供信息：
-主要查询对象：[填写]
-数据类型：[填写]
-关键词：[填写]
+请直接列出关键信息，无需包含"主要查询对象："、"数据类型："和"关键词："等标签。
+每项信息占一行，用逗号分隔多个词。
+
+例如：
+股票,指数
+行情数据,财务报表
+日K线,成交量,市值
 """
         if is_stream:
             return self._process_stream_result(self.llm_cheap.one_chat(preprocess_prompt, is_stream=True))
@@ -103,30 +107,34 @@ class AkshareFunctions:
             return self._process_result(focused_query)
 
     def _process_result(self, result: str) -> str:
-        lines = result.split('\n')
-        for i, line in enumerate(lines):
-            if line.startswith("关键词："):
-                keywords = line.split('：')[1]
-                keywords = re.sub(r'\b\d{6}\b', '个股', keywords)
-                lines[i] = f"关键词：{keywords}"
-        return '\n'.join(lines)
+        """处理非流式结果"""
+        lines = result.strip().split('\n')
+        processed_lines = []
+        for line in lines:
+            # 移除可能的标签
+            if ':' in line:
+                line = line.split(':', 1)[1].strip()
+            processed_lines.append(line)
+        return '\n'.join(processed_lines)
 
     def _process_stream_result(self, stream: Generator[str, None, None]) -> Generator[str, None, None]:
+        """处理流式结果"""
         buffer = ""
         for chunk in stream:
             buffer += chunk
             lines = buffer.split('\n')
             for line in lines[:-1]:
-                if line.startswith("关键词："):
-                    line = re.sub(r'\b\d{6}\b', '个股', line)
+                # 移除可能的标签
+                if ':' in line:
+                    line = line.split(':', 1)[1].strip()
                 yield line + '\n'
             buffer = lines[-1]
         if buffer:
-            if buffer.startswith("关键词："):
-                buffer = re.sub(r'\b\d{6}\b', '个股', buffer)
+            if ':' in buffer:
+                buffer = buffer.split(':', 1)[1].strip()
             yield buffer
 
-    def get_functions(self, query: str, n: int = 5, is_stream: bool = False) -> Generator[str, None, List[str]]:
+    def get_functions(self, query: str, n: int = 5, is_stream: bool = False) -> Union[List[str], Generator[List[str], None, None]]:
         """
         获取经过 llm_cheap reranker 排序后前 n 个最相关的函数名。
 
@@ -140,7 +148,7 @@ class AkshareFunctions:
         """
         try:
             # 预处理查询
-            focused_query = self.preprocess_query(query, is_stream=False)  # 为简化处理，这里不使用流式
+            focused_query = self.preprocess_query(query)
             print(f"聚焦后的查询:\n{focused_query}")
 
             # 从预处理后的消息生成嵌入
@@ -150,39 +158,33 @@ class AkshareFunctions:
             search_result = self.client.search(
                 collection_name='akshare_embeddings',
                 query_vector=query_embedding,
-                limit=max(30, n),
+                limit=max(50, n),
                 with_payload=True
             )
 
             if not search_result:
                 print("未找到搜索结果")
-                return []
+                return [] if not is_stream else ([] for _ in range(1))
 
             documents = [hit.payload['content'] for hit in search_result]
             names = [hit.payload['name'] for hit in search_result]
 
             # 使用 llm_cheap 进行重新排序
             rerank_prompt = f"""原始查询：{query}
-聚焦后的查询：
-{focused_query}
 
-请根据以上查询信息，从下面的函数列表中选择最相关的函数。评估时请考虑：
-1. 函数是否处理查询所需的主要数据类型
-2. 函数是否与提供的关键词相匹配
-3. 函数是否适用于查询的主要对象
+请根据以下查询信息，从给定的函数列表中选择最相关的函数。评估时请考虑：
+1. 函数是否能处理查询所需的数据类型和对象
+2. 函数名称是否与查询的关键概念匹配
+3. 函数的描述是否与查询的需求相符
 
 返回前{n}个最相关函数的名称，每行一个。
 请务必仅返回函数名，不要包含任何其他文字说明或编号。
-例如：
-stock_zh_a_hist
-stock_zh_index_daily
-stock_zh_a_minute
 
 函数列表：
 """
-            for name, doc in zip(names, documents):
-                rerank_prompt += f"{name}: {doc}\n"
-                
+            for doc in documents:
+                rerank_prompt += f"{doc}\n"
+
             if is_stream:
                 return self._process_stream_functions(self.llm_cheap.one_chat(rerank_prompt, is_stream=True), names, n)
             else:
