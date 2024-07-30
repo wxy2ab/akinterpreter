@@ -38,11 +38,19 @@ def build_akshare_embedding_db():
     batch_size = 16
     embeddings = []
 
-    # 分批转换为嵌入
-    for i in range(0, len(contents), batch_size):
-        batch = contents[i:i+batch_size]
-        batch_embeddings = embedding.convert_to_embedding(batch)
-        embeddings.extend(batch_embeddings)
+    # 计算总批次数
+    total_batches = (len(contents) + batch_size - 1) // batch_size
+
+    # 使用tqdm创建进度条
+    with tqdm(total=len(contents), desc="处理嵌入") as pbar:
+        # 分批转换为嵌入
+        for i in range(0, len(contents), batch_size):
+            batch = contents[i:i+batch_size]
+            batch_embeddings = embedding.convert_to_embedding(batch)
+            embeddings.extend(batch_embeddings)
+        
+            # 更新进度条
+            pbar.update(len(batch))
 
     # 连接到 QdrantDB
     client = QdrantClient(path=db_path)
@@ -61,7 +69,9 @@ def build_akshare_embedding_db():
 )
 
     points = []
-    for i, (embedding, name, content) in tqdm(enumerate(zip(embeddings, names, contents))):
+    total = len(embeddings)  # 假设embeddings、names和contents长度相同
+
+    for i, (embedding, name, content) in enumerate(tqdm(zip(embeddings, names, contents), total=total, desc="存储数据")):
         points.append(
             PointStruct(
                 id=i,
