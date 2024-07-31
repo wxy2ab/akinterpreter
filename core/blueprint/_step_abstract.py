@@ -25,7 +25,7 @@ class StepInfoGenerator(ABC):
         pass
 
     @abstractmethod
-    def validate_step_info(self, step_data: BaseStepModel) -> tuple[str, bool]:
+    def validate_step_info(self, step_info: dict) -> tuple[str, bool]:
         pass
 
     @abstractmethod
@@ -58,3 +58,7 @@ class StepExecutor(ABC):
     def redo_step(self, step_data: BaseStepModel, step_result: StepResult) -> Generator[Dict[str, Any], None, None]:
         pass
 
+class StepReport(ABC):
+    @abstractmethod
+    def gen_report(self, step_data: BaseStepModel, step_result: StepResult) -> Generator[Dict[str, Any], None, None]:
+        pass

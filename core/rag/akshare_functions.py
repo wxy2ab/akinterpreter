@@ -39,6 +39,9 @@ class AkshareFunctions:
         llm_cheap_factory = LLMCheapFactory()
         self.llm_cheap = llm_cheap_factory.get_instance()
 
+        # 设置集合名称
+        self.collection_name = 'akshare_embeddings'
+
     def get_embeddings(self, texts: List[str]) -> List[List[float]]:
         """
         将文本转换为嵌入。
@@ -156,7 +159,7 @@ class AkshareFunctions:
 
             # 从数据库中检索文档
             search_result = self.client.search(
-                collection_name='akshare_embeddings',
+                collection_name=self.collection_name,
                 query_vector=query_embedding,
                 limit=max(50, n),
                 with_payload=True
@@ -248,7 +251,31 @@ class AkshareFunctions:
             top_names.extend(remaining_names[:n-len(top_names)])
         return top_names
 
+    def search_documents(self,query:str,n:int=50)->list[str]:
+        """
+        使用 QdrantDB 搜索文档。
 
+        Args:
+            query (str): 查询语句。
+            n (int): 返回的文档数量，默认为50。
+
+        Returns:
+            list[str]: 包含搜索结果的文档列表。
+        """
+        # 从数据库中检索文档
+        search_result = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=self.get_embeddings([query])[0],
+            limit=n,
+            with_payload=True
+        )
+
+        if not search_result:
+            print("未找到搜索结果")
+            return []
+
+        documents = [hit.payload['content'] for hit in search_result]
+        return documents
 # 示例使用
 if __name__ == "__main__":
     functions = AkshareFunctions()

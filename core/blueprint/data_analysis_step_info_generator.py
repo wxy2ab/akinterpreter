@@ -1,6 +1,8 @@
 
 from typing import Any, Dict, Generator, Type
 
+from .llm_provider import LLMProvider
+
 from ._base_step_model import BaseStepModel
 from ..planner.message import send_message
 from ._step_abstract import StepInfoGenerator
@@ -8,6 +10,8 @@ from .data_analysis_step_model import DataAnalysisStepModel
 
 
 class DataAnalysisStepInfoGenerator(StepInfoGenerator):
+    def __init__(self) -> None:
+        self.llm_provider = LLMProvider()
     @property
     def step_description(self) -> str:
         return "提供数据统计分析的步骤"
@@ -28,7 +32,7 @@ class DataAnalysisStepInfoGenerator(StepInfoGenerator):
         yield send_message(type="plan",content="完成步骤")
         return step
 
-    def validate_step_info(self, step_data):
+    def validate_step_info(self, step_info:dict)-> tuple[str, bool]:
         pass
 
     def fix_step_info(self, step_data, query, error_msg):
