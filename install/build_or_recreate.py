@@ -8,6 +8,19 @@ def check_exists():
     if os.path.exists(check_path):
         shutil.rmtree(check_path)
 
+def lazy(fullname):
+    import sys
+    import importlib.util
+    try:
+        return sys.modules[fullname]
+    except KeyError:
+        spec = importlib.util.find_spec(fullname)
+        module = importlib.util.module_from_spec(spec)
+        loader = importlib.util.LazyLoader(spec.loader)
+        # Make module with proper locking and get it inserted into sys.modules.
+        loader.exec_module(module)
+        return module
+
 def rebuild_db():
     # 获取当前文件所在的目录
     current_file_directory = os.path.dirname(__file__)
@@ -28,6 +41,26 @@ def rebuild_db():
     # 从加载的模块中执行 build_akshare_embedding_db 函数
     built_module.build_akshare_embedding_db()
 
+def download_embedding():
+    current_file_directory = os.path.dirname(__file__)
+    core_directory = os.path.join(current_file_directory, '..')
+    sys.path.append(core_directory)
+
+    module = lazy("core.embeddings.embedding_factory")
+    factory = module.EmbeddingFactory()
+    embedding = factory.get_instance()
+    result = embedding.convert_to_embedding(["test"])
+    print(result)
+    print("Download embedding finished")
+    module_reranker = lazy("core.embeddings.ranker_factory")
+    factory_reranker = module_reranker.RankerFactory()
+    reranker = factory_reranker.get_instance()
+    result = reranker.rank("query",["test"])
+    print(result)
+    print("Download reranker finished")
+
+
 if __name__ == "__main__":
     check_exists()
     rebuild_db()
+    download_embedding()
