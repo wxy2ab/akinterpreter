@@ -27,3 +27,6 @@ zero_one_api_key =
 OPENAI_API_KEY =  
 hunyuan_SecretId =  
 hunyuan_SecretKey =  
+xunfei_spark_api_key =  
+xunfei_spark_secret_key =  
+hugging_face_api_key =  
