@@ -16,6 +16,11 @@ class StepInfoGenerator(ABC):
     def step_model(self) -> Type[BaseStepModel]:
         pass
 
+    @property
+    @abstractmethod
+    def step_code_generator(self) -> Type["StepCodeGenerator"]:
+        pass
+
     @abstractmethod
     def get_step_model(self) -> BaseStepModel:
         pass

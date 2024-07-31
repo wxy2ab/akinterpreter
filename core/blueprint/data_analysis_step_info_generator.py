@@ -7,6 +7,8 @@ from ._base_step_model import BaseStepModel
 from ..planner.message import send_message
 from ._step_abstract import StepInfoGenerator
 from .data_analysis_step_model import DataAnalysisStepModel
+from ._step_abstract import StepCodeGenerator
+from .data_analysis_step_code_code_generator import DataAnalysisStepCodeGenerator
 
 
 class DataAnalysisStepInfoGenerator(StepInfoGenerator):
@@ -19,6 +21,10 @@ class DataAnalysisStepInfoGenerator(StepInfoGenerator):
     @property
     def step_model(self) -> Type[BaseStepModel]:
         return DataAnalysisStepModel
+
+    @property
+    def step_code_generator(self) -> Type["StepCodeGenerator"]:
+        return DataAnalysisStepCodeGenerator
     
     def get_step_model(self) -> BaseStepModel:
         return DataAnalysisStepModel()
