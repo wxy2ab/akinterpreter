@@ -1,8 +1,8 @@
 [Default]
-llm_api = SimpleDeepSeekClient
-llm_cheap_api = CheapClaude
-embedding_api = BGELargeZhAPI
-ranker_api = BaiduBCEReranker
+llm_api = MiniMaxClient
+llm_cheap_api = CheapMiniMax
+embedding_api = BGEM3Embedding
+ranker_api = BGEM3Reranker
 talker = CliTalker
 project_id =  
 aws_access_key_id =  
@@ -29,4 +29,4 @@ hunyuan_SecretId =
 hunyuan_SecretKey =  
 xunfei_spark_api_key =  
 xunfei_spark_secret_key =  
-hugging_face_api_key =  
+hugging_face_api_key =  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

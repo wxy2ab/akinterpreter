@@ -51,6 +51,7 @@ def download_embedding():
     embedding = factory.get_instance()
     result = embedding.convert_to_embedding(["test"])
     print(result)
+    print(len(result[0]))
     print("Download embedding finished")
     module_reranker = lazy("core.embeddings.ranker_factory")
     factory_reranker = module_reranker.RankerFactory()

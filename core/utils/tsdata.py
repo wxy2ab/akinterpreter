@@ -81,3 +81,10 @@ def check_proxy_running(host, port=10808,type="socks5"):
         os.environ["https_proxy"] = f"{type}://{host_to_check}:10808"
         logger.info("连接到代理")
 
+def is_hugging_face_api_key_valid(api_key: str) -> bool:
+    import requests
+    headers = {
+        "Authorization": f"Bearer {api_key}"
+    }
+    response = requests.get("https://huggingface.co/api/whoami-v2", headers=headers)
+    return response.status_code == 200
