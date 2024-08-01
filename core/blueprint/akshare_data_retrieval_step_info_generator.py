@@ -7,8 +7,9 @@ from ._step_abstract import StepInfoGenerator
 from .akshare_data_retrieval_step_model import AkShareDataRetrievalStepModel
 from ..rag.akshare_functions import AkshareFunctions
 from ..planner.message import send_message
-from ._step_abstract import StepCodeGenerator
+from ._step_abstract import StepCodeGenerator,StepExecutor
 from .akshare_data_retrieval_step_code_generator import AkshareDataRetrievalStepCodeGenerator
+from .data_retrieval_step_executor import DataRetrievalStepExecutor
 
 class AkShareDataRetrievalStepInfoGenerator(StepInfoGenerator):
     def __init__(self) -> None:
@@ -28,6 +29,10 @@ class AkShareDataRetrievalStepInfoGenerator(StepInfoGenerator):
     @property
     def step_code_generator(self) -> Type["StepCodeGenerator"]:
         return AkshareDataRetrievalStepCodeGenerator
+    
+    @property
+    def step_executor(self) -> Type["StepExecutor"]:
+        return DataRetrievalStepExecutor
     
     def get_step_model(self) -> BaseStepModel:
         return AkShareDataRetrievalStepModel()
