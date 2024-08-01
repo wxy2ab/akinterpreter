@@ -4,7 +4,7 @@ from ..llms._llm_api_client import LLMApiClient
 from ..embeddings.embedding_factory import EmbeddingFactory
 from ..llms_cheap.llms_cheap_factory import LLMCheapFactory
 from ..llms.llm_factory import LLMFactory
-
+from ..interpreter.data_summarizer import DataSummarizer
 
 class LLMProvider:
     _instance = None
@@ -22,6 +22,7 @@ class LLMProvider:
         self._llm_factory = LLMFactory()
         self._cheap_factory = LLMCheapFactory()
         self._embedding_factory = EmbeddingFactory()
+        self._data_summarizer = DataSummarizer()
         self._llm_client = None
         self._cheap_client = None
         self._embedding_client = None

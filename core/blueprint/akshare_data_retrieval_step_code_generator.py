@@ -1,6 +1,7 @@
 from typing import Generator, Dict, Any
 
-from core.blueprint.llm_provider import LLMProvider
+from .llm_provider import LLMProvider
+from ..planner.akshare_retrieval_provider import AkshareRetrievalProvider
 from ._step_abstract import StepCodeGenerator, BaseStepModel
 from .akshare_data_retrieval_step_model import AkShareDataRetrievalStepModel
 from .llm_provider import LLMProvider
@@ -8,32 +9,34 @@ from ..planner.akshare_prompts import AksharePrompts
 from ..rag.akshare_functions import AkshareFunctions
 from ..planner.message import send_message
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
+from .step_data import StepData
 
 class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
-    def __init__(self, step_data: AkShareDataRetrievalStepModel):
+    def __init__(self, step_info: AkShareDataRetrievalStepModel,step_data:StepData):
+        self.step_info = step_info
         self.step_data = step_data
         self._step_code = ""
         self.llm_provider = LLMProvider()
         self.llm_client = self.llm_provider.new_llm_client()
         self.llms_cheap = self.llm_provider.new_cheap_client()
         self.prompts = AksharePrompts()
-        self.akshare_docs = AKShareDataSingleton()
+        self.akshare_docs_retrieval = AkshareRetrievalProvider()
 
     def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
-        selected_functions = self.step_data.selected_functions
-        function_docs = self.akshare_docs.get_specific_doc(selected_functions)
+        selected_functions = self.step_info.selected_functions
+        function_docs = self.akshare_docs_retrieval.get_specific_doc(selected_functions)
         
-        if "required_data" in self.step_data.model_dump():
+        if "required_data" in self.step_info.model_dump():
             data_summaries = {
-                data_var: self.step_data.model_dump().get(f"{data_var}_summary", "数据摘要不可用")
-                for data_var in self.step_data.required_data
+                data_var: self.step_info.model_dump().get(f"{data_var}_summary", "数据摘要不可用")
+                for data_var in self.step_info.required_data
             }
             code_prompt = self.prompts.generate_enhanced_code_for_data_retrieval_prompt(
-                self.step_data.model_dump(), function_docs, data_summaries
+                self.step_info.model_dump(), function_docs, data_summaries
             )
         else:
             code_prompt = self.prompts.generate_code_for_functions_prompt(
-                self.step_data.model_dump(), function_docs
+                self.step_info.model_dump(), function_docs
             )
 
         for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
