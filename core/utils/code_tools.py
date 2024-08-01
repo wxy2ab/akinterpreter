@@ -48,8 +48,11 @@ class CodeTools:
         with self._lock:
             if name not in self.data:
                 self.data[name] = value
-                summary = self.summarizer.get_data_summary(value)
-                self.data[f"{name}_summary"] = summary
+                # Check if value is NOT one of the excluded types
+                if not isinstance(value, (str, int, float, bool, complex)):
+                    summary = self.summarizer.get_data_summary(value)
+                    self.data[f"{name}_summary"] = summary
+
             else:
                 raise ValueError(f"Variable '{name}' already exists. Use set_var to modify it.")
 

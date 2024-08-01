@@ -18,7 +18,8 @@ class StepData:
             "llm_provider": self.llm_provider,
             "llm_client": self.llm_provider.new_llm_client(),
             "llm_factory": self.llm_provider.llm_factory,
-            "data_summarizer": self.llm_provider._data_summarizer
+            "data_summarizer": self.llm_provider._data_summarizer,
+            "code_runner":self.llm_provider.new_code_runner()
         }
         for name, value in default_vars.items():
             if not self._tools.is_exists(name):
@@ -50,6 +51,12 @@ class StepData:
             raise ValueError("step_id must be greater than 0")
         self._step_vars[step_id] = step_var
 
+    def is_exists(self, name):
+        return self._tools.is_exists(name)
+
+    def get_step_code(self, step_id: int):
+        return self._step_codes.get(step_id, "")
+    
     def __getitem__(self, name):
         return self._tools[name]
 

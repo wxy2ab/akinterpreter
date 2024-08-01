@@ -41,7 +41,7 @@ class ASTCodeRunner:
         finally:
             sys.stdout = old_stdout
 
-    def run(self, code: str, global_vars: Dict[str, Any]) -> Dict[str, Any]:
+    def run(self, code: str, global_vars: Dict[str, Any]={}) -> Dict[str, Any]:
         """
         input:
             code: 代码字符串

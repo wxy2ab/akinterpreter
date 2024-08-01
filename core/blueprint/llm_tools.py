@@ -1,5 +1,6 @@
 
 
+import ast
 import inspect
 import json
 import re
@@ -10,6 +11,15 @@ from sklearn.preprocessing import Normalizer, PolynomialFeatures
 
 from ..embeddings.embedding_factory import EmbeddingFactory
 
+class NotImplementedVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.has_not_implemented = False
+
+    def visit_Raise(self, node):
+        if isinstance(node.exc, ast.Call):
+            if isinstance(node.exc.func, ast.Name) and node.exc.func.id == 'NotImplementedError':
+                self.has_not_implemented = True
+        self.generic_visit(node)
 
 class LLMTools:
     _instance = None
@@ -88,6 +98,13 @@ class LLMTools:
         
         # 检查是否是抽象方法
         if '@abstractmethod' in source:
+            return False
+        
+        # 检查是否抛出NotImplementedError
+        tree = ast.parse(source)
+        visitor = NotImplementedVisitor()
+        visitor.visit(tree)
+        if visitor.has_not_implemented:
             return False
         
         return True

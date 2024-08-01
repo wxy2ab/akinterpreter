@@ -1,4 +1,5 @@
 
+from ..interpreter.ast_code_runner import ASTCodeRunner
 from ..embeddings._embedding import Embedding
 from ..llms._llm_api_client import LLMApiClient
 from ..embeddings.embedding_factory import EmbeddingFactory
@@ -66,3 +67,6 @@ class LLMProvider:
     
     def new_embedding_client(self)->Embedding:
         return self._embedding_factory.get_instance()
+    
+    def new_code_runner(self):
+        return ASTCodeRunner()

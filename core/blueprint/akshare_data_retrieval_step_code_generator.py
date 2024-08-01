@@ -39,7 +39,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
 
         code_prompt = self.generate_code_for_data_retrieval_prompt(self.step_info, function_docs, data_summaries)
 
-        for chunk in self.llm_client.text_chat(code_prompt, is_stream=True):
+        for chunk in self.llm_client.one_chat(code_prompt, is_stream=True):
             yield send_message(chunk, "code")
             self._step_code += chunk
 
@@ -54,11 +54,11 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         fix_prompt = self.fix_code_prompt(self._step_code, error)
         
         fixed_code = ""
-        for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+        for chunk in self.llm_client.one_chat(fix_prompt, is_stream=True):
             yield send_message(chunk, "code")
             fixed_code += chunk
         
-        self._step_code = self._extract_code(fixed_code)
+        self._step_code = self.llm_tools.extract_code(fixed_code)
         yield send_message(f"代码已修复。")
         yield send_message(self._step_code, "code")
 
@@ -106,7 +106,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         """
         
         check_result = ""
-        for chunk in self.llm_client.text_chat(check_prompt, is_stream=True):
+        for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
             yield send_message(chunk, "code_check")
             check_result += chunk
         
@@ -208,6 +208,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
         ```
         """
+
     @staticmethod
     def fix_code_prompt(code: str, error: str) -> str:
         return f"""

@@ -46,6 +46,7 @@ class AkShareDataRetrievalStepInfoGenerator(StepInfoGenerator):
         selected_functions = self.retrieval.get_functions(query,is_stream=False)
         step.selected_functions = selected_functions
         yield send_message(type="plan",content="完成步骤\n")
+        yield send_message(type="plan",content="data: [Done]",data=step)
         return step
 
     def validate_step_info(self, step_info: dict) -> tuple[str, bool]:
