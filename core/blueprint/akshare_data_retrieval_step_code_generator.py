@@ -16,7 +16,6 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         self.llm_provider = LLMProvider()
         self.llm_client = self.llm_provider.new_llm_client()
         self.llms_cheap = self.llm_provider.new_cheap_client()
-        self.retriever = AkshareFunctions()
         self.prompts = AksharePrompts()
         self.akshare_docs = AKShareDataSingleton()
 
