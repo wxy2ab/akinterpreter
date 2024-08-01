@@ -10,11 +10,18 @@ class BluePrintBuilder:
     def __init__(self):
         self.llm_provider = LLMProvider()
         self.provider = StepInfoProvider() 
-        self.blueprint = StepModelCollection()
+        self._blueprint = StepModelCollection()
         self.llm_tools = LLMTools()
         self.llm_client = self.llm_provider.new_llm_client()
         self.last_step_dict = None
         self.max_retry = 3
+
+    @property
+    def blueprint(self) -> StepModelCollection:
+        return self._blueprint
+    @blueprint.setter
+    def blueprint(self, value: StepModelCollection):
+        self._blueprint = value
 
     def _stream_plan(self, prompt: str) -> Generator[Dict[str, Any], None, str]:
         generator = self.llm_client.one_chat(prompt, is_stream=True)
@@ -32,7 +39,7 @@ class BluePrintBuilder:
         success = False
         while retried < self.max_retry:
             try:
-                self.blueprint.clear()
+                self._blueprint.clear()
                 yield from self.generate_steps(query, steps)
                 self.last_step_dict = steps
                 success = True
@@ -53,7 +60,7 @@ class BluePrintBuilder:
             raise Exception(error_msg)
 
     def build_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
-        self.blueprint.current_query = query
+        self._blueprint.current_query = query
         prompt = self.provider.get_build_prompt(query)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
@@ -63,7 +70,7 @@ class BluePrintBuilder:
         if self.last_step_dict is None:
             raise ValueError("No existing blueprint to modify")
         
-        self.blueprint.current_query = query
+        self._blueprint.current_query = query
         prompt = self.provider.get_modify_prompt(query, self.last_step_dict)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
@@ -78,10 +85,10 @@ class BluePrintBuilder:
                 yield {"type": "error", "content": generate_error}
                 raise ValueError(generate_error)
             result = yield from generator.gen_step_info(step, query)
-            self.blueprint.add_step(result)
+            self._blueprint.add_step(result)
 
     def fix_blueprint(self, query: str, steps: List[Dict[str, Any]], error_msg: str) -> Generator[Dict[str, Any], None, None]:
-        self.blueprint.clear()
+        self._blueprint.clear()
         prompt = self.provider.get_fix_prompt(query, steps, error_msg)
         steps = yield from self._generate_plan(prompt)
         yield {"type": "plan", "content": "data: [Done]", "data": steps}
