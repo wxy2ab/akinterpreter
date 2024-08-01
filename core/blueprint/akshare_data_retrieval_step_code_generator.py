@@ -7,7 +7,7 @@ from .llm_provider import LLMProvider
 from ..planner.akshare_prompts import AksharePrompts
 from ..rag.akshare_functions import AkshareFunctions
 from ..planner.message import send_message
-from ..akshare_doc import AKShareDataSingleton
+from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 
 class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
     def __init__(self, step_data: AkShareDataRetrievalStepModel):
