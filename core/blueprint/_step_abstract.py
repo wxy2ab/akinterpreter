@@ -64,6 +64,10 @@ class StepCodeGenerator(ABC):
     def step_code(self) -> str:
         pass
 
+    @abstractmethod
+    def make_step_sure(self):
+        pass
+
 class StepExecutor(ABC):
     @abstractmethod
     def execute_step_code(self, step_data: BaseStepModel, code: str, global_vars: Dict[str, Any]) -> Generator[Dict[str, Any], None, None]:

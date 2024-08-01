@@ -1,5 +1,6 @@
 
 
+import inspect
 import json
 import re
 from typing import Any, Dict, List, Union
@@ -62,3 +63,31 @@ class LLMTools:
             embeds=e.convert_to_embedding(["中国"])
             lengrg = len(embeds[0])
             print(f"{i} has {lengrg} dimensions")
+
+    @staticmethod
+    def has_implementation(func):
+        """
+        检查一个函数是否有具体的实现代码。
+
+        参数:
+        func (callable): 要检查的函数
+
+        返回:
+        bool: 如果函数有具体实现则返回True，否则返回False
+        """
+        # 获取函数的源代码
+        source = inspect.getsource(func)
+        
+        # 移除所有空白字符和注释
+        lines = [line.strip() for line in source.splitlines() 
+                if line.strip() and not line.strip().startswith('#')]
+        
+        # 检查是否只有函数定义和pass语句
+        if len(lines) <= 2 and 'pass' in lines[-1]:
+            return False
+        
+        # 检查是否是抽象方法
+        if '@abstractmethod' in source:
+            return False
+        
+        return True

@@ -12,6 +12,7 @@ from ..planner.message import send_message
 from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 from .step_data import StepData
 from .llm_tools import LLMTools
+from ..planner.code_enhancement_system import CodeEnhancementSystem
 
 class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
     def __init__(self, step_info: AkShareDataRetrievalStepModel,step_data:StepData):
@@ -23,6 +24,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         self.llms_cheap = self.llm_provider.new_cheap_client()
         self.akshare_docs_retrieval = AkshareRetrievalProvider()
         self.llm_tools = LLMTools()
+        self.code_enhancement_system = CodeEnhancementSystem()
 
     def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
         selected_functions = self.step_info.selected_functions
@@ -47,7 +49,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
     def fix_code(self, error: str) -> Generator[str, None, None]:
         if not self._step_code:
             yield send_message("没有可修复的代码。", "error")
-            return
+            raise Exception("代码还没有生成，还无法修复.")
 
         fix_prompt = self.fix_code_prompt(self._step_code, error)
         
@@ -68,11 +70,79 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         else:
             return content.strip()
 
+    def make_step_sure(self):
+        step_number = self.step_info.step_number
+        self.step_data.set_step_code(step_number, self._step_code)
+
     def pre_enhancement(self) -> Generator[str, None, None]:
-        pass
+        enhanced_prompt = self.code_enhancement_system.apply_pre_enhancement(
+            self.step_info.type,
+            self.step_info.description,
+            "从akshare获取数据",
+        )
+        self.step_info.description = enhanced_prompt
+        yield send_message("代码生成提示已增强", "info")
+        yield send_message(enhanced_prompt, "enhanced_prompt")
 
     def post_enhancement(self) -> Generator[str, None, None]:
-        pass
+        # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
+        check_prompt = f"""
+        请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
+        ```json
+        [
+            {{"error": "错误描述1", "line": "可能的问题行号1"}},
+            {{"error": "错误描述2", "line": "可能的问题行号2"}}
+        ]
+        ```
+        如果没有错误，请返回空列表：
+        ```json
+        []
+        ```
+
+        代码：
+        ```python
+        {self._step_code}
+        ```
+        """
+        
+        check_result = ""
+        for chunk in self.llm_client.text_chat(check_prompt, is_stream=True):
+            yield send_message(chunk, "code_check")
+            check_result += chunk
+        
+        try:
+            errors = self.llm_tools.extract_json_from_text(check_result)
+        except json.JSONDecodeError:
+            yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
+            errors = []
+
+        # 第二步：如果有致命错误，进行修复
+        if errors:
+            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...", "info")
+            
+            error_descriptions = "\n".join([f"- {error['error']} (可能在第 {error['line']} 行)" for error in errors])
+            fix_prompt = f"""
+            以下代码存在一些问题：
+            ```python
+            {self._step_code}
+            ```
+
+            这些问题包括：
+            {error_descriptions}
+
+            请修复这些问题，并提供完整的修正后的代码。修复后的代码使用 ```python 和 ``` 包裹。
+            """
+            
+            fixed_code = ""
+            for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+                yield send_message(chunk, "code_fix")
+                fixed_code += chunk
+            
+            self._step_code = self.llm_tools.extract_code(fixed_code)
+            yield send_message("代码已修复完成。", "info")
+            yield send_message(self._step_code, "full_code")
+        else:
+            yield send_message("代码检查完成，未发现致命错误。", "info")
 
     @property
     def step_code(self) -> str:
@@ -137,4 +207,18 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         # 保存结果
         {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
         ```
+        """
+    @staticmethod
+    def fix_code_prompt(code: str, error: str) -> str:
+        return f"""
+        以下代码导致了一个错误：
+        ```python
+        {code}
+        ```
+
+        错误信息：
+        {error}
+
+        请修复代码以解决此错误。提供完整的修正后的代码。
+        修复后的代码使用 ```python 和 ``` 包裹。
         """
