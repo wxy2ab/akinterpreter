@@ -44,19 +44,24 @@ class StepInfoGenerator(ABC):
 
 class StepCodeGenerator(ABC):
     @abstractmethod
-    def gen_step_code(self, step_data: BaseStepModel, query: str) -> Generator[Dict[str, Any], None, None]:
+    def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
         pass
 
     @abstractmethod
-    def fix_code(self, step_data: BaseStepModel, code: str, error_info: str) -> Generator[str, None, None]:
+    def fix_code(self) -> Generator[str, None, None]:
         pass
 
     @abstractmethod
-    def pre_enhancement(self, step_data: BaseStepModel, enhance_prompt: str) -> Generator[str, None, None]:
+    def pre_enhancement(self) -> Generator[str, None, None]:
         pass
 
     @abstractmethod
-    def post_enhancement(self, step_data: BaseStepModel, code: str, enhance_prompt: str) -> Generator[str, None, None]:
+    def post_enhancement(self) -> Generator[str, None, None]:
+        pass
+
+    @property
+    @abstractmethod
+    def step_code(self) -> str:
         pass
 
 class StepExecutor(ABC):
