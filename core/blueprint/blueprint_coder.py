@@ -29,4 +29,5 @@ class BluePrintCoder:
 
 
     def generate_code(self)-> Generator[Dict[str, Any], None, None]:
-        pass
+        for step in self.blueprint:
+            yield from self.generate_step(step)

@@ -1,6 +1,6 @@
 
 
-from typing import Dict
+from typing import Dict, Generator
 from core.blueprint._base_step_model import BaseStepModel
 from core.blueprint._step_abstract import StepExecutor
 from core.blueprint.step_data import StepData
@@ -15,7 +15,7 @@ class BluePrintExecutor:
         self.step_info_provider = StepInfoProvider()
         self.generator_dict:Dict[int,StepExecutor]={}
     
-    def excute_step(self,step_info:BaseStepModel):
+    def excute_step(self,step_info:BaseStepModel)-> Generator[str, None, None]:
         step_number = step_info.step_number
         if step_number not in self.generator_dict:
             info_generator =self.step_info_provider.select_generator(step_info.type)
@@ -24,3 +24,5 @@ class BluePrintExecutor:
             self.generator_dict[step_number] = step_executor
         executor = self.generator_dict[step_number]
         yield from executor.execute_step_code()
+    
+    

@@ -61,6 +61,7 @@ class BluePrintBuilder:
 
     def build_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
         self._blueprint.current_query = query
+        self._blueprint.query_summary = query
         prompt = self.provider.get_build_prompt(query)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
@@ -69,8 +70,10 @@ class BluePrintBuilder:
     def modify_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
         if self.last_step_dict is None:
             raise ValueError("No existing blueprint to modify")
-        
+        self._blueprint.query_list.append(query)
         self._blueprint.current_query = query
+        self._blueprint.query_summary = query
+        self._blueprint.query_list.append(query)
         prompt = self.provider.get_modify_prompt(query, self.last_step_dict)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
@@ -92,3 +95,28 @@ class BluePrintBuilder:
         prompt = self.provider.get_fix_prompt(query, steps, error_msg)
         steps = yield from self._generate_plan(prompt)
         yield {"type": "plan", "content": "data: [Done]", "data": steps}
+    
+    def _make_query_summary(self) -> Generator[Dict[str, Any], None, None]:
+        history = self._blueprint.query_list
+        current_query = self._blueprint.current_query
+
+        # Step 1: Use LLM API to determine if current_query is consistent with history
+        consistency_prompt = f"请比较以下当前查询与查询历史。判断主题是否发生了变化。请回答'改变'或'一致'。\n\n当前查询: {current_query}\n\n查询历史: {history}"
+        
+        consistency_response = yield from self._stream_plan(consistency_prompt)
+        is_topic_changed = '改变' in consistency_response
+
+        if is_topic_changed:
+            # If the topic has changed, reset the query list and summary
+            self._blueprint.query_list = [current_query]
+            self._blueprint.query_summary = current_query
+            yield {"type": "message", "content": "主题已改变。查询列表和摘要已重置。"}
+        else:
+            # If the topic hasn't changed, summarize the current query and history
+            summary_prompt = f"请将以下查询概括为一个简洁的陈述，以捕捉整体意图：\n\n查询历史: {history}\n当前查询: {current_query}"
+            
+            summary_response = yield from self._stream_plan(summary_prompt)
+            
+            self._blueprint.query_summary = summary_response.strip()
+            self._blueprint.query_list.append(current_query)
+            yield {"type": "message", "content": f"更新后的摘要: {self._blueprint.query_summary}"}

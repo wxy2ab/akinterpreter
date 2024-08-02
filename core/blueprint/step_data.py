@@ -12,6 +12,7 @@ class StepData:
         self._tools = code_tools
         self._tools.clear()
         self.add_default_vars()
+        self._report = ""
 
     def add_default_vars(self):
         default_vars = {
@@ -24,7 +25,14 @@ class StepData:
         for name, value in default_vars.items():
             if not self._tools.is_exists(name):
                 self._tools.add(name, value)
-        
+    @property
+    def report(self):
+        return self._report
+    
+    @report.setter
+    def report(self, value):
+        self._report = value
+
     @property
     def global_vars(self):
         return self._global_vars
