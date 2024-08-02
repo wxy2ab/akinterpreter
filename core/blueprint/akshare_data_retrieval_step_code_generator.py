@@ -13,6 +13,7 @@ from ..akshare_doc.akshare_data_singleton import AKShareDataSingleton
 from .step_data import StepData
 from .llm_tools import LLMTools
 from ..planner.code_enhancement_system import CodeEnhancementSystem
+from tenacity import retry, stop_after_attempt, wait_fixed,retry_if_exception
 
 class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
     def __init__(self, step_info: AkShareDataRetrievalStepModel,step_data:StepData):
@@ -26,6 +27,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         self.llm_tools = LLMTools()
         self.code_enhancement_system = CodeEnhancementSystem()
 
+    @retry(stop=stop_after_attempt(3),retry=retry_if_exception(False))
     def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
         selected_functions = self.step_info.selected_functions
         function_docs = self.akshare_docs_retrieval.get_specific_doc(selected_functions)
@@ -44,6 +46,12 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             self._step_code += chunk
 
         self._step_code = self.llm_tools.extract_code(self._step_code)
+
+        output,result = self.check_step_result(self._step_code)
+        if not result:
+            yield send_message(output, "error")
+            raise Exception(output)
+
         yield send_message(self._step_code, "full_code")
 
     def fix_code(self, error: str) -> Generator[str, None, None]:
@@ -103,6 +111,10 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         ```python
         {self._step_code}
         ```
+
+        注意：
+        - 只检查代码中确定暴露出的错误，不要检查没有证据的错误
+        - 只检查使用了库，但是没有import,不要检查import了有没有安装
         """
         
         check_result = ""
@@ -174,7 +186,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         请生成一个完整的Python代码块来执行任务。遵循以下规则：
 
         1. 只生成一个Python代码块，使用 ```python 和 ``` 包裹。
-        2. 确保代码完整可执行，并将结果保存在指定的变量中。
+        2. 确保代码完整可执行，并将结果保存在指定的变量中。不要使用影响代码直接运行的占位符。
         3. 不要在代码块外添加任何解释或注释。
         4. 代码应考虑数据的时效性、范围、格式和结构，以及可能需要的数据预处理步骤。
         5. 如果需要多个函数配合使用，直接在代码中组合它们。

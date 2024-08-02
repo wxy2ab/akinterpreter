@@ -1,13 +1,13 @@
 import re
 from typing import Generator, List, Dict, Any, Union
-from core.llms.llm_factory import LLMFactory
-from core.llms._llm_api_client import LLMApiClient
-from core.embeddings.embedding_factory import EmbeddingFactory
-from core.embeddings._embedding import Embedding
-from core.embeddings.ranker_factory import RankerFactory
-from core.embeddings._ranker import Ranker
-from qdrant_client import QdrantClient
-from core.llms_cheap.llms_cheap_factory import LLMCheapFactory
+from ..llms.llm_factory import LLMFactory
+from ..llms._llm_api_client import LLMApiClient
+from ..embeddings.embedding_factory import EmbeddingFactory
+from ..embeddings._embedding import Embedding
+from ..embeddings.ranker_factory import RankerFactory
+from ..embeddings._ranker import Ranker
+from ..llms_cheap.llms_cheap_factory import LLMCheapFactory
+from .qdrant_client_singleton import QdrantClientSingleton
 from .build_embedding_db import build_akshare_embedding_db
 import os
 
@@ -33,7 +33,7 @@ class AkshareFunctions:
             build_akshare_embedding_db()
 
         #初始化 Qdrant 客户端
-        self.client = QdrantClient(path=db_path)
+        self.client = QdrantClientSingleton.get_instance(db_path)
 
         #初始化 Cheap LLM 客户端
         llm_cheap_factory = LLMCheapFactory()

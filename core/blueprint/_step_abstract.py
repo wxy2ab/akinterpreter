@@ -1,8 +1,9 @@
 
 
 from abc import ABC, abstractmethod
+import ast
 import json
-from typing import Any, Dict, Generator, Type
+from typing import Any, Dict, Generator, Set, Tuple, Type
 
 from .llm_provider import LLMProvider
 
@@ -71,16 +72,33 @@ class StepCodeGenerator(ABC):
             yield send_message("没有可修复的代码。", "error")
             raise Exception("代码还没有生成，还无法修复.")
 
-        fix_prompt = self.fix_code_prompt(self._step_code, error)
-        
-        fixed_code = ""
-        for chunk in self.llm_client.one_chat(fix_prompt, is_stream=True):
-            yield send_message(chunk, "code")
-            fixed_code += chunk
-        
-        self._step_code = self.llm_tools.extract_code(fixed_code)
-        yield send_message(f"代码已修复。")
-        yield send_message(self._step_code, "code")
+        retry_count = 0
+
+        while True:
+            try:
+                retry_count = retry_count+1
+                fix_prompt = self.fix_code_prompt(self._step_code, error)
+                
+                fixed_code = ""
+                for chunk in self.llm_client.one_chat(fix_prompt, is_stream=True):
+                    yield send_message(chunk, "code")
+                    fixed_code += chunk
+                
+                self._step_code = self.llm_tools.extract_code(fixed_code)
+
+                output,result = self.check_step_result(self._step_code)
+
+                if not result:
+                    error = output
+                    yield send_message(output, "error")
+                    raise Exception(output)
+                yield send_message(f"代码已修复。")
+                yield send_message(self._step_code, "code")
+                break
+            except Exception as e:
+                if retry_count >= 3:
+                    yield send_message("代码修复失败，无法继续执行。", "error")
+                    raise Exception("代码修复失败")
 
     def pre_enhancement(self) -> Generator[str, None, None]:
         enhanced_prompt = self.code_enhancement_system.apply_pre_enhancement(
@@ -176,6 +194,57 @@ class StepCodeGenerator(ABC):
     def make_step_sure(self):
         pass
 
+    def check_step_result(self, code: str) -> Tuple[str, bool]:
+        tree = ast.parse(code)
+        required_vars = set(self.step_info.save_data_to)
+        if hasattr(self.step_info, "analysis_result"):
+            required_vars.add(self.step_info.analysis_result)
+        
+        assigned_vars = self.get_assigned_variables(tree)
+        
+        # 检查是否正确导入 code_tools
+        if not self.check_code_tools_import(tree):
+            return "缺少正确的 code_tools 导入语句。应该有：from core.utils.code_tools import code_tools", False
+        
+        # 检查是否正确使用 code_tools.add()
+        missing_vars = self.check_code_tools_usage(tree, required_vars)
+        
+        if missing_vars:
+            return f"以下变量未使用 code_tools.add() 正确保存: {', '.join(missing_vars)}", False
+        
+        return "", True
+
+    def get_assigned_variables(self, tree: ast.AST) -> Set[str]:
+        assigned_vars = set()
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Assign):
+                for target in node.targets:
+                    if isinstance(target, ast.Name):
+                        assigned_vars.add(target.id)
+            elif isinstance(node, ast.AugAssign):
+                if isinstance(target, ast.Name):
+                    assigned_vars.add(node.target.id)
+        return assigned_vars
+
+    def check_code_tools_import(self, tree: ast.AST) -> bool:
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom):
+                if node.module == 'core.utils.code_tools' and any(alias.name == 'code_tools' for alias in node.names):
+                    return True
+        return False
+
+    def check_code_tools_usage(self, tree: ast.AST, required_vars: Set[str]) -> Set[str]:
+        missing_vars = set(required_vars)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Attribute):
+                    if node.func.attr == 'add' and isinstance(node.func.value, ast.Name) and node.func.value.id == 'code_tools':
+                        if len(node.args) >= 2 and isinstance(node.args[0], ast.Str):
+                            var_name = node.args[0].s
+                            if var_name in missing_vars:
+                                missing_vars.remove(var_name)
+        return missing_vars
+
 class StepExecutor(ABC):
     def __init__(self,step_info:BaseStepModel ,step_data:StepData):
         self.step_data = step_data
@@ -213,7 +282,7 @@ class StepExecutor(ABC):
                     yield chunk
                 if count >=2:
                     yield send_message("代码修复失败，无法继续执行。", "error")
-                    raise Exception("代码修复失败")
+                    raise e
         yield send_message("代码执行完成", "message")
     
     def fix_code(self, code:str, error: str) -> Generator[str, None, None]:
