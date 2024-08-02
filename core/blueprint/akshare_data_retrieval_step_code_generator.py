@@ -86,7 +86,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         enhanced_prompt = self.code_enhancement_system.apply_pre_enhancement(
             self.step_info.type,
             self.step_info.description,
-            "从akshare获取数据",
+            self.step_info.description,
         )
         self.step_info.description = enhanced_prompt
         yield send_message("代码生成提示已增强", "info")
@@ -147,7 +147,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             
             fixed_code = ""
             for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
-                yield send_message(chunk, "code_fix")
+                yield send_message(chunk, "code")
                 fixed_code += chunk
             
             self._step_code = self.llm_tools.extract_code(fixed_code)
@@ -166,23 +166,31 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         function_docs: Dict[str, str],
         data_summaries: List[Dict[str, str]]
     ) -> str:
-        required_data = [f"{data['变量']}" for data in data_summaries]
+        required_data = [f"{data['变量']}" for data in data_summaries if '变量' in data]
         save_data_to = step.save_data_to
         
-        return f"""
+        prompt = f"""
         基于以下数据检索任务：
         {step.description}
 
         考虑使用以下Akshare函数来完成任务：
 
         {json.dumps(function_docs, indent=2, ensure_ascii=False)}
+        """
 
-        之前步骤数据变量的数据摘要：
-        {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
+        if data_summaries:
+            prompt += f"""
+            之前步骤数据变量的数据摘要：
+            {json.dumps(data_summaries, indent=2, ensure_ascii=False)}
+            """
 
-        对于之前步骤的数据，你可以使用以下变量名访问：
-        {', '.join(required_data)}
+        if required_data:
+            prompt += f"""
+            对于之前步骤的数据，你可以使用以下变量名访问：
+            {', '.join(required_data)}
+            """
 
+        prompt += f"""
         请生成一个完整的Python代码块来执行任务。遵循以下规则：
 
         1. 只生成一个Python代码块，使用 ```python 和 ``` 包裹。
@@ -210,7 +218,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         import akshare as ak
         from core.utils.code_tools import code_tools
 
-        # 访问之前步骤的数据（如果需要）
+        {f"# 访问之前步骤的数据（如果需要）" if required_data else ""}
         {', '.join([f"{var} = code_tools['{var}']" for var in required_data])}
 
         # 你的代码逻辑
@@ -220,6 +228,8 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
         ```
         """
+
+        return prompt
 
     @staticmethod
     def fix_code_prompt(code: str, error: str) -> str:
