@@ -3,7 +3,8 @@ from pydantic import Field
 from ._base_step_model import BaseStepModel
 
 class DataAnalysisStepModel(BaseStepModel):
-    step_type: ClassVar[Literal['data_analysis']] = 'data_analysis'
+    step_type: ClassVar[Literal['data_analysis']] =  Field('data_analysis', allow_mutation=False)
+    
     data_requirements: List[str] = Field(default_factory=list)
 
     @property
