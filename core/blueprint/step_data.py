@@ -24,7 +24,7 @@ class StepData:
         }
         for name, value in default_vars.items():
             if not self._tools.is_exists(name):
-                self._tools.add(name, value)
+                self._tools.add_var(name, value) 
     @property
     def report(self):
         return self._report

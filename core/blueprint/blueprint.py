@@ -1,3 +1,5 @@
+import os
+import pickle
 from typing import Generator
 
 from ._base_step_model import BaseStepModel
@@ -63,3 +65,44 @@ class BluePrint:
         self.blueprint = None
 
     
+    def save_to_file(self, filename: str) -> None:
+        """
+        将当前 BluePrint 实例序列化到文件
+        
+        :param filename: 要保存到的文件路径
+        """
+        data = {
+            "blueprint": self._blueprint,
+            "step_data": self.step_data,
+            "max_retry": self.max_retry
+        }
+        
+        with open(filename, 'wb') as f:
+            pickle.dump(data, f)
+
+    @classmethod
+    def load_from_file(cls, filename: str) -> 'BluePrint':
+        """
+        从文件中反序列化并创建一个新的 BluePrint 实例
+        
+        :param filename: 要加载的文件路径
+        :return: 加载了状态的 BluePrint 实例
+        """
+        if not os.path.exists(filename):
+            raise FileNotFoundError(f"文件 {filename} 不存在")
+
+        with open(filename, 'rb') as f:
+            data = pickle.load(f)
+
+        instance = cls()
+        instance._blueprint = data.get("blueprint")
+        instance.step_data = data.get("step_data", StepData())
+        instance.max_retry = data.get("max_retry", 3)
+
+        # 重新初始化其他组件
+        if instance._blueprint is not None:
+            instance.blueprint_coder = BluePrintCoder(instance._blueprint, instance.step_data)
+            instance.blueprint_executor = BluePrintExecutor(instance._blueprint, instance.step_data)
+            instance.blueprint_reporter = BluePrintReporter(instance._blueprint, instance.step_data)
+
+        return instance

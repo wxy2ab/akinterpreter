@@ -1,6 +1,8 @@
 
 from typing import Any, Dict, Generator, Type
 
+from .data_analysis_step_executor import DataAnalysisStepExecutor
+
 from .llm_provider import LLMProvider
 
 from ._base_step_model import BaseStepModel
@@ -31,7 +33,7 @@ class DataAnalysisStepInfoGenerator(StepInfoGenerator):
     
     @property
     def step_executor(self) -> Type["StepExecutor"]:
-        pass
+        return DataAnalysisStepExecutor
     
     def get_step_model(self) -> BaseStepModel:
         return DataAnalysisStepModel()

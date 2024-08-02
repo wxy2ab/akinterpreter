@@ -93,44 +93,55 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         yield send_message(enhanced_prompt, "enhanced_prompt")
 
     def post_enhancement(self) -> Generator[str, None, None]:
-        # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
-        check_prompt = f"""
-        请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
-        ```json
-        [
-            {{"error": "错误描述1", "line": "可能的问题行号1"}},
-            {{"error": "错误描述2", "line": "可能的问题行号2"}}
-        ]
-        ```
-        如果没有错误，请返回空列表：
-        ```json
-        []
-        ```
+        retries = 0
+        MAX_RETRIES = 5
+        while retries < MAX_RETRIES:
+            # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
+            check_prompt = f"""
+            请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
+            ```json
+            [
+                {{"error": "错误描述1", "line": "可能的问题行号1"}},
+                {{"error": "错误描述2", "line": "可能的问题行号2"}}
+            ]
+            ```
+            如果没有错误，请返回空列表：
+            ```json
+            []
+            ```
 
-        代码：
-        ```python
-        {self._step_code}
-        ```
+            代码：
+            ```python
+            {self._step_code}
+            ```
 
-        注意：
-        - 只检查代码中确定暴露出的错误，不要检查没有证据的错误
-        - 只检查使用了库，但是没有import,不要检查import了有没有安装
-        """
-        
-        check_result = ""
-        for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
-            yield send_message(chunk, "code_check")
-            check_result += chunk
-        
-        try:
-            errors = self.llm_tools.extract_json_from_text(check_result)
-        except json.JSONDecodeError:
-            yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
-            errors = []
+            注意：
+            - 如果不是非常确定，不要返回错误，返回空列表，是完全没有问题的。
+            - code_tools 是确定可以使用的对象。
+            - 不要判断akshare中是否存在某个函数
+            """
+            
+            check_result = ""
+            for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
+                yield send_message(chunk, "code_check")
+                check_result += chunk
+            
+            try:
+                errors = self.llm_tools.extract_json_from_text(check_result)
+                output,result = self.check_step_result(self._step_code)
+                if not result:
+                    errors.append({"error":output,"line":"-"})
+            except json.JSONDecodeError:
+                yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
+                errors = []
 
-        # 第二步：如果有致命错误，进行修复
-        if errors:
-            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...", "info")
+            # 如果没有错误，退出循环
+            if not errors:
+                yield send_message(f"代码检查完成，未发现致命错误。（重试次数：{retries}）", "info")
+                break
+
+            # 第二步：如果有致命错误，进行修复
+            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...（重试次数：{retries + 1}）", "info")
             
             error_descriptions = "\n".join([f"- {error['error']} (可能在第 {error['line']} 行)" for error in errors])
             fix_prompt = f"""
@@ -147,14 +158,19 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             
             fixed_code = ""
             for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
-                yield send_message(chunk, "code")
+                yield send_message(chunk, "code_fix")
                 fixed_code += chunk
             
             self._step_code = self.llm_tools.extract_code(fixed_code)
             yield send_message("代码已修复完成。", "info")
             yield send_message(self._step_code, "full_code")
+
+            retries += 1
+
+        if retries == MAX_RETRIES:
+            yield send_message(f"达到最大重试次数 ({MAX_RETRIES})，无法完全修复代码。", "warning")
         else:
-            yield send_message("代码检查完成，未发现致命错误。", "info")
+            yield send_message("代码修复完成，未发现更多错误。", "info")
 
     @property
     def step_code(self) -> str:
