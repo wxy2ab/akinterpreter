@@ -30,14 +30,15 @@ class ASTCodeRunner:
             # 捕获输出
             output = redirected_output.getvalue()
             if output:
-                yield {"type": "output", "content": output}
+                yield {"type": "message", "content": output}
 
             # 返回更新后的变量
             updated_vars = {k: v for k, v in exec_globals.items() if k not in global_vars or global_vars[k] is not v}
-            yield {"type": "variables", "content": updated_vars}
+            yield {"type": "message", "content": updated_vars}
 
         except Exception as e:
             yield {"type": "error", "content": str(e)}
+            raise e
         finally:
             sys.stdout = old_stdout
 

@@ -104,7 +104,7 @@ class StepCodeGenerator(ABC):
         enhanced_prompt = self.code_enhancement_system.apply_pre_enhancement(
             self.step_info.type,
             self.step_info.description,
-            "从akshare获取数据",
+            self.step_info.description,
         )
         self.step_info.description = enhanced_prompt
         yield send_message("代码生成提示已增强", "info")

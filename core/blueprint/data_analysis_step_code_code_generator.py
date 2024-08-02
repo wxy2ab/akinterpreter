@@ -62,47 +62,61 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         enhanced_prompt = self.code_enhancement_system.apply_pre_enhancement(
             self.step_info.type,
             self.step_info.description,
-            "从akshare获取数据",
+            self.step_info.description,
         )
         self.step_info.description = enhanced_prompt
         yield send_message("代码生成提示已增强", "info")
         yield send_message(enhanced_prompt, "enhanced_prompt")
 
     def post_enhancement(self) -> Generator[str, None, None]:
-        # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
-        check_prompt = f"""
-        请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
-        ```json
-        [
-            {{"error": "错误描述1", "line": "可能的问题行号1"}},
-            {{"error": "错误描述2", "line": "可能的问题行号2"}}
-        ]
-        ```
-        如果没有错误，请返回空列表：
-        ```json
-        []
-        ```
+        retries = 0
+        MAX_RETRIES = 5
+        while retries < MAX_RETRIES:
+            # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
+            check_prompt = f"""
+            请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
+            ```json
+            [
+                {{"error": "错误描述1", "line": "可能的问题行号1"}},
+                {{"error": "错误描述2", "line": "可能的问题行号2"}}
+            ]
+            ```
+            如果没有错误，请返回空列表：
+            ```json
+            []
+            ```
 
-        代码：
-        ```python
-        {self._step_code}
-        ```
-        """
-        
-        check_result = ""
-        for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
-            yield send_message(chunk, "code_check")
-            check_result += chunk
-        
-        try:
-            errors = self.llm_tools.extract_json_from_text(check_result)
-        except json.JSONDecodeError:
-            yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
-            errors = []
+            代码：
+            ```python
+            {self._step_code}
+            ```
 
-        # 第二步：如果有致命错误，进行修复
-        if errors:
-            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...", "info")
+            注意：
+            - 如果不是非常确定，不要返回错误，返回空列表，是完全没有问题的。
+            - code_tools 是确定可以使用的对象。
+            """
+            
+            check_result = ""
+            for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
+                yield send_message(chunk, "code_check")
+                check_result += chunk
+            
+            try:
+                errors = self.llm_tools.extract_json_from_text(check_result)
+                output,result = self.check_step_result(self._step_code)
+                if not result:
+                    errors.append({"error":output,"line":"-"})
+            except json.JSONDecodeError:
+                yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
+                errors = []
+
+            # 如果没有错误，退出循环
+            if not errors:
+                yield send_message(f"代码检查完成，未发现致命错误。（重试次数：{retries}）", "info")
+                break
+
+            # 第二步：如果有致命错误，进行修复
+            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...（重试次数：{retries + 1}）", "info")
             
             error_descriptions = "\n".join([f"- {error['error']} (可能在第 {error['line']} 行)" for error in errors])
             fix_prompt = f"""
@@ -125,8 +139,13 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
             self._step_code = self.llm_tools.extract_code(fixed_code)
             yield send_message("代码已修复完成。", "info")
             yield send_message(self._step_code, "full_code")
+
+            retries += 1
+
+        if retries == MAX_RETRIES:
+            yield send_message(f"达到最大重试次数 ({MAX_RETRIES})，无法完全修复代码。", "warning")
         else:
-            yield send_message("代码检查完成，未发现致命错误。", "info")
+            yield send_message("代码修复完成，未发现更多错误。", "info")
 
     @property
     def step_code(self) -> str:
@@ -137,15 +156,20 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         self.step_data.set_step_code(step_number, self._step_code)
 
     @staticmethod
-    def generate_data_analysis_code_prompt(step: DataAnalysisStepModel, data_summaries: Dict[str, str], allow_yfinance: bool) -> str:
+    def generate_data_analysis_code_prompt(step: DataAnalysisStepModel, data_summaries: list, allow_yfinance: bool) -> str:
         required_data = step.required_data
         save_data_to = step.save_data_to
         step_number = step.step_number
+
+        data_summary_str = "\n".join([f"{summary['变量']}: {summary['摘要']}" for summary in data_summaries])
 
         return f"""
         生成Python代码来分析以下数据：
 
         分析任务：{step.description}
+
+        可用的数据变量及其摘要：
+        {data_summary_str}
 
         请遵循以下规则生成代码：
 
@@ -172,7 +196,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         os.makedirs('output', exist_ok=True)
 
         # 访问之前步骤的数据
-        required_data = code_tools['required_data_name']
+        {", ".join([f"{var} = code_tools['{var}']" for var in required_data])}
         
         # 你的数据分析代码
         # ...
@@ -186,7 +210,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
 
         # 如果需要获取数据摘要
         data_summarizer = code_tools["data_summarizer"]
-        data_summary = data_summarizer.get_data_summary(data)
+        # data_summary = data_summarizer.get_data_summary(your_data)
 
         # 生成和保存图表
         plt.figure(figsize=(10, 6))
@@ -209,8 +233,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         code_tools.add("analysis_result_{step_number}", analysis_result_{step_number})
 
         # 如果需要保存原始数据
-        {"for save_var in save_data_to:" if isinstance(save_data_to, list) else f"save_var = '{save_data_to}'"}
-            {"code_tools.add(save_var, data)  # 假设 'data' 是您要保存的原始数据变量" if save_data_to else ""}
+        {"# 请在这里添加保存原始数据的代码" if save_data_to else ""}
         ```
 
         请确保代码完整可执行，并将分析结果保存在名为'analysis_result_{step_number}'的变量中，这个变量必须是字符串类型。

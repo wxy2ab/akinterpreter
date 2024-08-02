@@ -20,7 +20,7 @@ class BluePrintReporter:
         query = self.step_info.query_summary
         analysis_results = []
         for step in self.step_info:
-            if hasattr(step, "analysis_result"):
+            if hasattr(step,'analysis_result'):
                 step_result = step.analysis_result
                 result = self.step_data[step_result]
                 analysis_results.append({
@@ -40,7 +40,7 @@ class BluePrintReporter:
         full_report = ""
         for chunk in report_stream:
             full_report += chunk
-            yield chunk  # Yield each chunk as it's received
+            yield send_message(chunk,"report")  # Yield each chunk as it's received
         
         # Assign the complete report to self._report
         self._report = full_report
