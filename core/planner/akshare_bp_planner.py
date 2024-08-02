@@ -6,8 +6,8 @@ from typing import Callable, List, Dict, Tuple, Union, Optional, Any, Generator
 from core.scheduler.schedule_manager import SchedulerManager
 from .message import send_message
 from .parse_query_as_command import create_command_parser
-from .blueprint import BluePrint
-from .step_data import StepData
+from ..blueprint.blueprint import BluePrint
+from ..blueprint.step_data import StepData
 
 class AkshareBPPlanner:
     def __init__(self, max_retry=8):
@@ -87,12 +87,20 @@ class AkshareBPPlanner:
             yield send_message(f"步骤 {step} 的代码不存在", "error")
 
     def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
-        # 这里需要实现代码修改的逻辑，可能需要调用blueprint_coder的方法
-        # 暂时使用一个简单的实现
-        new_code = f"# Modified code for step {step}\n# Query: {query}\n# TODO: Implement actual code modification"
-        self.blueprint.step_data.set_step_code(step, new_code)
-        yield send_message(f"步骤 {step} 的代码已更新。", "message")
-        self._notify_code_change({step: new_code})
+        if self.blueprint.blueprint_coder is None:
+            yield send_message("BluePrintCoder 未初始化，无法修改代码。", "error")
+            return
+
+        try:
+            # 调用 BluePrintCoder 的 modify_step_code 方法
+            modification_generator = self.blueprint.blueprint_coder.modify_step_code(step, query)
+            
+            # 遍历生成器，传递所有消息
+            for message in modification_generator:
+                yield message
+        
+        except Exception as e:
+            yield send_message(f"修改代码时发生错误: {str(e)}", "error")
 
     def reset(self) -> Generator[Dict[str, Any], None, None]:
         self.task_saved_path = ""

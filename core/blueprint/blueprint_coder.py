@@ -19,6 +19,7 @@ class BluePrintCoder:
             #info_generator.step_code_generator(step_info,self.step_data)
             code_generator_class = info_generator.step_code_generator
             code_generator = code_generator_class(step_info,self.step_data)
+            self._code_generator = code_generator
             self.generator_dict[step_number] = code_generator
         code_generator = self.generator_dict[step_number]
         yield from code_generator.pre_enhancement()
@@ -33,13 +34,19 @@ class BluePrintCoder:
             yield from self.generate_step(step)
 
 
-    def modify_step_code(self,step_number:int,query:str)->Generator[Dict[str,Any],None,None]:
+    def modify_step_code(self, step_number: int, query: str) -> Generator[Dict[str, Any], None, None]:
         step = self.blueprint[step_number]
         if step is None:
             raise Exception(f"步骤{step_number}不存在")
-        info_generator = self.step_info_provider.select_generator(step.type)
-        code_generator_class = info_generator.step_code_generator
-        code_generator = code_generator_class(step,self.step_data)
-        yield from code_generator.modify_step_code(step_number,query)
+        code_generator = None
+        if step_number in self.generator_dict:
+            code_generator = self.generator_dict[step_number]
+        else:
+            info_generator = self.step_info_provider.select_generator(step.type)
+            code_generator_class = info_generator.step_code_generator
+            code_generator = code_generator_class(step, self.step_data)
+            self.generator_dict[step_number] = code_generator
+        
+        yield from code_generator.modify_step_code(step_number, query)
         
         
