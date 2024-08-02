@@ -16,7 +16,7 @@ class BluePrintCoder:
         step_number = step_info.step_number
         if step_number not in self.generator_dict:
             info_generator =self.step_info_provider.select_generator(step_info.type)
-            info_generator.step_code_generator(step_info,self.step_data)
+            #info_generator.step_code_generator(step_info,self.step_data)
             code_generator_class = info_generator.step_code_generator
             code_generator = code_generator_class(step_info,self.step_data)
             self.generator_dict[step_number] = code_generator
@@ -31,3 +31,15 @@ class BluePrintCoder:
     def generate_code(self)-> Generator[Dict[str, Any], None, None]:
         for step in self.blueprint:
             yield from self.generate_step(step)
+
+
+    def modify_step_code(self,step_number:int,query:str)->Generator[Dict[str,Any],None,None]:
+        step = self.blueprint[step_number]
+        if step is None:
+            raise Exception(f"步骤{step_number}不存在")
+        info_generator = self.step_info_provider.select_generator(step.type)
+        code_generator_class = info_generator.step_code_generator
+        code_generator = code_generator_class(step,self.step_data)
+        yield from code_generator.modify_step_code(step_number,query)
+        
+        

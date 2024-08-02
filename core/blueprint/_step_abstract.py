@@ -3,7 +3,7 @@
 from abc import ABC, abstractmethod
 import ast
 import json
-from typing import Any, Dict, Generator, Set, Tuple, Type
+from typing import Any, Dict, Generator, List, Set, Tuple, Type
 
 from .llm_provider import LLMProvider
 
@@ -202,6 +202,61 @@ class StepCodeGenerator(ABC):
 
         请修复代码以解决此错误。提供完整的修正后的代码。
         修复后的代码使用 ```python 和 ``` 包裹。
+        """
+
+    def modify_step_code(self, step: int, query: str) -> Generator[Dict[str, Any], None, None]:
+        step_number = self.step_info.step_number
+        code = self.step_data.get_step_code(step_number)
+        if not code:
+            yield send_message(f"步骤 {step} 的代码不存在。", "error")
+            return
+        required_data_list = self.step_info.required_data
+        data_summaries = []
+        if required_data_list:
+            for data_var in required_data_list:
+                data_summary =  self.step_data[f"{data_var}_summary"] if f"{data_var}_summary" in self.step_data else "数据摘要不可用"
+                data_summaries.append({ "变量" :data_var,"摘要":data_summary})
+
+        prompt = self.modify_step_code_prompt(code, query,data_summaries,step)
+        modified_code = ""
+        for chunk in self.llm_client.text_chat(prompt, is_stream=True):
+            modified_code += chunk
+            yield send_message(chunk, "code")
+
+        self._step_code = modified_code
+        output,result = self.check_step_result(modified_code)
+        if not result:
+            yield send_message(output, "error")
+            raise Exception(output)
+        self.step_data.set_step_code(step_number, modified_code)
+        yield send_message(f"步骤 {step} 的代码已更新。")
+        yield send_message(f"更新后的代码：\n{modified_code.strip()}", "code")
+
+    @staticmethod
+    def modify_step_code_prompt(current_code: str, query: str, data_summaries: List[Dict[str, str]], step:BaseStepModel) -> str:
+        required_data = step.required_data
+        save_data_to = step.save_data_to
+        
+        data_summary_str = "\n".join([f"变量 {summary['变量']}: {summary['摘要']}" for summary in data_summaries])
+        
+        save_data_instruction = ""
+        if save_data_to:
+            save_data_instruction = f"请确保将结果保存在以下变量中: {', '.join(save_data_to)}"
+        
+        return f"""
+        当前代码：
+        {current_code}
+
+        {"可用的数据变量及其摘要:" if required_data else ""}
+        {data_summary_str}
+
+        修改请求：
+        {query}
+
+        请根据修改请求提供更新后的完整代码。只返回修改后的代码，不需要任何解释。
+        {save_data_instruction}
+        如果代码中使用了'analysis_result_?'来保存分析结果，那么新代码仍然应该如此。
+        输出的代码用 ```python 和 ``` 包裹。
         """
 
     @property
