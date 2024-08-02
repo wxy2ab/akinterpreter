@@ -84,5 +84,13 @@ class CodeTools:
     def __len__(self):
         with self._lock:
             return len(self.data)
-        
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_lock']  # 不序列化 _lock
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._lock = Lock()  # 反序列化时重新创建 _lock
 code_tools = CodeTools()

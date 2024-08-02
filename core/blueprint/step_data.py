@@ -87,3 +87,14 @@ class StepData:
         self._tools.clear()
         self.add_default_vars()
         self._report = ""
+        
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['_tools']  # 不序列化 _tools
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self._tools = code_tools  # 反序列化时重新获取 code_tools
+        self._tools.clear()
+        self.add_default_vars()

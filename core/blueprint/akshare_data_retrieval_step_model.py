@@ -5,7 +5,7 @@ from .data_retrieval_step_model import DataRetrievalStepModel
 
 class AkShareDataRetrievalStepModel(DataRetrievalStepModel):
     library: Literal['akshare'] = 'akshare'
-    step_type: ClassVar[Literal['akshare_data_retrieval']] = Field('akshare_data_retrieval', allow_mutation=False)
+    step_type: ClassVar[Literal['akshare_data_retrieval']] = 'akshare_data_retrieval'
     
     def to_dict(self) -> Dict[str, Any]:
         return {

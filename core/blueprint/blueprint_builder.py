@@ -96,6 +96,11 @@ class BluePrintBuilder:
         prompt = self.provider.get_fix_prompt(query, steps, error_msg)
         steps = yield from self._generate_plan(prompt)
         yield {"type": "plan", "content": "data: [Done]", "data": steps}
+
+    def _generate_plan(self, prompt: str) -> Generator[Dict[str, Any], None, List[Dict[str, Any]]]:
+        plan_text = yield from self._stream_plan(prompt)
+        steps = self._parse_plan(plan_text)
+        return steps
     
     def _make_query_summary(self) -> Generator[Dict[str, Any], None, None]:
         history = self._blueprint.query_list

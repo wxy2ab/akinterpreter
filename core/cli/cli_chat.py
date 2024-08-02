@@ -20,7 +20,7 @@ def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool 
 
 async def chat_cli():
     factory = TalkerFactory()
-    talker = factory.get_instance("CliTalker")
+    talker = factory.get_instance("CliBpTalker")
     ui_handler = CliUIHandler(print_colored)
     event_bus = ReplayEventBus()
     

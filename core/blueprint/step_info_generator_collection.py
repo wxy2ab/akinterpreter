@@ -3,6 +3,7 @@ from collections.abc import Iterable
 
 from ._step_abstract import StepInfoGenerator
 
+
 class StepInfoGeneratorCollection:
     def __init__(self):
         self._generators: Dict[str, StepInfoGenerator] = {}
