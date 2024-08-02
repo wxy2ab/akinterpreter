@@ -1,4 +1,6 @@
 from typing import Generator
+
+from ._base_step_model import BaseStepModel
 from .step_data import StepData
 from .blueprint_builder import BluePrintBuilder
 from .blueprint_coder import BluePrintCoder
@@ -29,7 +31,7 @@ class BluePrint:
         yield from self.blueprint_builder.modify_blueprint(query)
         self._blueprint = self.blueprint_builder.blueprint
     
-    def generate_code(self,step_info:dict[str,any])->Generator[dict[str,any],None,None]:
+    def generate_and_execute_all(self)->Generator[dict[str,any],None,None]:
         if self._blueprint is None:
             raise Exception("请先生成蓝图")
         if self.blueprint_coder is None:
@@ -40,8 +42,24 @@ class BluePrint:
             yield from self.blueprint_coder.generate_step(step)
             yield from self.blueprint_executor.excute_step(step)
     
+    def generate_step(self,step:BaseStepModel)->Generator[dict[str,any],None,None]:
+        if self._blueprint is None:
+            raise Exception("请先生成蓝图")
+        if self.blueprint_coder is None:
+            self.blueprint_coder = BluePrintCoder(self._blueprint,self.step_data)
+        if self.blueprint_executor is None:
+            self.blueprint_executor = BluePrintExecutor(self._blueprint,self.step_data) 
+        yield from self.blueprint_coder.generate_step(step)
+        yield from self.blueprint_executor.excute_step(step)
+
     def final_report(self)->Generator[dict[str,any],None,None]:
         if self.blueprint_reporter is None:
             self.blueprint_reporter = BluePrintReporter(self._blueprint,self.step_data)
         yield from self.blueprint_reporter.report()
+
+    def clear(self):
+        self.blueprint_builder.clear()
+        self.step_data = StepData()
+        self.blueprint = None
+
     

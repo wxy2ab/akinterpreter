@@ -13,7 +13,7 @@ from ..planner.message import send_message
 from ._base_step_model import BaseStepModel
 from .step_result import StepResult
 from .step_data import StepData
-from tenacity import retry
+from tenacity import retry,retry_if_exception,stop_after_attempt
 
 class StepInfoGenerator(ABC):
     @property
@@ -186,7 +186,7 @@ class StepExecutor(ABC):
         self.llm_client  = self.llm_provider.new_llm_client()
         self.max_retry = 8
 
-    @retry(stop_max_attempt_number=8)
+    @retry(stop=stop_after_attempt(3))
     def execute_step_code(self) -> Generator[Dict[str, Any], None, None]:
         step_number = self.step_info.step_number
         code = self.step_data.get_step_code(step_number)

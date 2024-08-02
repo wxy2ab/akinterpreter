@@ -19,6 +19,7 @@ class BluePrintBuilder:
     @property
     def blueprint(self) -> StepModelCollection:
         return self._blueprint
+    
     @blueprint.setter
     def blueprint(self, value: StepModelCollection):
         self._blueprint = value
@@ -120,3 +121,7 @@ class BluePrintBuilder:
             self._blueprint.query_summary = summary_response.strip()
             self._blueprint.query_list.append(current_query)
             yield {"type": "message", "content": f"更新后的摘要: {self._blueprint.query_summary}"}
+
+    def clear(self):
+        self._blueprint = StepModelCollection()
+        self.last_step_dict = None

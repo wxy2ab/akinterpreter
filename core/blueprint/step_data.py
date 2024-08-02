@@ -79,3 +79,11 @@ class StepData:
 
     def __contains__(self, name):
         return name in self._tools
+
+    def clear(self):
+        self._global_vars.clear()
+        self._step_vars.clear()
+        self._step_codes.clear()
+        self._tools.clear()
+        self.add_default_vars()
+        self._report = ""
