@@ -41,12 +41,12 @@ class BaseStepModel(BaseModel):
     def model_validate_json(cls, json_data: str) -> 'BaseStepModel':
         return super().model_validate_json(json_data)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return self.model_dump(exclude={'step_type'})
+    # def to_dict(self) -> Dict[str, Any]:
+    #     return self.model_dump(exclude={'step_type'})
 
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'BaseStepModel':
-        return cls.model_validate(data)
+    # @classmethod
+    # def from_dict(cls, data: Dict[str, Any]) -> 'BaseStepModel':
+    #     return cls.model_validate(data)
     
     model_config = ConfigDict(
         populate_by_name=True,
