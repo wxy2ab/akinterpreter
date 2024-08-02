@@ -1,3 +1,4 @@
+import json
 from typing import Any, Dict, Literal, ClassVar
 from pydantic import Field
 from ._base_step_model import BaseStepModel
@@ -28,3 +29,19 @@ class AkShareDataRetrievalStepModel(DataRetrievalStepModel):
             required_data=data.get('required_data', []),
             selected_functions=data.get('selected_functions', [])
         )
+    
+    def to_json(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False, indent=4)
+    
+    @classmethod
+    def from_json(cls, data: str) -> 'AkShareDataRetrievalStepModel':
+        return cls.from_dict(json.loads(data))
+    
+    def __json__(self) -> Dict[str, Any]:
+        return self.to_dict()
+
+    def __dict__(self):
+        return self.to_dict()
+
+    def __repr__(self) -> str:
+        return json.dumps(self.to_dict(), ensure_ascii=False) 

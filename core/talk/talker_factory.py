@@ -13,16 +13,19 @@ class TalkerFactory(metaclass=Singleton):
 
     def _discover_talker_classes(self):
         current_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"Searching for Talker classes in: {current_dir}")
         talker_pattern = re.compile(r'class\s+(\w+)\s*\([^)]*Talker[^)]*\):')
         
         for filename in os.listdir(current_dir):
             if filename.endswith('.py') and not filename.startswith('_'):
                 file_path = os.path.join(current_dir, filename)
+                print(f"Examining file: {file_path}")
                 with open(file_path, 'r', encoding='utf-8') as file:
                     content = file.read()
                     matches = talker_pattern.findall(content)
                     for class_name in matches:
-                        self.talker_classes[class_name.lower()] = filename[:-3]  # 存储类名和模块名的映射
+                        print(f"Found Talker class: {class_name} in {filename}")
+                        self.talker_classes[class_name.lower()] = filename[:-3]
 
     def get_instance(self, name: str = "") -> Talker:
         config = Config()

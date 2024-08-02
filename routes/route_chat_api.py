@@ -69,6 +69,8 @@ async def chat_stream(request: Request):
                 if isinstance(item, str):
                     yield f"data: {json.dumps({'type': 'text', 'content': item})}\n\n"
                 elif isinstance(item, dict):
+                    if ("content" in item and isinstance(item["content"], BaseModel)) or ("data" in item and isinstance(item["data"], BaseModel)):
+                        continue
                     yield f"data: {json.dumps(item)}\n\n"
                 else:
                     yield f"data: {json.dumps({'type': 'unknown', 'content': str(item)})}\n\n"
