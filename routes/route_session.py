@@ -20,7 +20,7 @@ class PlanModel(BaseModel):
     
 @router.post("/sessions")
 def create_session():
-    session_id = session_manager.add_session()
+    session_id = session_manager.add_session_by_id()
     return {"session_id": session_id}
 
 @router.get("/sessions/{session_id}")

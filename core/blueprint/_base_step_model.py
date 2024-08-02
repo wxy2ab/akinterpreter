@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import ClassVar, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic import BaseModel
 from typing import Type, Dict, Any
 
@@ -26,8 +26,34 @@ class BaseStepModel(BaseModel):
         if not hasattr(cls, 'step_type'):
             raise ValueError(f"step_type must be defined for {cls.__name__}")
         return cls.step_type
+
+    def model_dump(self, *args, **kwargs) -> Dict[str, Any]:
+        return super().model_dump(*args, **kwargs)
+
+    @classmethod
+    def model_validate(cls, obj: Any) -> 'BaseStepModel':
+        return super().model_validate(obj)
+
+    def model_dump_json(self, *args, **kwargs) -> str:
+        return super().model_dump_json(*args, **kwargs)
+
+    @classmethod
+    def model_validate_json(cls, json_data: str) -> 'BaseStepModel':
+        return super().model_validate_json(json_data)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump(exclude={'step_type'})
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'BaseStepModel':
+        return cls.model_validate(data)
     
-    model_config = { "populate_by_name": True }
+    model_config = ConfigDict(
+        populate_by_name=True,
+        json_encoders={
+            ClassVar: lambda v: str(v),
+        }
+    )
 
 class StepModelTools:
 

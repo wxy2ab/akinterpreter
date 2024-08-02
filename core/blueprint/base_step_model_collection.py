@@ -1,5 +1,6 @@
+import json
 from pydantic import BaseModel, Field, field_validator
-from typing import Dict, List, Type, Union
+from typing import Any, Dict, List, Type, Union
 from collections import OrderedDict
 
 from ._base_step_model import BaseStepModel
@@ -84,3 +85,50 @@ class BaseStepModelCollection(BaseModel):
         for index, (_, step) in enumerate(self.steps.items(), start=1):
             new_steps[index] = step.model_copy(update={'step_number': index})
         self.steps = new_steps
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """自定义序列化方法"""
+        return {
+            "steps": {
+                str(k): v.model_dump() for k, v in self.steps.items()
+            }
+        }
+
+    @classmethod
+    def model_validate(cls, obj: Any) -> 'BaseStepModelCollection':
+        """自定义反序列化方法"""
+        if isinstance(obj, str):
+            obj = json.loads(obj)
+        
+        steps = {}
+        for k, v in obj['steps'].items():
+            step_number = int(k)
+            step_type = v['type']
+            step_class = cls._get_step_class(step_type)
+            step = step_class.model_validate(v)
+            steps[step_number] = step
+
+        return cls(steps=steps)
+
+    @staticmethod
+    def _get_step_class(step_type: str) -> Type[BaseStepModel]:
+        """根据步骤类型返回对应的步骤类"""
+        # 这里需要导入所有可能的步骤类型
+        from .data_retrieval_step_model import DataRetrievalStepModel
+        from .data_analysis_step_model import DataAnalysisStepModel
+        
+        step_classes = {
+            "data_retrieval": DataRetrievalStepModel,
+            "data_analysis": DataAnalysisStepModel,
+            # 添加其他步骤类型
+        }
+        
+        return step_classes.get(step_type, BaseStepModel)
+
+    def to_json(self) -> str:
+        """将对象转换为 JSON 字符串"""
+        return json.dumps(self.model_dump())
+
+    @classmethod
+    def from_json(cls, json_str: str) -> 'BaseStepModelCollection':
+        """从 JSON 字符串创建对象"""
+        return cls.model_validate(json_str)

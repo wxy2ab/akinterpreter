@@ -15,7 +15,7 @@ class ChatManager:
 
     def create_chatbot(self, session_id)->Talker:
         if session_id not in self.sessions:
-            self.sessions[session_id] = self.factory.get_instance("WebTalker")
+            self.sessions[session_id] = self.factory.get_instance("WebBPTalker")
             self.sessions[session_id].set_session_id(session_id)
         return self.sessions[session_id]
 

@@ -13,7 +13,7 @@ import traceback
 
 router = APIRouter()
 factory = TalkerFactory()
-chatbot = factory.get_instance("WebTalker")
+chatbot = factory.get_instance("WebBPTalker")
 manager = ChatSessionManager()
 
 from core.session.chat_manager import ChatManager
