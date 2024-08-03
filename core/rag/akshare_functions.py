@@ -152,7 +152,7 @@ class AkshareFunctions:
         try:
             # 预处理查询
             focused_query = self.preprocess_query(query)
-            print(f"聚焦后的查询:\n{focused_query}")
+            #print(f"聚焦后的查询:\n{focused_query}")
 
             # 从预处理后的消息生成嵌入
             query_embedding = self.get_embeddings([focused_query])[0]

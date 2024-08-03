@@ -1,9 +1,12 @@
 import os
 import importlib
+import traceback
 from fastapi import FastAPI, APIRouter, Request, HTTPException
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from core.session.chat_session_manager import ChatSessionManager
+from core.utils.log import logger
 
 class APIService:
     def __init__(self,port=8181):
@@ -20,6 +23,7 @@ class APIService:
         
         self.load_routes()
         self.load_directory()
+        self.add_exception_handler()  
 
         from core.utils.config_setting import Config
         config = Config()
@@ -87,6 +91,15 @@ class APIService:
         import uvicorn
         uvicorn.run(self.app, host=host, port=self.port)
 
+    def add_exception_handler(self):
+        @self.app.exception_handler(Exception)
+        async def global_exception_handler(request: Request, exc: Exception):
+            error_msg = f"Unexpected error occurred: {str(exc)}\n{traceback.format_exc()}"
+            logger.error(error_msg)
+            return JSONResponse(
+                status_code=500,
+                content={"message": "Internal server error", "details": str(exc)}
+            )
 # 运行服务
 if __name__ == "__main__":
     # 创建APIService实例
