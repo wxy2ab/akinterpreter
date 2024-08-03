@@ -380,11 +380,11 @@ class StepExecutor(ABC):
         if hasattr(self.step_data, "analysis_result"):
             analysis_result =  self.step_info.analysis_result
             if not self.step_data.is_exists(analysis_result):
-                return f"分析结果不存在,需要把分析结果存储于{analysis_result}", False
+                return f"分析结果不存在,需要把分析结果存储于'{analysis_result}'", False
         save_data_to = self.step_info.save_data_to
         for data_var in save_data_to:
             if not self.step_data.is_exists(data_var):
-                return f"数据 {data_var} 不存在,需要把数据存储于{data_var}", False
+                return f"数据 {data_var} 不存在,需要用code_tools.add(name,value)把数据存储于'{data_var}'", False
         return "", True
 
     @staticmethod

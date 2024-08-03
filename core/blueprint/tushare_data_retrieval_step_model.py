@@ -7,6 +7,5 @@ from ._base_step_model import BaseStepModel
 from .data_retrieval_step_model import DataRetrievalStepModel
 
 class TushareDataRetrievalStepModel(DataRetrievalStepModel):
-    library: Literal['akshare'] = 'tushare'
-    step_type: Literal['data_retrieval'] = 'tushare_data_retrieval'
-    selected_functions: list[str] = Field(default_factory=list)
+    library: Literal['tushare'] = 'tushare'
+    step_type: Literal['tushare_data_retrieval'] = 'tushare_data_retrieval'
