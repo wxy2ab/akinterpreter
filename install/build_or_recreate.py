@@ -60,8 +60,17 @@ def download_embedding():
     print(result)
     print("Download reranker finished")
 
+def rebuild_memory():
+    current_file_directory = os.path.dirname(__file__)
+    core_directory = os.path.join(current_file_directory, '..')
+    sys.path.append(core_directory)
+    module = lazy("core.tushare_doc.make_tushare_memory")
+    module.process_tushare_doc()
 
 if __name__ == "__main__":
+    
+    download_embedding()
     check_exists()
     rebuild_db()
-    download_embedding()
+    rebuild_memory()
+    
