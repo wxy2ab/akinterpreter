@@ -28,8 +28,8 @@ interface JsonEditorProps {
 }
 
 const NODE_WIDTH = 300;
-const NODE_HEIGHT = 200;
-const NODE_VERTICAL_SPACING = 150;
+const NODE_HEIGHT = 250; // Increased height to accommodate content without scrollbar
+const NODE_VERTICAL_SPACING = 100; // Adjusted spacing
 const QUERY_SUMMARY_SPACING = 50;
 
 const CustomNode: React.FC<NodeProps> = ({ data }) => {
@@ -37,7 +37,21 @@ const CustomNode: React.FC<NodeProps> = ({ data }) => {
     <div className="px-4 py-2 shadow-md rounded-md bg-gray-800 border-2 border-gray-600 text-white w-[300px]">
       <div className="text-lg font-bold">{data.title}</div>
       <hr className="my-2 border-gray-600" />
-      <div dangerouslySetInnerHTML={{ __html: data.content }} className="text-sm" />
+      <div className="text-sm">
+        {Object.entries(data.content).map(([key, value], index, array) => {
+          if (key === 'selected_functions' || key === 'library') return null;
+          if ((key === 'required_data' || key === 'save_data_to') && Array.isArray(value) && value.length === 0) return null;
+          return (
+            <React.Fragment key={key}>
+              <div>
+                <strong>{key}:</strong> 
+                {Array.isArray(value) ? value.join(', ') : String(value)}
+              </div>
+              {index < array.length - 1 && <hr className="my-2 border-gray-600" />}
+            </React.Fragment>
+          );
+        })}
+      </div>
     </div>
   );
 };
@@ -54,7 +68,7 @@ const getLayoutedElements = (nodes: Node[], edges: Edge[]) => {
     } else if (node.id === '1') {
       yPosition = QUERY_SUMMARY_SPACING + NODE_HEIGHT;
     } else {
-      yPosition = QUERY_SUMMARY_SPACING + (index - 1) * (NODE_HEIGHT + NODE_VERTICAL_SPACING) + NODE_HEIGHT;
+      yPosition = QUERY_SUMMARY_SPACING + (parseInt(node.id) - 1) * (NODE_HEIGHT + NODE_VERTICAL_SPACING) + NODE_HEIGHT;
     }
     return {
       ...node,
@@ -105,12 +119,16 @@ const FlowChart: React.FC<{ initialNodes: Node[], initialEdges: Edge[] }> = ({ i
       fitView
       minZoom={0.1}
       maxZoom={1.5}
+      nodesDraggable={true}
+      zoomOnScroll={false}
+      panOnScroll={true}
     >
       <Controls />
       <Background />
     </ReactFlow>
   );
 };
+
 
 const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
   const [value, setValue] = useState<string>(JSON.stringify(initialJson, null, 2));
@@ -149,29 +167,23 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
         type: 'custom',
         data: { 
           title: 'Query Summary',
-          content: `<p>${data.query_summary}</p>`
+          content: { summary: data.query_summary }
         },
         position: { x: 0, y: 0 },
         draggable: true,
       });
 
-      if (Array.isArray(data.steps)) {
-        data.steps.forEach((step: any, index: number) => {
-          const stepContent = Object.entries(step)
-            .map(([key, value]) => `
-              <div>
-                <strong>${key}:</strong> 
-                ${Array.isArray(value) ? value.join(', ') : value}
-              </div>
-            `)
-            .join('<hr class="my-2 border-gray-600" />');
-
+      if (data.steps && typeof data.steps === 'object') {
+        const stepNumbers = Object.keys(data.steps).sort((a, b) => parseInt(a) - parseInt(b));
+        
+        stepNumbers.forEach((stepNumber, index) => {
+          const step = data.steps[stepNumber];
           nodes.push({
             id: `${step.step_number}`,
             type: 'custom',
             data: { 
               title: `Step ${step.step_number}`,
-              content: stepContent
+              content: step
             },
             position: { x: 0, y: 0 },
             draggable: true,
@@ -179,9 +191,9 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
 
           if (index === 0) {
             edges.push({
-              id: `e-summary-${index + 1}`,
+              id: `e-summary-${step.step_number}`,
               source: 'query_summary',
-              target: `${index + 1}`,
+              target: `${step.step_number}`,
               animated: true,
               type: 'smoothstep',
               markerEnd: {
@@ -190,9 +202,9 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
             });
           } else {
             edges.push({
-              id: `e${index}-${index + 1}`,
-              source: `${index}`,
-              target: `${index + 1}`,
+              id: `e${stepNumbers[index-1]}-${step.step_number}`,
+              source: `${stepNumbers[index-1]}`,
+              target: `${step.step_number}`,
               animated: true,
               type: 'smoothstep',
               markerEnd: {
@@ -208,7 +220,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
           type: 'custom',
           data: { 
             title: '分析总结',
-            content: '<p>基于以上步骤的分析总结</p>'
+            content: { summary: '基于以上步骤的分析总结' }
           },
           position: { x: 0, y: 0 },
           draggable: true,
@@ -216,7 +228,7 @@ const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) =>
 
         edges.push({
           id: `e-last-summary`,
-          source: `${data.steps.length}`,
+          source: `${stepNumbers[stepNumbers.length - 1]}`,
           target: 'summary',
           animated: true,
           type: 'smoothstep',
