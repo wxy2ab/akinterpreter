@@ -115,10 +115,12 @@ class BaseStepModelCollection(BaseModel):
         # 这里需要导入所有可能的步骤类型
         from .data_retrieval_step_model import DataRetrievalStepModel
         from .data_analysis_step_model import DataAnalysisStepModel
+        from .akshare_data_retrieval_step_model import AkShareDataRetrievalStepModel
         
         step_classes = {
             "data_retrieval": DataRetrievalStepModel,
             "data_analysis": DataAnalysisStepModel,
+            "akshare_data_retrieval": AkShareDataRetrievalStepModel,
             # 添加其他步骤类型
         }
         

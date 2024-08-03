@@ -7,6 +7,7 @@ from .data_retrieval_step_model import DataRetrievalStepModel
 class AkShareDataRetrievalStepModel(DataRetrievalStepModel):
     library: Literal['akshare'] = 'akshare'
     step_type: ClassVar[Literal['akshare_data_retrieval']] = 'akshare_data_retrieval'
+    selected_functions: list[str] = Field(default_factory=list)
     
     # def to_dict(self) -> Dict[str, Any]:
     #     return {

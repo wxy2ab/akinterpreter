@@ -3,6 +3,7 @@ from datetime import datetime
 import os
 import json
 from typing import Callable, List, Dict, Tuple, Union, Optional, Any, Generator
+from ..blueprint.step_model_collection import StepModelCollection
 from core.scheduler.schedule_manager import SchedulerManager
 from .message import send_message
 from .parse_query_as_command import create_command_parser
@@ -75,6 +76,15 @@ class AkshareBPPlanner:
 
     def get_current_plan(self) -> Dict[str, Any]:
         return self.blueprint.blueprint.to_dict() if self.blueprint.blueprint else {}
+
+    def set_current_plan(self, current_plan: Dict[str, Any]):
+        self.blueprint.blueprint =StepModelCollection.from_dict(current_plan)
+        self._notify_plan_change(current_plan)
+
+    def set_step_codes(self, step_codes: Dict[int, str]):
+        for step_number, code in step_codes.items():
+            self.blueprint.step_data.set_step_code(step_number, code)
+        self._notify_code_change(step_codes)
 
     def get_max_retry(self) -> int:
         return self.blueprint.max_retry

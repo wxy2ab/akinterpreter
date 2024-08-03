@@ -25,6 +25,11 @@ class BluePrint:
     def blueprint(self)->StepModelCollection:
         return self._blueprint
     
+    @blueprint.setter
+    def blueprint(self,value:StepModelCollection):
+        self._blueprint = value
+        self.blueprint_builder.blueprint = value
+    
     def build_blueprint(self,query:str)->Generator[dict[str,any],None,None]:
         yield from self.blueprint_builder.build_blueprint(query)
         self._blueprint = self.blueprint_builder.blueprint

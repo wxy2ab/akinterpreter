@@ -124,7 +124,7 @@ class WebBPTalker(Talker):
             if session_dat.current_plan:
                 self.akshare_planner.set_current_plan(session_dat.current_plan)
             if session_dat.step_codes:
-                self.akshare_planner.set_setp_codes(session_dat.step_codes)
+                self.akshare_planner.set_step_codes(session_dat.step_codes)
             if session_dat.data:
                 self.akshare_planner._set_from_setting_data(session_dat.data)
 

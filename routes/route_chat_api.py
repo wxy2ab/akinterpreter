@@ -1,4 +1,5 @@
 import logging
+import os
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel
@@ -34,20 +35,30 @@ async def chat_endpoint(request: ChatRequest):
 
 @router.post("/api/schat")
 async def schat_endpoint(request: SessionChatRequest):
+    if os.environ.get("DEBUG_LEVEL") == "debug":
+        return await schat_endpoint_debug(request)
+    else:
+        return await schat_endpoint_production(request)
+
+async def schat_endpoint_debug(request: SessionChatRequest):
+    session_id = request.session_id
+    if not session_id:
+        raise HTTPException(status_code=400, detail="session_id is required")
+    
+    logger.info(f"Received chat request for session {session_id}: {request.message}")
+    
+    chatbot = chat_manager.get_chatbot(session_id)
+    if not chatbot:
+        chatbot = chat_manager.create_chatbot(session_id)
+        logger.info(f"Created new chatbot instance for session ID: {session_id}")
+    
+    generator = chatbot.chat(request.message)
+    chat_sid = manager.create_session(generator)
+    return JSONResponse({"session_id": chat_sid})
+
+async def schat_endpoint_production(request: SessionChatRequest):
     try:
-        session_id = request.session_id
-        if not session_id:
-            raise HTTPException(status_code=400, detail="session_id is required")
-        
-        logger.info(f"Received chat request for session {session_id}: {request.message}")
-        
-        chatbot = chat_manager.get_chatbot(session_id)
-        if not chatbot:
-            chatbot = chat_manager.create_chatbot(session_id)
-            logger.info(f"Created new chatbot instance for session ID: {session_id}")
-        generator = chatbot.chat(request.message)
-        chat_sid = manager.create_session(generator)
-        return JSONResponse({"session_id": chat_sid}) 
+        return await schat_endpoint_debug(request)
     except Exception as e:
         logger.error(f"Error in schat endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -71,9 +82,18 @@ async def chat_stream(request: Request):
                 elif isinstance(item, dict):
                     if ("content" in item and isinstance(item["content"], BaseModel)) or ("data" in item and isinstance(item["data"], BaseModel)):
                         continue
-                    yield f"data: {json.dumps(item)}\n\n"
+                    try:
+                        serialized_item = json.dumps(item)
+                        yield f"data: {serialized_item}\n\n"
+                    except TypeError:
+                        logger.warning(f"Skipping non-serializable item: {item}")
+                        continue
                 else:
-                    yield f"data: {json.dumps({'type': 'unknown', 'content': str(item)})}\n\n"
+                    try:
+                        yield f"data: {json.dumps({'type': 'unknown', 'content': str(item)})}\n\n"
+                    except TypeError:
+                        logger.warning(f"Skipping non-serializable item: {item}")
+                        continue
                 await asyncio.sleep(0)  # 让出控制权给事件循环
             logger.info(f"Finished generating response for session: {session_id}")
             yield "data: [DONE]\n\n"
