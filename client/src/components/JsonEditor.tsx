@@ -6,6 +6,7 @@ import ReactFlow, {
   Edge,
   Controls,
   Background,
+  BackgroundVariant,
   NodeProps,
   useNodesState,
   useEdgesState,
@@ -83,6 +84,7 @@ const FlowChart: React.FC<{ initialNodes: Node[], initialEdges: Edge[] }> = ({ i
   const { fitView } = useReactFlow();
   const [nodes, setNodes] = useState<Node[]>(initialNodes);
   const [edges, setEdges] = useState<Edge[]>(initialEdges);
+  const [initialFit, setInitialFit] = useState<boolean>(true);
 
   useEffect(() => {
     setNodes(initialNodes);
@@ -105,8 +107,11 @@ const FlowChart: React.FC<{ initialNodes: Node[], initialEdges: Edge[] }> = ({ i
   );
 
   useEffect(() => {
-    fitView({ padding: 0.2 });
-  }, [fitView, nodes, edges]);
+    if (initialFit) {
+      fitView({ padding: 0.2 });
+      setInitialFit(false);
+    }
+  }, [fitView, initialFit]);
 
   return (
     <ReactFlow
@@ -120,15 +125,15 @@ const FlowChart: React.FC<{ initialNodes: Node[], initialEdges: Edge[] }> = ({ i
       minZoom={0.1}
       maxZoom={1.5}
       nodesDraggable={true}
-      zoomOnScroll={false}
+      zoomOnScroll={true}
       panOnScroll={true}
+      elementsSelectable={true}
     >
       <Controls />
-      <Background />
+      <Background variant={BackgroundVariant.Dots} gap={12} size={1} />
     </ReactFlow>
   );
 };
-
 
 const JsonEditor: React.FC<JsonEditorProps> = ({ initialJson, onJsonChange }) => {
   const [value, setValue] = useState<string>(JSON.stringify(initialJson, null, 2));
