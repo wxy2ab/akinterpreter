@@ -12,8 +12,14 @@ class CodeTools:
             if cls._instance is None:
                 cls._instance = super(CodeTools, cls).__new__(cls)
                 cls._instance.data = {}
+                cls._instance.recovers = {}
                 cls._instance.summarizer = DataSummarizer()
         return cls._instance
+
+    def add_with_recover(self, name, value):
+        with self._lock:
+            self.data[name] = value
+            self.recovers[name] = value
 
     def add_var(self, name, value):
         with self._lock:
@@ -43,6 +49,8 @@ class CodeTools:
     def clear(self):
         with self._lock:
             self.data.clear()
+            # Restore values from recovers
+            self.data.update(self.recovers)
 
     def add(self, name, value):
         with self._lock:

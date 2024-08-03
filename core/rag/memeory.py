@@ -202,7 +202,32 @@ class Memory:
         ranked_texts = self.llm_rank(f"{query}", texts, final_topk)
         
         return ranked_texts
+    def get_functions(self, query: str, initial_topk: int = 50, final_topk: int = 5) -> List[str]:
+        """
+        获取与查询最相关的函数名列表。
 
+        Args:
+            query (str): 查询字符串，描述要完成的任务。
+            initial_topk (int): 初始检索的函数数量。默认为50。
+            final_topk (int): 最终返回的函数数量。默认为5。
+
+        Returns:
+            List[str]: 最相关函数名的列表。
+        """
+        retrieved_functions = self.retrieves(query, initial_topk, final_topk)
+        
+        # 提取函数名
+        function_names = []
+        for func in retrieved_functions:
+            # 假设函数描述的格式是 "函数名: 函数描述"
+            parts = func.split(':', 1)
+            if len(parts) > 1:
+                function_names.append(parts[0].strip())
+            else:
+                # 如果没有冒号，就使用整个字符串作为函数名
+                function_names.append(func.strip())
+        
+        return function_names
     def llm_rank1(self, query: str, texts: List[str], top_k: int) -> List[str]:
         # Prepare the prompt for LLM ranking
         ranking_prompt = f"""Query: {query}
@@ -236,7 +261,29 @@ Your ranking:"""
         # Apply the ranking and return top_k results
         ranked_texts = [texts[i-1] for i in ranking[:top_k]]
         return ranked_texts
+    def search_documents(self, query: str, topk: int = 50) -> List[str]:
+        """
+        直接搜索与查询最相关的文档，不经过rerank步骤。
 
+        Args:
+            query (str): 查询字符串。
+            topk (int): 返回的文档数量。默认为50。
+
+        Returns:
+            List[str]: 最相关文档的列表。
+        """
+        # 预处理查询
+        focused_query = self.preprocess_query(query)
+        
+        # 为预处理后的查询生成嵌入
+        query_emb = self.embedding_client.convert_to_embedding([focused_query])[0]
+        
+        # 使用嵌入相似度排序并选择前topk个结果
+        sorted_data = sorted(self.data, key=lambda x: self.sim_func(x['emb'], query_emb), reverse=True)
+        top_results = sorted_data[:topk]
+        
+        # 返回文档内容
+        return [item['text'] for item in top_results]
     def to_json(self) -> str:
         return json.dumps({"data": self.data}, default=lambda obj: obj.tolist() if isinstance(obj, np.ndarray) else obj)
 
