@@ -41,7 +41,7 @@ class Memory:
         preprocess_prompt = f"""原始查询：{query}
 
 请分析这个查询，并提供以下信息：
-1. 主要查询对象：（例如：股票、指数、期货等）
+1. 主要查询对象：（例如：股票、指数、期货、美股、港股等）
 2. 数据类型：（例如：行情数据、财务数据、研究报告等）
 3. 关键词：（提取查询中的关键词，可以包括同义词）
 
@@ -51,18 +51,19 @@ class Memory:
 - 如果遇到具体的股票代码，请用"股票"替代。
 - 如果遇到期货合约代码，请用"期货合约"代替
 - 如果遇到指数代码，请用"指数"代替
-- 区分股票、期货、指数。尽量不要混合出现
+- 严格区分股票、期货、指数。如非必要不要让这些词混合出现
 - 时间信息，比如2024年，时间范围，比如1月到6月，是没有帮助的，不要提供。
-- 具体的股票代码和合约代码，指数代码没有帮助，不要提供。
-- 如果查询提及数据周期，需要添加周期关键词，比如"日线"、"分钟"等。
+- 具体的股票代码、合约代码、指数代码没有帮助，不要提供。
+- 如果查询提及数据周期，需要添加周期关键词，比如"日线"、"分钟"等，查询数据的默认周期是日线。
+- 请反复检查有没有违反上面的注意事项
 
 请直接列出关键信息，无需包含"主要查询对象："、"数据类型："和"关键词："等标签。
 每项信息占一行，用逗号分隔多个词。
 
 例如：
-股票,指数
+股票,
 行情数据,财务报表
-日K线,成交量,市值
+日线,成交量,市值
 """
         if is_stream:
             return self._process_stream_result(self.llm_cheap.one_chat(preprocess_prompt, is_stream=True))
@@ -70,7 +71,60 @@ class Memory:
             focused_query = self.llm_cheap.one_chat(preprocess_prompt).strip()
             return self._process_result(focused_query)
 
+
     def llm_rank(self, query: str, texts: List[str], top_k: int) -> List[str]:
+        # 准备用于LLM排序的提示
+        numbered_functions = [f"编号:{i+1}, 函数:{text}" for i, text in enumerate(texts)]
+        ranking_prompt = f"""任务：{query}
+
+你是一个智能助手，需要帮助用户完成上述任务。以下是可能有助于完成任务的函数列表。请仔细分析每个函数，并选择最可能帮助完成任务的函数。
+
+可用函数列表：
+{chr(10).join(numbered_functions)}
+
+评估标准：
+1. 函数的功能是否直接匹配任务需求
+2. 函数的输入输出是否符合任务要求
+3. 函数的描述是否暗示它可以处理任务中提到的数据类型或操作
+
+请提供您的选择结果，使用以下格式：
+[最符合的编号1, 最符合的编号2, 最符合的编号3, ...]
+
+注意事项：
+- 只返回编号，不要返回函数名称。
+- 最相关的函数应该排在前面。
+- 只包括相关的函数，最多不超过{top_k}个。
+- 如果没有相关函数，请返回空列表 []。
+- 确保返回的编号在有效范围内（1到{len(texts)}）。
+
+您的选择结果："""
+
+        # 获取LLM的排序结果
+        llm_response = self.llm_cheap.one_chat(ranking_prompt).strip()
+        
+        # 解析排序结果
+        try:
+            # 移除可能的前后缀并分割
+            numbers = [int(num.strip()) for num in llm_response.strip('[]').replace(' ', '').split(',') if num.strip()]
+            
+            # 过滤有效的编号并转换为0-based索引
+            valid_indices = [num - 1 for num in numbers if 1 <= num <= len(texts)]
+            
+            # 如果没有有效的排序结果，使用原始顺序
+            if not valid_indices:
+                print("未找到有效的排序结果。使用原始顺序。")
+                valid_indices = list(range(min(top_k, len(texts))))
+            else:
+                # 限制结果数量
+                valid_indices = valid_indices[:top_k]
+        except Exception as e:
+            print(f"解析LLM排序结果时出错：{e}。使用原始顺序。")
+            valid_indices = list(range(min(top_k, len(texts))))
+
+        # 返回排序后的函数
+        return [texts[i] for i in valid_indices]
+
+    def llm_rank2(self, query: str, texts: List[str], top_k: int) -> List[str]:
         # 准备用于LLM排序的提示
         ranking_prompt = f"""查询：{query}
 
@@ -145,7 +199,7 @@ class Memory:
         texts = [m['text'] for m in memory]
         
         # Use LLM for ranking
-        ranked_texts = self.llm_rank(query, texts, final_topk)
+        ranked_texts = self.llm_rank(f"{query}", texts, final_topk)
         
         return ranked_texts
 
