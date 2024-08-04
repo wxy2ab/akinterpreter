@@ -37,6 +37,10 @@ class CodeToolsRequired(metaclass=Singleton):
     def is_required(self):
         return self.required
     
+    @property
+    def tools(self):
+        return self._tools
+    
 
 
 
