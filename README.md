@@ -1,11 +1,12 @@
-# akinterpreter 使用akshare的金融市场查询和分析工具
+# akinterpreter 使用akshare tushare的金融市场查询和分析工具
 
 ![Project Logo](./docs/logo256.png)
 
 ## 介绍
 [akshare](https://akshare.akfamily.xyz/) 是一个开源数据工具([github地址](https://github.com/akfamily/akshare))，里面有900多个函数，可以查询国内外的各种金融数据，包括股票，期货，期权，债券，指数，基金，外汇，宏观经济，新闻，美股，港股等等各类数据。目前持续活跃，保持高频次的更新。
 如果不想花钱，想利用API查询和分析数据，那么akshare是非常好的选择。
-本项目就是利用LLM的API，基于akshare搭建解释器，只要你会搭建python环境，就可以用自然语言快速完成一些查询和分析。
+[tushare](https://tushare.pro/) 是一个性能更好，数据质量更稳定的数据平台。只需要一点费用，就能访问这些高质量数据。是目前最具性价比的金融数据平台。可以可靠的获取分钟数据。以及质量更好的新闻和研报数据。使用tushare需要先去网站注册key，并开通权限，否则无法使用。
+本项目是利用LLM的API，搭建的解释器，可以帮你自动获取数据，分析数据。只要你会搭建python环境，就可以用自然语言快速完成一些查询和分析。
 
 ## 特性
 - 自然语言查询，不用写代码
@@ -36,7 +37,7 @@ pip install -r requirments.txt
 # 启动cli
 python cli.py
 
-# 启动web
+# 启动web，首次运行需要准备数据，会慢一些
 python main.py
 ```
 
@@ -73,8 +74,8 @@ cp settings.ini.template settings.ini
 ```text
 [Default]
 llm_api = DeepSeekClient        #主要使用的LLM API，取值看下面的列表。需要自己申请key，并配置KEY
-llm_cheap_api = CheapClaude     #处理简单NLP任务，暂时没有使用
-embedding_api = BGELargeZhAPI   #文本向量化用，暂时没有使用
+llm_cheap_api = CheapClaude     #处理简单NLP任务，建议使用CheapMiniMax(目前赠送1亿tokens) ,需要配置对应API
+embedding_api = MiniMaxEmbedding   #文本向量化用，如果你注册了MiniMax，那个建议使用MiniMax的embedding
 ranker_api = BaiduBCEReranker   #二次排序用，暂时没有使用
 talker = CliTalker              #不要改动
 project_id =                    #Google gemini API 需要的proect id，非gemini API不用管
