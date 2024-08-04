@@ -3,7 +3,7 @@ from pydantic import Field
 from ._base_step_model import BaseStepModel
 
 class DataRetrievalStepModel(BaseStepModel):
-    step_type: ClassVar[Literal['data_retrieval']] = Field('data_retrieval', allow_mutation=False) 
+    step_type: ClassVar[str] = Field('data_retrieval', allow_mutation=False) 
     selected_functions: List[str] = Field(default_factory=list)
 
     # def to_dict(self) -> Dict[str, Any]:

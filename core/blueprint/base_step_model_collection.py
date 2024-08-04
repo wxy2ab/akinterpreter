@@ -94,7 +94,7 @@ class BaseStepModelCollection(BaseModel):
         }
 
     @classmethod
-    def model_validate(cls, obj: Any) -> 'BaseStepModelCollection':
+    def model_validate1(cls, obj: Any) -> 'BaseStepModelCollection':
         """自定义反序列化方法"""
         if isinstance(obj, str):
             obj = json.loads(obj)
@@ -108,7 +108,37 @@ class BaseStepModelCollection(BaseModel):
             steps[step_number] = step
 
         return cls(steps=steps)
+    
+    @classmethod
+    def model_validate(cls, obj: Any) -> 'BaseStepModelCollection':
+        if isinstance(obj, str):
+            obj = json.loads(obj)
+        
+        steps = {}
+        for k, v in obj['steps'].items():
+            step_number = int(k)
+            step_type = v['type']
+            print(f"Processing step {step_number}, type: {step_type}")
+            print(f"Full step data: {json.dumps(v, indent=2)}")
+            step_class = cls._get_step_class(step_type)
+            print(f"Step class: {step_class}")
+            try:
+                # Try both ways of creating the model
+                print("Attempting model_validate...")
+                step = step_class.model_validate(v)
+                print("model_validate successful")
+            except Exception as e:
+                print(f"model_validate failed: {str(e)}")
+                try:
+                    print("Attempting direct instantiation...")
+                    step = step_class(**v)
+                    print("Direct instantiation successful")
+                except Exception as e:
+                    print(f"Direct instantiation failed: {str(e)}")
+                    raise
+            steps[step_number] = step
 
+        return cls(steps=steps)
     @staticmethod
     def _get_step_class(step_type: str) -> Type[BaseStepModel]:
         """根据步骤类型返回对应的步骤类"""

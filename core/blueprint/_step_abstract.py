@@ -285,6 +285,7 @@ class StepCodeGenerator(ABC):
             yield send_message(f"Maximum retry count ({MAX_RETRIES}) reached, unable to fully fix the code.", "warning")
         else:
             yield send_message("Code fixing complete, no more errors found.", "info")
+
     @staticmethod
     def fix_code_prompt(code: str, error: str) -> str:
         return f"""
@@ -425,7 +426,7 @@ class StepExecutor(ABC):
         self.llm_client  = self.llm_provider.new_llm_client()
         self.max_retry = 8
 
-    @retry(stop=stop_after_attempt(3))
+    @retry(stop=stop_after_attempt(8))
     def execute_step_code(self) -> Generator[Dict[str, Any], None, None]:
         step_number = self.step_info.step_number
         code = self.step_data.get_step_code(step_number)

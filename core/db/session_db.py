@@ -1,7 +1,9 @@
+from base64 import b64decode, b64encode
+import base64
 import json
 import duckdb
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from ..model.user_session_model import UserSession
 from ..model.chat_list_model import ChatListModel
 from ..utils.single_ton import Singleton
@@ -43,23 +45,40 @@ class SessionDb(metaclass=Singleton):
             )
         """)
 
-    def _safe_serialize(self, data: Any) -> bytes:
-        try:
-            return msgpack.packb(data, use_bin_type=True)
-        except Exception as e:
-            logger.error(f"Serialization error: {e}")
-            return msgpack.packb(str(data), use_bin_type=True)  # Fallback to string serialization
 
-    def _safe_deserialize(self, data: bytes) -> Any:
+    def _safe_serialize(self, data: Any) -> str:
         try:
-            return msgpack.unpackb(data, raw=False)
+            packed = msgpack.packb(data, use_bin_type=True)
+            return base64.urlsafe_b64encode(packed).decode('ascii')
         except Exception as e:
-            logger.error(f"Deserialization error: {e}")
+            logger.warning(f"MessagePack serialization failed, falling back to JSON: {e}")
             try:
-                # Attempt to decode as string, then as JSON (for backwards compatibility)
-                return json.loads(data.decode('utf-8'))
-            except:
-                return str(data)  # Last resort: return as string
+                return json.dumps(data)
+            except Exception as e:
+                logger.error(f"JSON serialization also failed: {e}")
+                raise Exception("Unable to serialize data") from e
+
+    def _safe_deserialize(self, data: Union[str, bytes, None]) -> Any:
+        if data is None:
+            return None
+        
+        if isinstance(data, bytes):
+            data = data.decode('ascii', errors='replace')
+        
+        if not isinstance(data, str):
+            raise Exception(f"Expected str or bytes, got {type(data)}")
+        
+        try:
+            # Try to decode base64 and then unpack with msgpack
+            decoded = base64.urlsafe_b64decode(data)
+            return msgpack.unpackb(decoded, raw=False)
+        except Exception as e:
+            logger.warning(f"MessagePack deserialization failed, trying JSON: {e}")
+            try:
+                return json.loads(data)
+            except json.JSONDecodeError as je:
+                logger.error(f"JSON deserialization also failed: {je}")
+                raise Exception("Unable to deserialize data") from je
 
     def add_session(self, session: UserSession):
         """
@@ -68,46 +87,53 @@ class SessionDb(metaclass=Singleton):
         Args:
             session (UserSession): The UserSession object to add or update.
         """
-        cursor = self.conn.cursor()
-        # Check if the session_id already exists
-        cursor.execute("SELECT session_id FROM user_sessions WHERE session_id = ?", (session.session_id,))
-        existing_session = cursor.fetchone()
+        with self.conn.cursor() as cursor:
+            cursor.execute("BEGIN")
+            try:
+                # Check if the session_id already exists
+                cursor.execute("SELECT session_id FROM user_sessions WHERE session_id = ?", (session.session_id,))
+                existing_session = cursor.fetchone()
 
-        if existing_session:
-            # Session exists, perform an UPDATE
-            cursor.execute(
-                "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, "
-                "chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? "
-                "WHERE session_id = ?",
-                (
-                    session.created_at,
-                    session.expires_at,
-                    session.last_request_time,
-                    self._safe_serialize(session.chat_history),
-                    self._safe_serialize(session.current_plan),
-                    self._safe_serialize(session.step_codes),
-                    self._safe_serialize(session.data),
-                    session.chat_list_id,
-                    session.session_id,
-                ),
-            )
-        else:
-            # Session does not exist, perform an INSERT
-            cursor.execute(
-                "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    session.session_id,
-                    session.created_at,
-                    session.expires_at,
-                    session.last_request_time,
-                    self._safe_serialize(session.chat_history),
-                    self._safe_serialize(session.current_plan),
-                    self._safe_serialize(session.step_codes),
-                    self._safe_serialize(session.data),
-                    session.chat_list_id,
-                ),
-            )
+                if existing_session:
+                    # Session exists, perform an UPDATE
+                    cursor.execute(
+                        "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, "
+                        "chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? "
+                        "WHERE session_id = ?",
+                        (
+                            session.created_at,
+                            session.expires_at,
+                            session.last_request_time,
+                            self._safe_serialize(session.chat_history),
+                            self._safe_serialize(session.current_plan),
+                            self._safe_serialize(session.step_codes),
+                            self._safe_serialize(session.data),
+                            session.chat_list_id,
+                            session.session_id,
+                        ),
+                    )
+                else:
+                    # Session does not exist, perform an INSERT
+                    cursor.execute(
+                        "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        (
+                            session.session_id,
+                            session.created_at,
+                            session.expires_at,
+                            session.last_request_time,
+                            self._safe_serialize(session.chat_history),
+                            self._safe_serialize(session.current_plan),
+                            self._safe_serialize(session.step_codes),
+                            self._safe_serialize(session.data),
+                            session.chat_list_id,
+                        ),
+                    )
+                cursor.execute("COMMIT")
+            except Exception as e:
+                cursor.execute("ROLLBACK")
+                logger.error(f"Error in add_session: {e}")
+                raise e
 
 
     def get_session(self, session_id: str) -> Optional[UserSession]:
@@ -117,34 +143,45 @@ class SessionDb(metaclass=Singleton):
         ).fetchone()
 
         if result:
-            return UserSession(
-                session_id=result[0],
-                created_at=result[1],
-                expires_at=result[2],
-                last_request_time=result[3],
-                chat_history=self._safe_deserialize(result[4]),
-                current_plan=self._safe_deserialize(result[5]),
-                step_codes=self._safe_deserialize(result[6]),
-                data=self._safe_deserialize(result[7]),
-                chat_list_id=result[8]
-            )
+            session_data = {
+                "session_id": result[0],
+                "created_at": result[1],
+                "expires_at": result[2],
+                "last_request_time": result[3],
+                "chat_history": self._safe_deserialize(result[4]),
+                "current_plan": self._safe_deserialize(result[5]),
+                "step_codes": self._safe_deserialize(result[6]),
+                "data": self._safe_deserialize(result[7]),
+                "chat_list_id": result[8]
+            }
+            
+            try:
+                return UserSession(**session_data)
+            except Exception as e:
+                logger.error(f"Error creating UserSession: {e}")
+                logger.error(f"Session data: {session_data}")
+                return None
         return None
 
     def update_session(self, session: UserSession):
-        self.conn.execute(
-            "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? WHERE session_id = ?",
-            (
-                session.created_at, 
-                session.expires_at, 
-                session.last_request_time, 
-                self._safe_serialize(session.chat_history), 
-                self._safe_serialize(session.current_plan), 
-                self._safe_serialize(session.step_codes), 
-                self._safe_serialize(session.data), 
-                session.chat_list_id,
-                session.session_id
+        try:
+            self.conn.execute(
+                "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? WHERE session_id = ?",
+                (
+                    session.created_at, 
+                    session.expires_at, 
+                    session.last_request_time, 
+                    self._safe_serialize(session.chat_history), 
+                    self._safe_serialize(session.current_plan), 
+                    self._safe_serialize(session.step_codes), 
+                    self._safe_serialize(session.data), 
+                    session.chat_list_id,
+                    session.session_id
+                )
             )
-        )
+        except Exception as e:
+            logger.error(f"Error in update_session: {e}")
+            raise
 
     def update_last_request_time(self, session_id: str, last_request_time: datetime):
         self.conn.execute(
@@ -206,7 +243,7 @@ class SessionDb(metaclass=Singleton):
             (session_id,)
         ).fetchone()
 
-        if result:
+        if result and result[0]:
             return self._safe_deserialize(result[0])
         return {}
 
@@ -325,3 +362,8 @@ class SessionDb(metaclass=Singleton):
     def chat_list_is_id_exists(self, chat_list_id: str) -> bool:
         result = self.conn.execute("SELECT 1 FROM chat_list WHERE chat_list_id = ?", (chat_list_id,)).fetchone()
         return result is not None
+
+    def close_connection(self):
+        if self.conn:
+            self.conn.close()
+            self.conn = None

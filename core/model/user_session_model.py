@@ -9,21 +9,26 @@ class UserSession(BaseModel):
     created_at: datetime
     expires_at: datetime
     last_request_time: datetime
-    chat_history: Optional[List[dict]] = Field(default_factory=list)
-    current_plan: Optional[Dict] = Field(default_factory=dict)
-    step_codes: Optional[Dict] = Field(default_factory=dict)
-    data: Optional[Dict] = Field(default_factory=dict)
+    chat_history: Optional[List[Dict[str, Any]]] = Field(default_factory=list)
+    current_plan: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    step_codes: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    data: Optional[Dict[str, Any]] = Field(default_factory=dict)
     def get(self, key: str, default: Any = None) -> Any:
         keys = key.split(".")
-        value = self.__dict__  # 获取属性字典，从 data 开始查找
+        value = self  # 从 self 开始，而不是 self.__dict__
 
         for k in keys:
-            if isinstance(value, dict) and k in value:
-                value = value[k]
+            if isinstance(value, dict):
+                value = value.get(k, default)
+                if value == default:
+                    return default
+            elif hasattr(value, k):
+                value = getattr(value, k)
             else:
                 return default
 
         return value
+    
     def has(self, key: str) -> bool:
         """
         检查 UserSession 模型中是否存在指定的键，并且值不为 None。
@@ -38,11 +43,16 @@ class UserSession(BaseModel):
         value = self
 
         for k in keys:
-            if hasattr(value, k):  # 检查属性是否存在
-                value = getattr(value, k)  # 获取属性值
-                if value is None:  # 判断是否为 None
+            if hasattr(value, k):
+                value = getattr(value, k)
+                if value is None:
                     return False
             else:
                 return False
 
         return True
+    class Config:
+        populate_by_name = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }

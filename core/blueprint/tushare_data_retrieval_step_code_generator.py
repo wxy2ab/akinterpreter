@@ -27,6 +27,7 @@ class TushareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         self.llm_tools = LLMTools()
         self.code_enhancement_system = CodeEnhancementSystem()
 
+
     @retry(stop=stop_after_attempt(3),retry=retry_if_exception(False))
     def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
         selected_functions = self.step_info.selected_functions
@@ -151,3 +152,94 @@ class TushareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         """
 
         return prompt
+
+    def post_enhancement(self) -> Generator[str, None, None]:
+        retries = 0
+        MAX_RETRIES = 5
+        enhanced_prompt = self.code_enhancement_system.apply_post_enhancement(self.step_info.type,
+                                                                                self.step_info.description,
+                                                                                self.step_info.description)
+        while retries < MAX_RETRIES:
+            # 第一步：检查代码中的致命错误，要求返回 JSON 格式
+            check_prompt = f"""
+            请检查以下代码是否存在会影响其执行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
+            ```json
+            [
+                {{"error": "错误描述1", "line": "可能的问题行号1"}},
+                {{"error": "错误描述2", "line": "可能的问题行号2"}}
+            ]
+            ```
+            如果没有错误，请返回空列表：
+            ```json
+            []
+            ```
+
+            代码：
+            ```python
+            {self._step_code}
+            ```
+
+            {f"此外，在检查代码时请考虑以下增强建议：" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
+
+            注意：
+            - 如果您不是非常确定，请不要返回错误。如果没有问题，请返回空列表。
+            - code_tools 对象是确定可以使用的。
+            - 不允许import tushare as ts ，这个代码是无法运行的，发现这个代码立即报错。必须使用ts=code_tools["ts"]来导入tushare。
+            - 不要检查tsgetter['查询内容'],查询内容可以是任意字符串
+            - 不要检查pro之中是否存在某个方法，pro是一个tushare的api对象，可以直接调用方法。
+            """
+            
+            check_result = ""
+            for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
+                yield send_message(chunk, "code_check")
+                check_result += chunk
+            
+            try:
+                errors = self.llm_tools.extract_json_from_text(check_result)
+                output, result = self.check_step_result(self._step_code)
+                if not result:
+                    errors.append({"error": output, "line": "-"})
+            except json.JSONDecodeError:
+                yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
+                errors = []
+
+            # 如果没有错误，退出循环
+            if not errors:
+                yield send_message(f"代码检查完成，未发现致命错误。（重试次数：{retries}）", "info")
+                break
+
+            # 第二步：如果有致命错误，进行修复
+            yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...（重试次数：{retries + 1}）", "info")
+            
+            error_descriptions = "\n".join([f"- {error['error']} （可能在第 {error['line']} 行）" for error in errors])
+            fix_prompt = f"""
+            以下代码存在一些问题：
+            ```python
+            {self._step_code}
+            ```
+
+            这些问题包括：
+            {error_descriptions}
+
+            {f"此外，在修复代码时请考虑以下增强建议：" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
+
+            请修复这些问题，并提供完整的修正后的代码。修复后的代码使用 ```python 和 ``` 包裹。
+            """
+            
+            fixed_code = ""
+            for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+                yield send_message(chunk, "code_fix")
+                fixed_code += chunk
+            
+            self._step_code = self.llm_tools.extract_code(fixed_code)
+            yield send_message("代码已修复。", "info")
+            yield send_message(self._step_code, "full_code")
+
+            retries += 1
+
+        if retries == MAX_RETRIES:
+            yield send_message(f"达到最大重试次数（{MAX_RETRIES}），无法完全修复代码。", "warning")
+        else:
+            yield send_message("代码修复完成，未发现更多错误。", "info")
