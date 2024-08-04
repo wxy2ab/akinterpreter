@@ -10,7 +10,7 @@ def tsdata(func):
         limit = kwargs.pop('limit', None)
         offset = kwargs.pop('offset', None)
         if limit is None:
-            limit = 1000
+            limit = 2000
 
         all_data = []
         while True:
@@ -51,11 +51,10 @@ def is_socket_connected(host, port):
         return False
 
 
-def check_proxy_running(host, port=10808,type="socks5"):
+def check_proxy_running(host, port=10808,type="http"):
     # 要检查的地址和端口
     host_to_check = host
 
-    
     from .config_setting import Config
     from .log import logger
     config = Config()

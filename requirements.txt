@@ -28,3 +28,6 @@ python-docx
 seaborn
 markdown
 BCEmbedding
+fuzzywuzzy
+rapidfuzz
+python-Levenshtein

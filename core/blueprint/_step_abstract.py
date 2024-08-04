@@ -113,10 +113,13 @@ class StepCodeGenerator(ABC):
     def post_enhancement(self) -> Generator[str, None, None]:
         retries = 0
         MAX_RETRIES = 5
+        enhanced_prompt = self.code_enhancement_system.apply_post_enhancement(self.step_info.type,
+                                                                                self.step_info.description,
+                                                                                self.step_info.description)
         while retries < MAX_RETRIES:
-            # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
+            # 第一步：检查代码中的致命错误，要求返回 JSON 格式
             check_prompt = f"""
-            请检查以下代码是否有影响运行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
+            请检查以下代码是否存在会影响其执行的致命错误。如果有，请以 JSON 格式列出这些错误，格式如下：
             ```json
             [
                 {{"error": "错误描述1", "line": "可能的问题行号1"}},
@@ -133,9 +136,12 @@ class StepCodeGenerator(ABC):
             {self._step_code}
             ```
 
+            {f"此外，在检查代码时请考虑以下增强建议：" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
+
             注意：
-            - 如果不是非常确定，不要返回错误，返回空列表，是完全没有问题的。
-            - code_tools 是确定可以使用的对象。
+            - 如果您不是非常确定，请不要返回错误。如果没有问题，请返回空列表。
+            - code_tools 对象是确定可以使用的。
             """
             
             check_result = ""
@@ -145,9 +151,9 @@ class StepCodeGenerator(ABC):
             
             try:
                 errors = self.llm_tools.extract_json_from_text(check_result)
-                output,result = self.check_step_result(self._step_code)
+                output, result = self.check_step_result(self._step_code)
                 if not result:
-                    errors.append({"error":output,"line":"-"})
+                    errors.append({"error": output, "line": "-"})
             except json.JSONDecodeError:
                 yield send_message("无法解析检查结果，将假定代码没有错误。", "warning")
                 errors = []
@@ -160,7 +166,7 @@ class StepCodeGenerator(ABC):
             # 第二步：如果有致命错误，进行修复
             yield send_message(f"检测到代码中存在 {len(errors)} 个潜在问题，正在进行修复...（重试次数：{retries + 1}）", "info")
             
-            error_descriptions = "\n".join([f"- {error['error']} (可能在第 {error['line']} 行)" for error in errors])
+            error_descriptions = "\n".join([f"- {error['error']} （可能在第 {error['line']} 行）" for error in errors])
             fix_prompt = f"""
             以下代码存在一些问题：
             ```python
@@ -169,6 +175,9 @@ class StepCodeGenerator(ABC):
 
             这些问题包括：
             {error_descriptions}
+
+            {f"此外，在修复代码时请考虑以下增强建议：" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
 
             请修复这些问题，并提供完整的修正后的代码。修复后的代码使用 ```python 和 ``` 包裹。
             """
@@ -179,16 +188,103 @@ class StepCodeGenerator(ABC):
                 fixed_code += chunk
             
             self._step_code = self.llm_tools.extract_code(fixed_code)
-            yield send_message("代码已修复完成。", "info")
+            yield send_message("代码已修复。", "info")
             yield send_message(self._step_code, "full_code")
 
             retries += 1
 
         if retries == MAX_RETRIES:
-            yield send_message(f"达到最大重试次数 ({MAX_RETRIES})，无法完全修复代码。", "warning")
+            yield send_message(f"达到最大重试次数（{MAX_RETRIES}），无法完全修复代码。", "warning")
         else:
             yield send_message("代码修复完成，未发现更多错误。", "info")
 
+    def post_enhancement_en(self) -> Generator[str, None, None]:
+        retries = 0
+        MAX_RETRIES = 5
+        enhanced_prompt = self.code_enhancement_system.apply_post_enhancement(self.step_info.type,
+                                                                                self.step_info.description,
+                                                                                self.step_info.description)
+        while retries < MAX_RETRIES:
+            # Step 1: Check for fatal errors in the code, requesting JSON format
+            check_prompt = f"""
+            Please check the following code for fatal errors that would affect its execution. If there are any, list them in JSON format as follows:
+            ```json
+            [
+                {{"error": "Error description 1", "line": "Possible problematic line number 1"}},
+                {{"error": "Error description 2", "line": "Possible problematic line number 2"}}
+            ]
+            ```
+            If there are no errors, return an empty list:
+            ```json
+            []
+            ```
+
+            Code:
+            ```python
+            {self._step_code}
+            ```
+
+            {f"Additionally, consider the following enhancement suggestions when checking the code:" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
+
+            Notes:
+            - If you're not very certain, don't return an error. Return an empty list if there are no problems.
+            - The code_tools object is definitely available for use.
+            """
+            
+            check_result = ""
+            for chunk in self.llm_client.one_chat(check_prompt, is_stream=True):
+                yield send_message(chunk, "code_check")
+                check_result += chunk
+            
+            try:
+                errors = self.llm_tools.extract_json_from_text(check_result)
+                output, result = self.check_step_result(self._step_code)
+                if not result:
+                    errors.append({"error": output, "line": "-"})
+            except json.JSONDecodeError:
+                yield send_message("Unable to parse check result, will assume the code has no errors.", "warning")
+                errors = []
+
+            # If no errors, exit the loop
+            if not errors:
+                yield send_message(f"Code check complete, no fatal errors found. (Retry count: {retries})", "info")
+                break
+
+            # Step 2: If there are fatal errors, proceed with fixing
+            yield send_message(f"Detected {len(errors)} potential issues in the code, proceeding with fixes... (Retry count: {retries + 1})", "info")
+            
+            error_descriptions = "\n".join([f"- {error['error']} (possibly on line {error['line']})" for error in errors])
+            fix_prompt = f"""
+            The following code has some issues:
+            ```python
+            {self._step_code}
+            ```
+
+            These issues include:
+            {error_descriptions}
+
+            {f"Additionally, consider the following enhancement suggestions when fixing the code:" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
+
+            Please fix these issues and provide the complete corrected code. Wrap the fixed code with ```python and ```.
+            """
+            
+            fixed_code = ""
+            for chunk in self.llm_client.text_chat(fix_prompt, is_stream=True):
+                yield send_message(chunk, "code_fix")
+                fixed_code += chunk
+            
+            self._step_code = self.llm_tools.extract_code(fixed_code)
+            yield send_message("Code has been fixed.", "info")
+            yield send_message(self._step_code, "full_code")
+
+            retries += 1
+
+        if retries == MAX_RETRIES:
+            yield send_message(f"Maximum retry count ({MAX_RETRIES}) reached, unable to fully fix the code.", "warning")
+        else:
+            yield send_message("Code fixing complete, no more errors found.", "info")
     @staticmethod
     def fix_code_prompt(code: str, error: str) -> str:
         return f"""

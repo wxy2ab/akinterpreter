@@ -22,6 +22,9 @@ class TushareDataRetrievalStepInfoGenerator(StepInfoGenerator):
         ts.set_token(tushare_key)
         from ..utils.code_tools import code_tools
         code_tools.add_with_recover("ts",ts)
+        from ..tushare_doc.ts_code_matcher import TsCodeMatcher
+        tsgetter = TsCodeMatcher()
+        code_tools.add_with_recover("tsgetter",tsgetter)
 
     
     @property

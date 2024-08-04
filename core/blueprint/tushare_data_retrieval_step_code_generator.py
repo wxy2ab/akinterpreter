@@ -117,6 +117,12 @@ class TushareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
         11. 仔细阅读Tushare文档中每个函数返回数据的限制。
         12. 如果单次请求达到返回数据上限，需要实现多次请求并拼接数据的逻辑。
+        13. tushare的查询需要使用ts_code，使用以下方式获取ts_code：
+            tsgetter = code_tools["tsgetter"]
+            ts_code = tsgetter["查询内容"]
+            例如：ts_code = tsgetter["贵州茅台"]
+            此时，ts_code 的值将是 "600519.SH"
+            注意：查询美股时，ts_code不能用中文，需要使用英文。
 
         请只提供代码，不要添加任何额外的解释。代码结构示例：
 
@@ -128,6 +134,10 @@ class TushareDataRetrievalStepCodeGenerator(StepCodeGenerator):
 
         {f"# 访问之前步骤的数据（如果需要）" if required_data else ""}
         {', '.join([f"{var} = code_tools['{var}']" for var in required_data])}
+
+        # 获取ts_code
+        tsgetter = code_tools["tsgetter"]
+        ts_code = tsgetter["查询内容"]  # 替换"查询内容"为实际需要查询的股票名称或代码
 
         # 你的代码逻辑
         # ...

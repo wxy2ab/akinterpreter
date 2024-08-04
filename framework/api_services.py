@@ -8,6 +8,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.session.chat_session_manager import ChatSessionManager
 from core.utils.log import logger
 
+import faulthandler
+
 class APIService:
     def __init__(self,port=8181):
         manager = ChatSessionManager()
@@ -29,6 +31,9 @@ class APIService:
         config = Config()
         if config.has_key("port"):
             self.port = int(config.get("port"))
+        
+        #追踪段错误，核心已经转存储
+        faulthandler.enable()
                
     def load_routes(self):
         import sys

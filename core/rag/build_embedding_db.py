@@ -7,6 +7,7 @@ from core.embeddings._embedding import Embedding
 from core.embeddings.embedding_factory import EmbeddingFactory
 from qdrant_client import QdrantClient
 from qdrant_client.http.models import PointStruct, VectorParams, Distance
+import time
 
 def build_akshare_embedding_db():
     # 创建目录和文件路径
@@ -48,7 +49,7 @@ def build_akshare_embedding_db():
             batch = contents[i:i+batch_size]
             batch_embeddings = embedding.convert_to_embedding(batch)
             embeddings.extend(batch_embeddings)
-        
+
             # 更新进度条
             pbar.update(len(batch))
 
