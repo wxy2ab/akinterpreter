@@ -3,6 +3,7 @@
 from abc import ABC, abstractmethod
 import ast
 import json
+import traceback
 from typing import Any, Dict, Generator, List, Set, Tuple, Type
 
 from .llm_provider import LLMProvider
@@ -446,7 +447,8 @@ class StepExecutor(ABC):
             except Exception as e:
                 is_code_changed = True
                 yield send_message(f"代码执行失败：{str(e)}", "error")
-                generator = self.fix_code(code, str(e))
+                trace = traceback.format_exc()
+                generator = self.fix_code(code, trace)
                 for chunk in generator:
                     if chunk["type"] == "full_code":
                         code = chunk["content"]
