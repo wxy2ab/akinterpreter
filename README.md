@@ -74,7 +74,7 @@ cp settings.ini.template settings.ini
 ```text
 [Default]
 llm_api = DeepSeekClient        #主要使用的LLM API，取值看下面的列表。需要自己申请key，并配置KEY
-llm_cheap_api = CheapClaude     #处理简单NLP任务，建议使用CheapMiniMax(目前赠送1亿tokens) ,需要配置对应API
+llm_cheap_api = CheapClaude     #处理简单NLP任务，建议使用CheapMiniMax(目前赠送1亿tokens) ,需要配置对应API KEY
 embedding_api = MiniMaxEmbedding   #文本向量化用，如果你注册了MiniMax，那个建议使用MiniMax的embedding
 ranker_api = BaiduBCEReranker   #二次排序用，暂时没有使用
 talker = CliTalker              #不要改动
@@ -141,11 +141,12 @@ __陆续还在添加其他LLM API的支持，有需要可以pr 或者 issue__
     * **MiniMaxClient**: 上海稀宇科技的 API (还没测试，无依赖)
     * **OpenAIClient**: OPENAI API (众所周知，国内不可用，依赖openai库)
     * **Zero1LLamaImproverClient**: 零一 API (还没测试，依赖openai库)
-- llm_cheap_api 用于处理简易 NLP 任务，暂时不用填
-- embedding_api 用于文本向量化，暂时不用填
+- llm_cheap_api 建议使用CheapMiniMax(目前赠送1亿tokens) ,需要配置对应API KEY
+- embedding_api 文本向量化用，如果你注册了MiniMax，那个建议使用MiniMax的embedding
 - ranker_api 用于二次排序，暂时不用填
 - talker = CliTalker  要用cli模式,就不要动这个 
 - 后面的 api_key , 不同都填，选择哪个 LLM API，就填哪个 api_key
+- tushare_key 如果要使用tushare,必须配置有效key，如果不配置key，tushare是不会启用的
 
 ## 运行
 ```bash
@@ -245,8 +246,9 @@ python main.py
 - 主体代码尚不完善，很多功能没有实现，需要慢慢完善。也请使用的朋友耐心，遇到问题积极反馈，我们一起来完善这个项目。
 - 是不是只要把所有问题交给AI就行，自己可以躺平？不是的，AI的知识也是有限的，也需要你的经验和知识的辅助，这样能让AI更强大。
 
-## 关联项目  
-- [akshare](https://github.com/jindaxiang/akshare)  数据源
+## 相关项目  
+- [akshare](https://github.com/jindaxiang/akshare)  akshare数据源
+- [tushare](https://tushare.pro/) tushare数据源
 - [ak_code_library](https://github.com/wxy2ab/ak_code_library)  由akinterpreter 生成的代码，会放在这个仓库，方便大家使用
 
 ## 微信

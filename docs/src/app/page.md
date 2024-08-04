@@ -45,7 +45,7 @@ akinterpreter 现在处于早期阶段，每天可能都会有大量的代码签
 # 进入项目目录
 cd akinterpreter
 
-# 可选，创建虚拟环境, 开发使用python3.12 ，其他版本没测试过，理论上3.9+版本应该都可以
+# 可选，创建虚拟环境, 开发使用python3.12 ，其他版本没测试过，理论上3.10+版本应该都可以(使用了3.10的特性，但是没测试过)
 conda create -p ./env python=3.12
 
 # 激活虚拟环境
@@ -90,3 +90,18 @@ python main.py
 
 ---
 
+
+## 如何使用tushare
+tushare是一个优质的数据平台   
+如果想使用tushare，需要两个步骤：  
+1. 运行./install/install_additional.bat    
+在./install目录下，找到install_additional.bat，执行它。    
+这个bat文件会帮你执行pip install tushare   
+```shell
+.\install\install_additional.bat
+```
+2. 配置tushare的key    
+在settings.ini中，找到tushare_key，填入你申请的key。    
+tushare的API KEY 申请地址：[https://tushare.pro/register](https://tushare.pro/register)    
+申请之后，还要联系客服，开通权限。    
+有了权限之后，在settings.ini中，找到tushare_key，填入你申请的key 就可以使用tushare了   

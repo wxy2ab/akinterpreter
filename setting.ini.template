@@ -1,7 +1,7 @@
 [Default]
-llm_api = MiniMaxClient
+llm_api = SimpleDeepSeekClient
 llm_cheap_api = CheapMiniMax
-embedding_api = BGEM3Embedding
+embedding_api = MiniMaxEmbedding
 ranker_api = BGEM3Reranker
 talker = CliTalker
 project_id =  

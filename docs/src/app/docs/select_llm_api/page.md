@@ -36,15 +36,15 @@ akinterpreter 提供了多种LLM API的支持，选择你喜欢的API，配置�
 你会看到开头是这样的
 ```ini
 [Default]
-llm_api = DeepSeekClient
-llm_cheap_api = CheapClaude
-embedding_api = BGELargeZhAPI
+llm_api = SimpleDeepSeekClient
+llm_cheap_api = CheapMiniMax
+embedding_api = MiniMaxEmbedding
 ranker_api = BaiduBCEReranker
 talker = CliTalker
 ```
 你需要配置的就是 llm_api 对面内容   
 llm_api 必须是`支持的llm_api 列表`里面的`类名`   
-比如，如果你想选择DeepSeek,就应该输入 llm_api = DeepSeekClient    
+比如，如果你想选择DeepSeek,就应该输入 llm_api = SimpleDeepSeekClient    
 
 ## 推荐配置1
 推荐大家选择SimpleClaudeAwsClient,因为这个是开发用的   
@@ -67,3 +67,17 @@ DeepSeek 目前价格确实很有竞争力
 目前其他很多API都还没测试过    
 只是调通了接口，理论上可以运行   
 如果大家遇到任何问题，可以反馈   
+
+## llm_cheap_api
+国产LLM API目前还是很给力的。    
+MiniMax的API 目前送一亿tokens 非常爽了  
+不过这个API不适合生成代码，但是可以执行其他的文本任务   
+
+## embedding_api
+embedding_api 也也建议使用MiniMax的API   
+封装的类是 MiniMaxEmbedding   
+比较下来我还是推荐使用API ，而不是使用本地的embedding模型    
+本地的embedding模型，都需要从huggingface 下载，需要点魔法🧙‍♀️才能实现    
+另外本地的embedding模型，文件都是很大，基本1G以上，下载也需要时间    
+如果没有GPU的话，好几个本地模型执行速度也很慢    
+综合考虑，我还是建议使用API，避免麻烦    
