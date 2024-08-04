@@ -51,7 +51,7 @@ class TushareDataRetrievalStepInfoGenerator(StepInfoGenerator):
         step.description = step_info["task"]
         step.save_data_to=step_info["save_data_to"]
         step.required_data=step_info["required_data"]
-        yield send_message(type="plan",content="获取可用函数\n")
+        yield send_message(type="plan",content="\n获取可用函数\n")
         selected_functions = self.retrieval.get_functions(query)
         step.selected_functions = selected_functions
         yield send_message(type="plan",content="完成步骤\n")
