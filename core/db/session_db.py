@@ -5,8 +5,9 @@ from typing import Any, Dict, List, Optional
 from ..model.user_session_model import UserSession
 from ..model.chat_list_model import ChatListModel
 from ..utils.single_ton import Singleton
+from ..utils.log import logger
 import os
-import ast
+import msgpack
 
 class SessionDb(metaclass=Singleton):
     def __init__(self):
@@ -42,15 +43,23 @@ class SessionDb(metaclass=Singleton):
             )
         """)
 
-    def _safe_serialize(self, data: Any) -> str:
-        return repr(data)
-
-    def _safe_deserialize(self, data: str) -> Any:
+    def _safe_serialize(self, data: Any) -> bytes:
         try:
-            return ast.literal_eval(data)
-        except (ValueError, SyntaxError):
-            # If literal_eval fails, it might be old JSON data
-            return json.loads(data)
+            return msgpack.packb(data, use_bin_type=True)
+        except Exception as e:
+            logger.error(f"Serialization error: {e}")
+            return msgpack.packb(str(data), use_bin_type=True)  # Fallback to string serialization
+
+    def _safe_deserialize(self, data: bytes) -> Any:
+        try:
+            return msgpack.unpackb(data, raw=False)
+        except Exception as e:
+            logger.error(f"Deserialization error: {e}")
+            try:
+                # Attempt to decode as string, then as JSON (for backwards compatibility)
+                return json.loads(data.decode('utf-8'))
+            except:
+                return str(data)  # Last resort: return as string
 
     def add_session(self, session: UserSession):
         """
@@ -256,26 +265,41 @@ class SessionDb(metaclass=Singleton):
     def chat_list_delete(self, chat_list_id: str):
         self.conn.execute("DELETE FROM chat_list WHERE chat_list_id = ?", (chat_list_id,))
 
-    def chat_list_get_list(self, session_id: str) -> List[ChatListModel]:
-        results = self.conn.execute(
-            "SELECT session_id, chat_list_id, name, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data FROM chat_list WHERE session_id = ?",
-            (session_id,)
-        ).fetchall()
+    def chat_list_get_list(self, session_id: str, limit: int = 25, offset: int = 0) -> List[ChatListModel]:
+        # Validate input parameters
+        limit = max(1, min(limit, 100))  # Ensure limit is between 1 and 100
+        offset = max(0, offset)  # Ensure offset is non-negative
 
-        return [
-            ChatListModel(
-                session_id=row[0],
-                chat_list_id=row[1],
-                name=row[2],
-                created_at=row[3],
-                expires_at=row[4],
-                last_request_time=row[5],
-                chat_history=self._safe_deserialize(row[6]),
-                current_plan=self._safe_deserialize(row[7]),
-                step_codes=self._safe_deserialize(row[8]),
-                data=self._safe_deserialize(row[9])
-            ) for row in results
-        ]
+        try:
+            results = self.conn.execute(
+                """
+                SELECT session_id, chat_list_id, name, created_at, expires_at, last_request_time, 
+                    chat_history, current_plan, step_codes, data 
+                FROM chat_list 
+                WHERE session_id = ? 
+                ORDER BY last_request_time DESC 
+                LIMIT ? OFFSET ?
+                """,
+                (session_id, limit, offset)
+            ).fetchall()
+
+            return [
+                ChatListModel(
+                    session_id=row[0],
+                    chat_list_id=row[1],
+                    name=row[2],
+                    created_at=row[3],
+                    expires_at=row[4],
+                    last_request_time=row[5],
+                    chat_history=self._safe_deserialize(row[6]),
+                    current_plan=self._safe_deserialize(row[7]),
+                    step_codes=self._safe_deserialize(row[8]),
+                    data=self._safe_deserialize(row[9])
+                ) for row in results
+            ]
+        except Exception as e:
+            logger.error(f"Error in chat_list_get_list: {e}")
+            return []  # Return an empty list in case of error
     
     def chat_list_get_one(self, chat_list_id: str) -> Optional[ChatListModel]:
         result = self.conn.execute(

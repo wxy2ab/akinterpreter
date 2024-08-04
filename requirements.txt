@@ -31,3 +31,4 @@ BCEmbedding
 fuzzywuzzy
 rapidfuzz
 python-Levenshtein
+msgpack
