@@ -71,6 +71,9 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
     def post_enhancement(self) -> Generator[str, None, None]:
         retries = 0
         MAX_RETRIES = 5
+        enhanced_prompt = self.code_enhancement_system.apply_post_enhancement(self.step_info.type,
+                                                                                self.step_info.description,
+                                                                                self.step_info.description)
         while retries < MAX_RETRIES:
             # 第一步：检查代码是否有致命错误，要求返回 JSON 格式
             check_prompt = f"""
@@ -90,6 +93,9 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
             ```python
             {self._step_code}
             ```
+            
+            {f"此外，在检查代码时请考虑以下建议：" if enhanced_prompt else ""}
+            {enhanced_prompt if enhanced_prompt else ""}
 
             注意：
             - 如果不是非常确定，不要返回错误，返回空列表，是完全没有问题的。

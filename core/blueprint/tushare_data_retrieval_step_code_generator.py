@@ -179,7 +179,7 @@ class TushareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             {self._step_code}
             ```
 
-            {f"此外，在检查代码时请考虑以下增强建议：" if enhanced_prompt else ""}
+            {f"此外，在检查代码时请考虑以下建议：" if enhanced_prompt else ""}
             {enhanced_prompt if enhanced_prompt else ""}
 
             注意：
