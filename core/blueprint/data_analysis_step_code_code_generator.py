@@ -180,7 +180,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         5. 使用 uuid.uuid4() 生成唯一的文件名，以避免重复。
         6. 将生成的文件和图片以Markdown链接的格式写入返回值。
         7. 将主要的分析结果也写入返回值。
-        8. 对于新闻分析、情感分析等自然语言处理任务，必须使用LLM API进行分析。
+        8. 对于新闻分析、情感分析、报告分析等自然语言处理任务，必须使用LLM API进行分析。
 
         代码结构示例：
 
@@ -228,7 +228,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         results.append("2. 发现2")
         # ...
 
-        # 将分析性的结果保存到analysis_result_{step_number}变量
+        # 将分析性的结果保存到analysis_result_{step_number}变量,LLM返回的结果也需要保存到这个字符串中
         analysis_result_{step_number} = "\\n".join(results)
         code_tools.add("analysis_result_{step_number}", analysis_result_{step_number})
 
