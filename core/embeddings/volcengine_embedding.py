@@ -53,4 +53,4 @@ class VolcengineEmbedding(Embedding):
 
     @property
     def vector_size(self) -> int:
-        return 2048
+        return 2560
