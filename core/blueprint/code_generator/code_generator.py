@@ -100,7 +100,7 @@ class CodeGenStepCodeGenerator(StepCodeGenerator):
         1. 从code_tools中获取所需的数据和函数
         2. 执行可调用函数，获得结果
         3. 使用 data_summarizer = code_tools["data_summarizer"] 获取数据摘要器
-        4. 对函数调用的结果生成数据摘要
+        4. 对函数调用的结果生成数据摘要：data_summary = data_summarizer.get_data_summary(data) 生成数据摘要
         5. 使用 llm_client = code_tools["llm_client"] 获取LLM客户端
         6. 使用以下提示词调用 llm_client.one_chat() 生成最终代码：
 
@@ -128,7 +128,6 @@ class CodeGenStepCodeGenerator(StepCodeGenerator):
         8. 使用 code_runner = code_tools["code_runner"] 获取代码运行器
            然后使用 result = code_runner.run(extracted_code) 执行提取的代码
            检查 result 字典中的 'error' 键，如果存在错误，请处理它
-           如果执行成功，可以通过 result['updated_vars'] 访问更新后的变量
 
         确保生成的代码是完整的、可以直接运行的，并包含所有必要的步骤。
         最终生成的代码应该包含主函数的实现、测试和保存步骤，就像在无可调用函数的情况下一样。
