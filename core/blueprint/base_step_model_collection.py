@@ -147,12 +147,14 @@ class BaseStepModelCollection(BaseModel):
         from .data_analysis_step_model import DataAnalysisStepModel
         from .akshare_data_retrieval_step_model import AkShareDataRetrievalStepModel
         from .tushare_data_retrieval_step_model import TushareDataRetrievalStepModel
+        from .data_export_step_model import DataExportStepModel
         
         step_classes = {
             "data_retrieval": DataRetrievalStepModel,
             "data_analysis": DataAnalysisStepModel,
             "akshare_data_retrieval": AkShareDataRetrievalStepModel,
             "tushare_data_retrieval": TushareDataRetrievalStepModel,
+            "data_export": DataExportStepModel,
             # 添加其他步骤类型
         }
         

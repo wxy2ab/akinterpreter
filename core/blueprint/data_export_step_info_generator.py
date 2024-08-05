@@ -54,7 +54,7 @@ class DataExportStepInfoGenerator(StepInfoGenerator):
         save_data_to = step_info.get("save_data_to")
         filetype = step_info.get("filetype")
         allowed_filetypes = ['csv', 'json', 'parquet','xml','xlsx','markdown' ,'html','pdf','docx']
-        if len(required_data):
+        if len(required_data)==0:
             return "data_export步骤的 required_data 必须有值，否则无法把数据导出",False
         if len(save_data_to)>0:
             return "data_export步骤的 save_data_to 不需要，因为不会生成新的数据",False

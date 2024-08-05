@@ -232,7 +232,7 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
             from core.utils.code_tools import code_tools
             
             # 对于每个需要保存的变量：
-            {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
+            {chr(10).join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
 
         请只提供代码，不要添加任何额外的解释。代码结构示例：
 
@@ -241,13 +241,13 @@ class AkshareDataRetrievalStepCodeGenerator(StepCodeGenerator):
         from core.utils.code_tools import code_tools
 
         {f"# 访问之前步骤的数据（如果需要）" if required_data else ""}
-        {', '.join([f"{var} = code_tools['{var}']" for var in required_data])}
+        {chr(10).join([f"{var} = code_tools['{var}']" for var in required_data])}
 
         # 你的代码逻辑
         # ...
 
         # 保存结果
-        {', '.join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
+        {chr(10).join([f"code_tools.add('{var}', 值)" for var in save_data_to])}
         ```
         """
 

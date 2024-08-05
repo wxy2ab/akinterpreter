@@ -63,11 +63,28 @@ class StringMatcher:
         best_match = max(candidates_df.itertuples(), key=lambda x: fuzz.partial_ratio(query, getattr(x, self.index_column)))
         return getattr(best_match, self.result_column)
 
+import pickle
+
 class TsCodeMatcher(StringMatcher):
-    def __init__(self, index_column='content', result_column='ts_code'):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            cls._instance.initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self.initialized:
+            return
+        
+        index_column = 'content'
+        result_column = 'ts_code'
         df = pickle.load(open('./json/tushare_code_20240804.pickle', 'rb'))
         index_cache = f"./json/tushare_code_20240804_index_{index_column}_{result_column}.pickle"
         df['content'] = df['ts_code'] + ',' + df['name'] + ',' + df['type']
         super().__init__(df, index_cache, index_column, result_column)
+        self.initialized = True
+
     def __getitem__(self, query):
         return self.rapidfuzz_match(query)

@@ -202,7 +202,7 @@ class DataAnalysisStepCodeGenerator(StepCodeGenerator):
         os.makedirs('output', exist_ok=True)
 
         # 访问之前步骤的数据
-        {", ".join([f"{var} = code_tools['{var}']" for var in required_data])}
+        {chr(10).join([f"{var} = code_tools['{var}']" for var in required_data])}
         
         # 你的数据分析代码
         # ...

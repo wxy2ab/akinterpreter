@@ -1,9 +1,3 @@
-
-
-
-
-
-
 import json
 from typing import Any, Dict, Generator
 
@@ -16,7 +10,7 @@ from .llm_provider import LLMProvider
 from .data_export_step_model import DataExportStepModel
 from .step_data import StepData
 from ._step_abstract import StepCodeGenerator
-
+from core.utils.code_tools import code_tools
 
 class DataExportStepCodeGenerator(StepCodeGenerator):
     def __init__(self,step_info: DataExportStepModel,step_data:StepData):
@@ -32,6 +26,7 @@ class DataExportStepCodeGenerator(StepCodeGenerator):
     
     @retry(stop=stop_after_attempt(3),retry=retry_if_exception(False))
     def gen_step_code(self) -> Generator[Dict[str, Any], None, None]:
+        description = self.step_info.description
         filetype = self.step_info.filetype
         required_data_list = self.step_info.required_data
         data_summaries = []
@@ -42,6 +37,8 @@ class DataExportStepCodeGenerator(StepCodeGenerator):
         
         code_prompt = f"""
         请生成Python代码以将数据导出为{filetype}格式的文件。
+        
+        描述:{description}
         需要导出的数据变量: {', '.join(required_data_list)}
         数据摘要:
         {json.dumps(data_summaries, ensure_ascii=False, indent=2)}
@@ -54,6 +51,11 @@ class DataExportStepCodeGenerator(StepCodeGenerator):
         5. 请提供注释以解释代码的主要部分。
         6. 输出文件必须存储在 ./output/ 目录下，因为只有这个文件夹有写入权限。
            确保在代码中使用 os.path.join('./output', filename) 来构建文件路径。
+        7. 从code_tools中读取required_data_list中的数据。使用以下方式：
+           from core.utils.code_tools import code_tools
+           {f"# 访问之前步骤的数据（如果需要）" if required_data_list else ""}
+           {chr(10).join([f"{var} = code_tools['{var}']" for var in required_data_list])}
+        8. 确保代码中包含所有必要的导入语句。
         
         请仅提供Python代码，无需其他解释。
         """
@@ -63,3 +65,11 @@ class DataExportStepCodeGenerator(StepCodeGenerator):
             self._step_code += chunk
         
         self._step_code = self.llm_tools.extract_code(self._step_code)
+
+    def make_step_sure(self):
+        step_number = self.step_info.step_number
+        self.step_data.set_step_code(step_number, self._step_code)
+        
+    @property
+    def step_code(self) -> str:
+        return self._step_code
