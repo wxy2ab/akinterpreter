@@ -148,6 +148,7 @@ class BaseStepModelCollection(BaseModel):
         from .akshare_data_retrieval_step_model import AkShareDataRetrievalStepModel
         from .tushare_data_retrieval_step_model import TushareDataRetrievalStepModel
         from .data_export_step_model import DataExportStepModel
+        from .code_generator.step_model import CodeGenStepModel
         
         step_classes = {
             "data_retrieval": DataRetrievalStepModel,
@@ -155,6 +156,7 @@ class BaseStepModelCollection(BaseModel):
             "akshare_data_retrieval": AkShareDataRetrievalStepModel,
             "tushare_data_retrieval": TushareDataRetrievalStepModel,
             "data_export": DataExportStepModel,
+            "function_generate": CodeGenStepModel,
             # 添加其他步骤类型
         }
         

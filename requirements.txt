@@ -36,3 +36,4 @@ pyarrow
 openpyxl
 reportlab
 python-docx
+pandas_ta

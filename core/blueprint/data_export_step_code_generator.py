@@ -39,7 +39,7 @@ class DataExportStepCodeGenerator(StepCodeGenerator):
         请生成Python代码以将数据导出为{filetype}格式的文件。
         
         描述:{description}
-        需要导出的数据变量: {', '.join(required_data_list)}
+        需要的数据变量: {', '.join(required_data_list)}
         数据摘要:
         {json.dumps(data_summaries, ensure_ascii=False, indent=2)}
         
