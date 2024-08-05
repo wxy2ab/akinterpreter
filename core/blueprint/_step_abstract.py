@@ -433,11 +433,17 @@ class StepExecutor(ABC):
         code = self.step_data.get_step_code(step_number)
         is_code_changed = False
         count = 0
+        updated_vars = {}  # 初始化 updated_vars
         while True:
             try:
                 count += 1
-                yield from self.code_runner.run_sse(code, self.step_data.global_vars)
-                output,result = self.check_step_result()
+                for item in self.code_runner.run_sse(code, self.step_data.global_vars):
+                    if item["type"] == "message" and isinstance(item["content"], dict):
+                        # 捕获 updated_vars
+                        updated_vars = item["content"]
+                    else:
+                        yield item
+                output, result = self.check_step_result()
                 if not result:
                     yield send_message(output, "error")
                     raise Exception(output)
@@ -453,10 +459,10 @@ class StepExecutor(ABC):
                     if chunk["type"] == "full_code":
                         code = chunk["content"]
                     yield chunk
-                if count >=2:
+                if count >= 2:
                     yield send_message("代码修复失败，无法继续执行。", "error")
                     raise e
-        yield send_message("代码执行完成", "message")
+        yield from self.post_process(updated_vars) 
     
     def fix_code(self, code:str, error: str) -> Generator[str, None, None]:
         fix_prompt = self.fix_code_prompt(code, error)
@@ -485,6 +491,9 @@ class StepExecutor(ABC):
             if not self.step_data.is_exists(data_var):
                 return f"数据 {data_var} 不存在,需要用code_tools.add(name,value)把数据存储于'{data_var}'", False
         return "", True
+
+    def post_process(self,update_vars:dict) -> Generator[Dict[str, Any], None, None]:
+        yield send_message("步骤执行完成", "message")
 
     @staticmethod
     def fix_code_prompt(code: str, error: str) -> str:
