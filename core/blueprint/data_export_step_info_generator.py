@@ -52,11 +52,14 @@ class DataExportStepInfoGenerator(StepInfoGenerator):
     def validate_step_info(self, step_info:dict)-> tuple[str, bool]:
         required_data = step_info.get("required_data")
         save_data_to = step_info.get("save_data_to")
+        filetype = step_info.get("filetype")
+        allowed_filetypes = ['csv', 'json', 'parquet','xml','xlsx','markdown' ,'html','pdf','docx']
         if len(required_data):
             return "data_export步骤的 required_data 必须有值，否则无法把数据导出",False
         if len(save_data_to)>0:
             return "data_export步骤的 save_data_to 不需要，因为不会生成新的数据",False
-        
+        if filetype not in allowed_filetypes:
+            return "data_export步骤的 filetype 必须是 csv, json, xml, xlsx, markdown 中的一个",False
         return "",True
 
     def fix_step_info(self, step_data, query, error_msg) -> Generator[Dict[str, Any], None, None]:
