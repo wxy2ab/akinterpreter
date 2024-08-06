@@ -97,7 +97,7 @@ class MiniMaxClient(LLMApiClient):
         if is_stream:
             return self._process_stream_response(response)
         else:
-            if 'base_resp' in response and response['base_resp']['status_code']!=200:
+            if 'base_resp' in response and response['base_resp']['status_code']!=0:
                 raise Exception(response['base_resp']['status_msg'])
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return response['choices'][0]['message']['content']
