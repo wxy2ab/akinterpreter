@@ -327,3 +327,9 @@ def test1_session_api():
     runner = unittest.TextTestRunner()
     runner.run(suite)
 
+def test_llama_client():
+    from core.llms.llama_client import LlamaClient
+    from core.utils.all_tools import tools_info_claude, AllTools
+    client = LlamaClient()
+    text = client.one_chat("hello , nice to meet you ")
+    print(text)
