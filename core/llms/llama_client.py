@@ -8,7 +8,7 @@ class LlamaClient(LLMApiClient):
     pass
 
 class LlamaClient(OpenAIClient):
-    def __init__(self, model:Literal["mixtral-8x22b-instruct","gemma2-27b","llama3.1-8b","llama3.1-70b","llama3.1-405b"] ="llama3.1-405b" , **kwargs):
+    def __init__(self, model:Literal["mixtral-8x22b-instruct","gemma2-27b","llama3.1-8b","llama3.1-70b","llama3.1-405b"] ="llama3.1-70b" , **kwargs):
         config = Config()
         api_key = config.get('llama_api_key')
         super().__init__(api_key = api_key, model=model, base_url='https://api.llama-api.com', max_tokens=4000, **kwargs)
