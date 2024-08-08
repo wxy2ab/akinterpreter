@@ -13,38 +13,49 @@ import msgpack
 
 class SessionDb(metaclass=Singleton):
     def __init__(self):
-        database_dir = './database'
-        if not os.path.exists(database_dir):
-            os.makedirs(database_dir)
-        self.conn = duckdb.connect(database='./database/sessions.db', read_only=False)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS user_sessions (
-                session_id VARCHAR PRIMARY KEY,
-                created_at TIMESTAMP,
-                expires_at TIMESTAMP,
-                last_request_time TIMESTAMP,
-                chat_history VARCHAR,
-                current_plan VARCHAR,
-                step_codes VARCHAR,
-                data VARCHAR,
-                chat_list_id VARCHAR
-            )
-        """)
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS chat_list (
-                session_id VARCHAR,
-                chat_list_id VARCHAR PRIMARY KEY,
-                created_at TIMESTAMP,
-                expires_at TIMESTAMP,
-                last_request_time TIMESTAMP,
-                chat_history VARCHAR,
-                current_plan VARCHAR,
-                step_codes VARCHAR,
-                data VARCHAR,
-                name VARCHAR
-            )
-        """)
+        try:
+            database_dir = './database'
+            if not os.path.exists(database_dir):
+                os.makedirs(database_dir)
+            self.conn = duckdb.connect(database='./database/sessions.db', read_only=False)
+            self._create_tables()
+        except Exception as e:
+            logger.error(f"Error initializing SessionDb: {e}")
+            # Instead of raising an exception, we'll set self.conn to None
+            self.conn = None
 
+    def _create_tables(self):
+        try:
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    session_id VARCHAR PRIMARY KEY,
+                    created_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    last_request_time TIMESTAMP,
+                    chat_history VARCHAR,
+                    current_plan VARCHAR,
+                    step_codes VARCHAR,
+                    data VARCHAR,
+                    chat_list_id VARCHAR
+                )
+            """)
+            self.conn.execute("""
+                CREATE TABLE IF NOT EXISTS chat_list (
+                    session_id VARCHAR,
+                    chat_list_id VARCHAR PRIMARY KEY,
+                    created_at TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    last_request_time TIMESTAMP,
+                    chat_history VARCHAR,
+                    current_plan VARCHAR,
+                    step_codes VARCHAR,
+                    data VARCHAR,
+                    name VARCHAR
+                )
+            """)
+        except Exception as e:
+            logger.error(f"Error creating tables: {e}")
+            raise
 
     def _safe_serialize(self, data: Any) -> str:
         try:
@@ -56,17 +67,23 @@ class SessionDb(metaclass=Singleton):
                 return json.dumps(data)
             except Exception as e:
                 logger.error(f"JSON serialization also failed: {e}")
-                raise Exception("Unable to serialize data") from e
+                # Instead of raising an exception, return a safe default
+                return json.dumps({})
 
     def _safe_deserialize(self, data: Union[str, bytes, None]) -> Any:
         if data is None:
             return None
         
         if isinstance(data, bytes):
-            data = data.decode('ascii', errors='replace')
+            try:
+                data = data.decode('ascii', errors='replace')
+            except Exception as e:
+                logger.error(f"Error decoding bytes: {e}")
+                return None
         
         if not isinstance(data, str):
-            raise Exception(f"Expected str or bytes, got {type(data)}")
+            logger.error(f"Expected str or bytes, got {type(data)}")
+            return None
         
         try:
             # Try to decode base64 and then unpack with msgpack
@@ -78,24 +95,30 @@ class SessionDb(metaclass=Singleton):
                 return json.loads(data)
             except json.JSONDecodeError as je:
                 logger.error(f"JSON deserialization also failed: {je}")
-                raise Exception("Unable to deserialize data") from je
+                return None
 
+    def _execute_query(self, query, params=None):
+        if self.conn is None:
+            logger.error("Database connection is not initialized")
+            return None
+        try:
+            return self.conn.execute(query, params) if params else self.conn.execute(query)
+        except Exception as e:
+            logger.error(f"Error executing query: {e}")
+            return None
+        
     def add_session(self, session: UserSession):
-        """
-        Adds a new user session or updates an existing one if the session_id already exists.
+        if self.conn is None:
+            logger.error("Database connection is not initialized")
+            return
 
-        Args:
-            session (UserSession): The UserSession object to add or update.
-        """
         with self.conn.cursor() as cursor:
             cursor.execute("BEGIN")
             try:
-                # Check if the session_id already exists
                 cursor.execute("SELECT session_id FROM user_sessions WHERE session_id = ?", (session.session_id,))
                 existing_session = cursor.fetchone()
 
                 if existing_session:
-                    # Session exists, perform an UPDATE
                     cursor.execute(
                         "UPDATE user_sessions SET created_at = ?, expires_at = ?, last_request_time = ?, "
                         "chat_history = ?, current_plan = ?, step_codes = ?, data = ?, chat_list_id = ? "
@@ -113,7 +136,6 @@ class SessionDb(metaclass=Singleton):
                         ),
                     )
                 else:
-                    # Session does not exist, perform an INSERT
                     cursor.execute(
                         "INSERT INTO user_sessions (session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -133,34 +155,33 @@ class SessionDb(metaclass=Singleton):
             except Exception as e:
                 cursor.execute("ROLLBACK")
                 logger.error(f"Error in add_session: {e}")
-                raise e
 
 
     def get_session(self, session_id: str) -> Optional[UserSession]:
-        result = self.conn.execute(
+        result = self._execute_query(
             "SELECT session_id, created_at, expires_at, last_request_time, chat_history, current_plan, step_codes, data, chat_list_id FROM user_sessions WHERE session_id = ?",
             (session_id,)
-        ).fetchone()
-
+        )
         if result:
-            session_data = {
-                "session_id": result[0],
-                "created_at": result[1],
-                "expires_at": result[2],
-                "last_request_time": result[3],
-                "chat_history": self._safe_deserialize(result[4]),
-                "current_plan": self._safe_deserialize(result[5]),
-                "step_codes": self._safe_deserialize(result[6]),
-                "data": self._safe_deserialize(result[7]),
-                "chat_list_id": result[8]
-            }
-            
-            try:
-                return UserSession(**session_data)
-            except Exception as e:
-                logger.error(f"Error creating UserSession: {e}")
-                logger.error(f"Session data: {session_data}")
-                return None
+            result = result.fetchone()
+            if result:
+                session_data = {
+                    "session_id": result[0],
+                    "created_at": result[1],
+                    "expires_at": result[2],
+                    "last_request_time": result[3],
+                    "chat_history": self._safe_deserialize(result[4]),
+                    "current_plan": self._safe_deserialize(result[5]),
+                    "step_codes": self._safe_deserialize(result[6]),
+                    "data": self._safe_deserialize(result[7]),
+                    "chat_list_id": result[8]
+                }
+                
+                try:
+                    return UserSession(**session_data)
+                except Exception as e:
+                    logger.error(f"Error creating UserSession: {e}")
+                    logger.error(f"Session data: {session_data}")
         return None
 
     def update_session(self, session: UserSession):
@@ -308,7 +329,7 @@ class SessionDb(metaclass=Singleton):
         offset = max(0, offset)  # Ensure offset is non-negative
 
         try:
-            results = self.conn.execute(
+            results = self._execute_query(
                 """
                 SELECT session_id, chat_list_id, name, created_at, expires_at, last_request_time, 
                     chat_history, current_plan, step_codes, data 
@@ -318,25 +339,26 @@ class SessionDb(metaclass=Singleton):
                 LIMIT ? OFFSET ?
                 """,
                 (session_id, limit, offset)
-            ).fetchall()
-
-            return [
-                ChatListModel(
-                    session_id=row[0],
-                    chat_list_id=row[1],
-                    name=row[2],
-                    created_at=row[3],
-                    expires_at=row[4],
-                    last_request_time=row[5],
-                    chat_history=self._safe_deserialize(row[6]),
-                    current_plan=self._safe_deserialize(row[7]),
-                    step_codes=self._safe_deserialize(row[8]),
-                    data=self._safe_deserialize(row[9])
-                ) for row in results
-            ]
+            )
+            if results:
+                results = results.fetchall()
+                return [
+                    ChatListModel(
+                        session_id=row[0],
+                        chat_list_id=row[1],
+                        name=row[2],
+                        created_at=row[3],
+                        expires_at=row[4],
+                        last_request_time=row[5],
+                        chat_history=self._safe_deserialize(row[6]),
+                        current_plan=self._safe_deserialize(row[7]),
+                        step_codes=self._safe_deserialize(row[8]),
+                        data=self._safe_deserialize(row[9])
+                    ) for row in results
+                ]
         except Exception as e:
             logger.error(f"Error in chat_list_get_list: {e}")
-            return []  # Return an empty list in case of error
+        return []  # Return an empty list in case of error
     
     def chat_list_get_one(self, chat_list_id: str) -> Optional[ChatListModel]:
         result = self.conn.execute(
@@ -365,5 +387,9 @@ class SessionDb(metaclass=Singleton):
 
     def close_connection(self):
         if self.conn:
-            self.conn.close()
-            self.conn = None
+            try:
+                self.conn.close()
+            except Exception as e:
+                logger.error(f"Error closing database connection: {e}")
+            finally:
+                self.conn = None

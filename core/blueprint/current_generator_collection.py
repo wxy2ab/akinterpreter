@@ -5,6 +5,7 @@ from .tushare_data_retrieval_step_info_generator import TushareDataRetrievalStep
 from .step_info_generator_collection import StepInfoGeneratorCollection
 from .akshare_data_retrieval_step_info_generator import AkShareDataRetrievalStepInfoGenerator
 from .data_analysis_step_info_generator import DataAnalysisStepInfoGenerator
+from .code_generator.step_info import CodeGenInfoGenerator
 
 
 class CurrentGeneratorCollection(StepInfoGeneratorCollection):
@@ -13,6 +14,7 @@ class CurrentGeneratorCollection(StepInfoGeneratorCollection):
         self.add(AkShareDataRetrievalStepInfoGenerator())
         self.add(DataAnalysisStepInfoGenerator())
         self.add(DataExportStepInfoGenerator())
+        self.add(CodeGenInfoGenerator())
         from ..utils.config_setting import Config
         config = Config()
         if config.has_key("tushare_key"):

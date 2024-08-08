@@ -70,7 +70,8 @@ class BluePrintBuilder:
 
     def modify_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
         if self.last_step_dict is None:
-            raise ValueError("No existing blueprint to modify")
+            yield from self.build_blueprint(query)
+            return
         self._blueprint.query_list.append(query)
         self._blueprint.current_query = query
         self._blueprint.query_summary = query

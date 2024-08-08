@@ -112,6 +112,7 @@ class StepCodeGenerator(ABC):
         yield send_message(enhanced_prompt, "enhanced_prompt")
 
     def post_enhancement(self) -> Generator[str, None, None]:
+        self._step_code = self.llm_tools.extract_code(self._step_code)
         retries = 0
         MAX_RETRIES = 5
         enhanced_prompt = self.code_enhancement_system.apply_post_enhancement(self.step_info.type,
@@ -320,7 +321,7 @@ class StepCodeGenerator(ABC):
         for chunk in self.llm_client.text_chat(prompt, is_stream=True):
             modified_code += chunk
             yield send_message(chunk, "code")
-
+        modified_code = self.llm_tools.extract_code(modified_code)
         self._step_code = modified_code
         output,result = self.check_step_result(modified_code)
         if not result:
@@ -382,7 +383,7 @@ class StepCodeGenerator(ABC):
         missing_vars = self.check_code_tools_usage(tree, required_vars)
         
         if missing_vars:
-            return f"以下变量未使用 code_tools.add() 正确保存: {', '.join(missing_vars)}", False
+            return f"以下变量未使用 code_tools.add(name,value) 正确保存: {', '.join(missing_vars)}", False
         
         return "", True
 

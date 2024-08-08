@@ -8,7 +8,7 @@ from core.blueprint.code_generator.step_executor import CodeGenStepExecutor
 from core.blueprint.code_generator.step_model import CodeGenStepModel
 from core.blueprint.llm_provider import LLMProvider
 from core.planner.message import send_message
-from core.utils import code_tools
+from core.utils.code_tools import code_tools
 
 
 class CodeGenInfoGenerator(StepInfoGenerator):
