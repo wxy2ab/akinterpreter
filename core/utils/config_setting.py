@@ -13,7 +13,7 @@ class Config(metaclass = Singleton):
             with open(path, "w") as file:
                 pass
         self.config = configparser.ConfigParser()
-        self.config.read(path)
+        self.config.read(path,encoding='utf8')
         
     def get(self,  key:str="token" ,/, section:str="Default"):
         if not self.config.has_section(section):
