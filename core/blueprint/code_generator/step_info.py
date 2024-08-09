@@ -20,7 +20,7 @@ class CodeGenInfoGenerator(StepInfoGenerator):
 
     @property
     def step_description(self) -> str:
-        return "提供python函数生成的步骤。生成的函数后续步骤可以调用。"
+        return "提供python函数生成的步骤。生成的函数后续步骤可以调用。只能生成数据处理的函数，任何需要数据查询的函数都不能使用这个步骤"
     
     @property
     def step_model(self) -> Type[BaseStepModel]:
