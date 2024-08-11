@@ -10,7 +10,9 @@ class StepInfoProvider:
     def select_generator(self, step_type:str)->StepInfoGenerator:
         return self.generators[step_type]
 
-    def get_build_prompt(self, query: str) -> str:
+    def get_build_prompt(self, query: str,flow_prompt:str="") -> str:
+        if flow_prompt:
+            flow_prompt=f"考虑下面的步骤流程:\n{flow_prompt}"
         generator_list = []
         for k,v in self.generators.items():
             generator_list.append({"step":k,"description":v.step_description})   
@@ -21,6 +23,8 @@ class StepInfoProvider:
 
 generator_list:
 {generator_list}
+
+{flow_prompt}
 
 请仔细阅读以下说明，并确保你的回答完全符合要求：
 

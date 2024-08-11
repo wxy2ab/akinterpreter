@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, Generator, List
 
 from ._step_abstract import StepInfoGenerator
@@ -5,9 +6,12 @@ from .llm_provider import LLMProvider
 from .step_model_collection import StepModelCollection
 from .step_info_provider import StepInfoProvider
 from .llm_tools import LLMTools
+from .plan_template_manager import PlanTemplateManager
 
 class BluePrintBuilder:
     def __init__(self):
+        self.flow_template_path = "./json/flow_templates.md"
+        self.template_manager = None
         self.llm_provider = LLMProvider()
         self.provider = StepInfoProvider() 
         self._blueprint = StepModelCollection()
@@ -15,6 +19,9 @@ class BluePrintBuilder:
         self.llm_client = self.llm_provider.new_llm_client()
         self.last_step_dict = None
         self.max_retry = 3
+        if  os.path.exists(self.flow_template_path):
+            self.template_manager = PlanTemplateManager(self.llm_client)
+            self.template_manager.load_templates_from_file(self.flow_template_path)
 
     @property
     def blueprint(self) -> StepModelCollection:
@@ -63,6 +70,9 @@ class BluePrintBuilder:
     def build_blueprint(self, query: str) -> Generator[Dict[str, Any], None, None]:
         self._blueprint.current_query = query
         self._blueprint.query_summary = query
+        flow_prompt = ""
+        if self.template_manager:
+            flow_prompt = self.template_manager.get_best_template(query)
         prompt = self.provider.get_build_prompt(query)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
