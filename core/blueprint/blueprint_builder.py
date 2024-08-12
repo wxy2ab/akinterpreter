@@ -72,8 +72,10 @@ class BluePrintBuilder:
         self._blueprint.query_summary = query
         flow_prompt = ""
         if self.template_manager:
-            flow_prompt = self.template_manager.get_best_template(query)
-        prompt = self.provider.get_build_prompt(query)
+            flow_dict = self.template_manager.get_best_template(query)
+            if flow_dict:
+                flow_prompt = flow_dict["template"]
+        prompt = self.provider.get_build_prompt(query,flow_prompt)
         plan_text = yield from self._stream_plan(prompt)
         steps = self._parse_plan(plan_text)
         yield from self._execute_plan(query, steps)

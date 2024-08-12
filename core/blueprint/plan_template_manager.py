@@ -1,12 +1,13 @@
 import json
 import re
-from typing import List, Dict
+from typing import List, Dict, Optional
 from core.llms._llm_api_client import LLMApiClient
 
 class PlanTemplateManager:
     def __init__(self, llm_client: LLMApiClient):
         self.llm_client = llm_client
         self.templates: List[Dict] = []
+        self.default_template: Dict = {}
 
     def add_template(self, description: str, template: str):
         self.templates.append({
@@ -34,7 +35,7 @@ class PlanTemplateManager:
                 f.write(f"### {template['description']}\n")
                 f.write(f"{template['template']}\n\n")
 
-    def get_best_template(self, query: str) -> Dict:
+    def get_best_template(self, query: str) -> Optional[Dict]:
         prompt = f"""
         根据以下查询：
         {query}
@@ -43,8 +44,8 @@ class PlanTemplateManager:
         {json.dumps([t['description'] for t in self.templates], ensure_ascii=False, indent=2)}
 
         请选择最适合该查询的模板。你的回答应该是一个JSON格式的字符串，包含以下字段：
-        1. "index": 最佳匹配模板的索引（从0开始的整数）
-        2. "reason": 选择这个模板的原因（字符串）
+        1. "index": 最佳匹配模板的索引（从0开始的整数）。如果没有合适的模板，请返回-1。
+        2. "reason": 选择这个模板或返回-1的原因（字符串）
 
         请确保你的回答是一个有效的JSON字符串，并用```json和```包裹。
         示例回答格式：
@@ -52,6 +53,13 @@ class PlanTemplateManager:
         {{
             "index": 0,
             "reason": "这个模板最适合因为..."
+        }}
+        ```
+        或者
+        ```json
+        {{
+            "index": -1,
+            "reason": "没有完全匹配的模板，因为..."
         }}
         ```
         """
@@ -67,11 +75,18 @@ class PlanTemplateManager:
             result = json.loads(json_str)
             
             index = result['index']
+            if index == -1:
+                print(f"没有找到合适的模板。原因: {result['reason']}")
+                return None
+            
             if not isinstance(index, int) or index < 0 or index >= len(self.templates):
                 raise ValueError(f"无效的模板索引: {index}")
             
             return self.templates[index]
         except (json.JSONDecodeError, KeyError, ValueError) as e:
             print(f"解析模板选择时出错: {str(e)}")
-            # 如果出错，返回默认模板
-            return self.templates[0] if self.templates else {}
+            return None
+
+    def get_template(self, query: str) -> Dict:
+        template = self.get_best_template(query)
+        return template if template is not None else self.default_template
