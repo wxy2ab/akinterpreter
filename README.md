@@ -249,7 +249,7 @@ python main.py
 - [akshare](https://github.com/jindaxiang/akshare)  akshare数据源
 - [tushare](https://tushare.pro/) tushare数据源
 - [ak_code_library](https://github.com/wxy2ab/ak_code_library)  由akinterpreter 生成的代码，会放在这个仓库，方便大家使用
-- [llm_dealer](https://github.com/wxy2ab/ak_code_library)  llm交易员，AI选股等实验性项目
+- [llm_dealer](https://github.com/wxy2ab/llm_dealer)  llm交易员，AI选股等实验性项目
 
 ## 微信
 ![微信](./docs/wechat.jpg)
