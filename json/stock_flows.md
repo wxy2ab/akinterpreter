@@ -45,7 +45,7 @@
 ### 百度热门股票短线推荐模板
 
 1. 获取热门股票和市场信息
-   - 使用 get_baidu_hotrank 获取百度热门股票列表
+   - 使用 get_baidu_hotrank 获取百度热门股票列表,获取前50支热门股票
    - 使用 stock_market_desc 获取市场整体描述
    - 使用 get_market_news_300 获取市场新闻，然后用 summarizer_news 提取关键信息
    - 使用 summarize_historical_index_data 获取上证指数的近期走势
@@ -80,13 +80,17 @@
    输入: stock_analysis, market_overview, market_news_summary, index_trend
    对每只热门股票进行LLM分析：
    - 生成评估提示词，包含：
-     - 股票信息（从stock_analysis中获取）
+     - 股票信息（从stock_analysis[stock_code]中获取）
      - 市场信息（使用market_overview, market_news_summary, index_trend）
-     - 短线投资特定要求（如对市场情绪、热点事件的敏感性）
+     - 短线投资特定要求，明确指出：
+       *  评估股票对市场情绪的敏感度（高/中/低）
+       *  股票与当前热点事件的相关性（强/中/弱）
+       *  股票的短期技术面走势（上升/震荡/下降）
+       *  股票的流动性（以换手率为参考）
      - 要求返回JSON格式，包含：
        - "code": 股票代码
        - "name": 股票名称
-       - "score": 0-100的整数评分
+       - "score": 短线潜力评分（0-100的整数），表示其和当前市场热点，情绪热点，短线潜力的匹配程度
        - "reason": 50字以内的推荐理由
        - "risks": 列出关键风险点（字符串列表）
        - "volume": 从股票信息中提取的成交量（数值）
@@ -106,6 +110,13 @@
        },
        ...
      }
+   注意：
+
+   确保使用正确的变量名访问股票信息：stock_analysis[stock_code]
+   确保 attention 是数值类型
+   在生成评估提示词时，明确指出短线投资的具体评估标准，明确要求明确返回结构
+   为评分提供明确的解释和范围，使其与短线投资需求紧密相关
+   使用code_tools.add("stock_evaluations", stock_evaluations)存储输出结果
 
 4. 筛选和排序
    输入: stock_evaluations
@@ -116,12 +127,22 @@
      - "score": 短线潜力评分
      - "reason": 推荐理由
      - "risks": 风险因素列表
-     - "volume": 成交量
      - "attention": 市场关注度
-   - 根据综合因素对这个列表进行排序
+     - "turnover_rate": 换手率（如果可用）
+   - 根据综合因素对这个列表进行排序，排序规则如下：
+      1. 主要依据：短线潜力评分（score）
+      2. 次要依据：市场关注度（attention）
+      3. 辅助参考：换手率（turnover_rate，如果可用）
+   - 如果换手率数据不可用，则仅使用短线潜力评分和市场关注度进行排序
+   - 使用加权平均的方式计算综合得分，建议权重为：
+      1. 短线潜力评分：70%
+      2. 市场关注度：30%
+   - 如果换手率数据可用，可以将其作为额外的参考因素，但不应过度影响排序
    - 选择排名靠前的股票（如前5只）作为推荐
-   输出:
-   - recommended_stocks: List[Dict] 推荐股票列表
+   - 输出:
+      recommended_stocks: List[Dict] 推荐股票列表，每个字典包含以下键：
+      - "code", "name", "score", "reason", "risks", "attention", "turnover_rate"（如果可用）, "composite_score"（综合得分）
+   - 注意：attention 来自LLM的输出,可能部分attention并非数值类型，需要去掉里面的描述性文字才能获得attention 的值
 
 5. 生成推荐列表和输出结果
    输入: recommended_stocks, market_overview, market_news_summary, index_trend
@@ -149,52 +170,98 @@
 
 ### 快速股票推荐流程模板
 
-1. 获取热门股票列表
-   - 输入：用户的股票范围查询条件
+1. 获取股票列表
    - 使用 "适合用于选择股票范围的函数" 获取一批股票
-   - 输出：
-     - stock_list: List[str] 热门股票代码列表
+   - 如果用户没有指定范围，默认使用 get_baidu_hotrank 获取前30支热门股票
+   输出:
+   - stock_list: List[str] 股票代码列表
 
 2. 快速收集关键信息
-   - 输入：stock_list
+   输入: stock_list
    - 使用 stock_market_desc 获取市场整体描述
-   - 对每只热门股票：
+   - 使用 get_market_news_300 获取市场新闻，然后用 summarizer_news 提取关键信息
+   - 对每只股票：
      - 使用 get_baidu_analysis_summary 获取百度分析摘要
      - 使用 summarize_historical_data 获取简要的历史数据摘要
-   - 输出：
-     - market_summary: str 市场整体描述
-     - stock_info: Dict[str, Dict] 股票信息字典，键为股票代码，值为包含百度分析和历史数据摘要的字典
+     - 使用 get_stock_comments_summary 获取股票评论摘要
+   输出:
+   - market_summary: str 市场整体描述
+   - market_news_summary: str 市场新闻摘要
+   - stock_info: Dict[str, Dict] 股票信息字典，结构如下：
+     {
+       "stock_code": {
+         "baidu_analysis": str,  # 百度分析摘要
+         "history": str,  # 历史数据摘要
+         "comments_summary": str  # 股票评论摘要
+       },
+       ...
+     }
 
 3. 构建LLM分析提示词
-   - 输入：stock_list, market_summary, stock_info, 用户查询条件
-   - 为每只股票创建一个简洁但信息丰富的提示词
-   - 输出：
-     - prompts: Dict[str, str] 提示词字典，键为股票代码，值为对应的LLM分析提示词
+   输入: stock_list, market_summary, market_news_summary, stock_info
+   - 为每只股票创建一个简洁但信息丰富的提示词，包含：
+     - 股票信息（从stock_info[stock_code]中获取）
+     - 市场信息（使用market_summary, market_news_summary）
+     - 投资特定要求，明确指出：
+       * 评估股票对市场情绪的敏感度（高/中/低）
+       * 股票与当前热点事件的相关性（强/中/弱）
+       * 股票的短期技术面走势（上升/震荡/下降）
+     - 要求返回JSON格式，包含：
+       - "code": 股票代码
+       - "name": 股票名称
+       - "score": 潜力评分（0-100的整数），用于表示和筛选需求的匹配程度
+       - "reason": 30字以内的推荐理由
+       - "risks": 列出主要风险点（字符串列表，最多3个）
+       - "attention": 从评论摘要中提取的关注指数（如果可用，数值,确保是数值类型）
+   输出:
+   - prompts: Dict[str, str] 提示词字典，键为股票代码，值为对应的LLM分析提示词
 
 4. LLM 分析步骤
-   - 输入：prompts
-   - 对每只股票进行LLM分析
-   - 输出：
-     - analysis_results: Dict[str, Dict] 分析结果字典，键为股票代码，值为包含以下字段的字典：
-       - score: int 0-100的评分
-       - reason: str 不超过50字的推荐理由
-       - risks: List[str] 关键风险因素列表
+   输入: prompts
+   - 使用 llm_client.one_chat(prompt) 对每只股票进行分析
+   - 解析LLM返回的JSON结果
+   输出:
+   - analysis_results: Dict[str, Dict] 分析结果字典，结构如下：
+     {
+       "stock_code": {
+         "name": str,
+         "score": int,
+         "reason": str,
+         "risks": List[str],
+         "attention": float (如果可用)
+       },
+       ...
+     }
 
-5. 生成推荐报告
-   - 输入：market_summary, analysis_results
-   - 创建一个简洁的推荐报告
-   - 输出：
-     - output_result: str 最终的推荐报告，包含：
-       - 市场概况
-       - 推荐股票列表（包括股票代码、名称、评分、推荐理由、风险提示）
-       - 整体风险提醒
+5. 筛选和排序
+   输入: analysis_results
+   - 根据潜力评分和市场关注度对股票进行排序
+   - 计算综合得分，建议权重为：
+     1. 潜力评分：80%
+     2. 市场关注度：20%（如果可用）
+   - 选择排名靠前的股票（如前5只）作为推荐
+   输出:
+   - recommended_stocks: List[Dict] 推荐股票列表，每个字典包含以下键：
+     "code", "name", "score", "reason", "risks", "attention"（如果可用）, "composite_score"
+
+6. 生成推荐报告
+   输入: recommended_stocks, market_summary, market_news_summary
+   - 创建一个简洁的推荐报告，包含：
+     - 市场整体情况概述（包括热点事件）
+     - 推荐的股票列表，每只股票包含：
+       - 股票代码和名称
+       - 综合得分
+       - 推荐理由（50字以内）
+       - 主要风险因素（最多3个）
+     - 整体风险提示
+   输出:
+   - output_result: str 最终的推荐报告
 
 注意事项：
-- 优化LLM提示词，确保能快速提取和分析关键信息
-- 限制每只股票的分析时间，保持整体流程的快速性
-- 强调LLM分析基于有限信息，推荐仅供参考
-- 建议用户在做出投资决策前进行更深入的研究
+- 优化每个步骤的执行效率，保持整体流程的快速性
+- 确保LLM提示词简洁明了，能快速提取和分析关键信息
+- 强调分析基于有限信息，推荐仅供参考，不构成投资建议
 - 清晰说明市场瞬息万变，推荐的时效性有限
-- 确保每个步骤的输出变量与下一步骤的输入变量名称一致
-- 在每个步骤中，使用code_tools.add()存储必要的中间结果
+- 建议用户在做出投资决策前进行更深入的研究
+- 使用code_tools.add()存储每个步骤的关键输出
 - 最后一步使用code_tools.add('output_result', final_report)存储最终报告

@@ -468,7 +468,7 @@ class StockDataProvider:
 
     def stock_market_desc(self)->str:
         """
-        获取市场总体描述信息，每个市场的市盈率，指数等信息
+        获取市场总体描述信息，每个市场的市盈率，指数等信息。返回值是包含这些信息的字符串。
         """
         market_descriptions = []
         markets = ["上证", "深证", "创业板", "科创版"]
@@ -1478,6 +1478,9 @@ class StockDataProvider:
         """
         名称和代码的字典，用代码查名称
         返回值: Dict[代码,名称]
+
+        如果根据代码获取股票名称可以这样：
+        name = stock_data_provider.get_code_name()[symbol]
         """
         if self.code_name_list:
             return self.code_name_list  
