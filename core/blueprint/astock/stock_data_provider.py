@@ -46,7 +46,7 @@ class StockDataProvider:
 
     def search_index_code(self,name:str)->str:
         """
-        通过名称模糊查询指数代码
+        通过名称模糊查询指数代码。参数name:str,返回值str
         参数：
             name:str  用于搜索的名字
         返回值
@@ -56,7 +56,7 @@ class StockDataProvider:
 
     def search_stock_code(self,name:str)->str:
         """
-        通过名称模糊查询股票代码
+        通过名称模糊查询股票代码.参数name:str 返回值str
         参数
             name:str    用于搜索的名字
         返回值
@@ -82,8 +82,7 @@ class StockDataProvider:
 
     def get_previous_trading_date(self) -> str:
         """
-        获取最近一个交易日，不包含今天的日期
-        返回格式：YYYYMMDD
+        获取最近一个交易日，不包含今天的日期,返回str 格式：YYYYMMDD
         """
         now = datetime.now()
         
@@ -105,9 +104,8 @@ class StockDataProvider:
     
     def get_latest_trading_date(self) -> str:
         """
-        获取最近一个交易日
+        获取最近一个交易日。返回str 格式：YYYYMMDD
         如果当前时间是9:30之后，则，最近包含今天，否则不包含
-        返回格式：YYYYMMDD
         """
         now = datetime.now()
         cache_valid = False
@@ -137,7 +135,7 @@ class StockDataProvider:
 
     def get_rebound_stock_pool(self, date: str = None) -> dict:
         """
-        获取炸板股池数据并返回格式化结果。
+        获取炸板股池数据并返回格式化结果。返回dict[symbol,str]
         
         参数:
             date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
@@ -183,7 +181,7 @@ class StockDataProvider:
 
     def get_new_stock_pool(self, date: str = None) -> dict:
         """
-        获取次新股池数据并返回格式化结果。
+        获取次新股池数据并返回格式化结果。返回dict[symbol,str]
         
         参数:
             date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
@@ -229,7 +227,7 @@ class StockDataProvider:
 
     def get_strong_stock_pool(self, date: str = None) -> dict:
         """
-        获取强势股池数据并返回格式化结果。
+        获取强势股池数据并返回格式化结果。返回dict[symbol,str]
         
         参数:
             date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
@@ -275,7 +273,7 @@ class StockDataProvider:
 
     def get_previous_day_stock_pool(self, date: str = None) -> dict:
         """
-        获取昨日涨停股池数据并返回格式化结果。
+        获取昨日涨停股池数据并返回格式化结果。返回dict[symbol,str]
         
         参数:
             date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
@@ -321,7 +319,7 @@ class StockDataProvider:
 
     def get_market_anomaly(self, indicator: Literal['火箭发射', '快速反弹', '大笔买入', '封涨停板', '打开跌停板', '有大买盘', '竞价上涨', '高开5日线', '向上缺口', '60日新高', '60日大幅上涨', '加速下跌', '高台跳水', '大笔卖出', '封跌停板', '打开涨停板', '有大卖盘', '竞价下跌', '低开5日线', '向下缺口', '60日新低', '60日大幅下跌'] = '大笔买入') -> dict:
         """
-        获取指定类型的盘口异动信息，并返回格式化结果。
+        获取指定类型的盘口异动信息，并返回格式化结果。indicator:str="大笔买入" 返回dict[symbol,str]
         
         参数:
             indicator (str): 盘口异动的类型，可以从以下选项中选择:
@@ -351,7 +349,7 @@ class StockDataProvider:
 
     def get_active_a_stock_stats(self, indicator: Literal['近一月', '近三月', '近六月', '近一年'] = "近一月") -> dict:
         """
-        获取活跃 A 股统计数据，并返回格式化结果。
+        获取活跃 A 股统计数据，并返回格式化结果。参数indicator:str="近一月" 返回dict[symbol,str]
         
         参数:
             indicator (str): 统计时间范围，可以选择以下选项:
@@ -388,7 +386,7 @@ class StockDataProvider:
 
     def get_daily_lhb_details(self,date:str=None) -> dict:
         """
-        获取龙虎榜每日详情数据，并返回格式化结果。
+        获取龙虎榜每日详情数据，并返回格式化结果。返回dict[symbol,str]
         
         返回:
             dict: 键为股票代码，值为该股票的龙虎榜详情信息，格式化为易于读取的字符串。
@@ -416,8 +414,8 @@ class StockDataProvider:
 
     def get_next_financial_report_date(self):
         """
-        获取下一个财报发布日期(即将发生的)
-        返回值yyyymmdd
+        获取下一个财报发布日期(即将发生的). 返回值：str 格式：yyyymmdd
+
         """
         # 当前日期
         today = datetime.today()
@@ -442,8 +440,8 @@ class StockDataProvider:
 
     def get_latest_financial_report_date(self):
         """
-        获取最近的财报发布日期(已经发生的)
-        返回值yyyymmdd
+        获取最近的财报发布日期(已经发生的)。 返回值：str 格式：yyyymmdd
+
         """
         # 当前日期
         today = datetime.today()
@@ -468,7 +466,7 @@ class StockDataProvider:
 
     def stock_market_desc(self)->str:
         """
-        获取市场总体描述信息，每个市场的市盈率，指数等信息。返回值是包含这些信息的字符串。
+        获取市场总体描述信息，每个市场的市盈率，指数等信息。返回值str。
         """
         market_descriptions = []
         markets = ["上证", "深证", "创业板", "科创版"]
@@ -491,7 +489,7 @@ class StockDataProvider:
 
     def get_a_stock_pb_stats(self) -> str:
         """
-        获取A股等权重与中位数市净率数据，并返回格式化结果。
+        获取A股等权重与中位数市净率数据。返回值str
         
         返回:
             str: A股市净率统计信息，包含日期、上证指数、市净率中位数、等权平均等信息。
@@ -518,7 +516,7 @@ class StockDataProvider:
 
     def get_a_stock_pe_ratios(self) -> str:
         """
-        获取A股等权重与中位数市盈率数据，并返回格式化结果。
+        获取A股等权重与中位数市盈率数据。返回值str
         
         返回:
             str: A股市盈率统计信息，包含日期、沪深300指数、市盈率中位数、等权平均等信息。
@@ -551,7 +549,7 @@ class StockDataProvider:
 
     def get_current_buffett_index(self)->str:
         """
-        获取当前巴菲特指数的最新数据
+        获取当前巴菲特指数的最新数据.返回值str
         
         返回值:
             一个字符串，包含以下信息：
@@ -581,7 +579,7 @@ class StockDataProvider:
 
     def get_stock_a_indicators(self, symbol: str) -> str:
         """
-        获取指定股票的A股个股指标的最新数据
+        获取指定股票的A股个股指标的最新数据.参数symbol:str 返回值str
         
         输入参数:
             symbol (str): 股票代码
@@ -621,7 +619,7 @@ class StockDataProvider:
 
     def get_industry_pe_ratio(self, symbol: str, date: str = None) -> str:
         """
-        获取指定日期和行业分类的行业市盈率数据
+        获取指定日期和行业分类的行业市盈率数据。参数symbol:str 返回值str
         
         输入参数:
             symbol (str): 行业分类，选择 {"证监会行业分类", "国证行业分类"}
@@ -669,7 +667,7 @@ class StockDataProvider:
 
     def get_institute_recommendations(self, indicator: Literal['最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'] = "投资评级选股") -> dict:
         """
-        获取机构推荐池数据，并返回格式化结果。
+        获取机构推荐池数据，并返回格式化结果。 参数indicator:str="投资评级选股" 返回值Dict[symbol,str]
         
         参数:
             indicator (str): 选择的机构推荐类型，可以选择以下选项:
@@ -699,7 +697,7 @@ class StockDataProvider:
 
     def get_recent_recommendations_summary(self, symbol: str) -> str:
         """
-        获取指定股票的最近半年的评级记录统计
+        获取指定股票的最近半年的评级记录统计.参数symbol:str 返回值str
         
         输入参数:
             symbol (str): 股票代码
@@ -779,7 +777,7 @@ class StockDataProvider:
 
     def get_investment_ratings(self, date: str = None) -> dict:
         """
-        获取投资评级数据，并返回格式化结果。
+        获取投资评级数据，并返回格式化结果。返回值Dict[symbol,str]
         
         参数:
             date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
@@ -810,7 +808,7 @@ class StockDataProvider:
     
     def get_financial_analysis_summary(self, symbol: str, start_year: str = "2024") -> str:
         """
-        获取指定股票的财务分析指标，并返回易于理解的字符串形式的结果。
+        获取指定股票的财务分析指标，并返回易于理解的字符串形式的结果。参数symbol:str 返回值str
 
         参数:
             symbol (str): 股票代码。
@@ -832,7 +830,7 @@ class StockDataProvider:
  
     def get_key_financial_indicators(self, symbol: str, indicator: Literal["按报告期", "按年度", "按单季度"] = "按报告期") -> str:
         """
-        获取指定股票的关键财务指标摘要，并返回易于理解的字符串形式的结果。
+        获取指定股票的关键财务指标摘要，并返回易于理解的字符串形式的结果。参数symbol:str,indicator:str="按报告期" 返回值str
 
         参数:
             symbol (str): 股票代码。
@@ -854,7 +852,7 @@ class StockDataProvider:
 
     def get_stock_balance_sheet_by_report_em(self, symbol: str) -> str:
         """
-        获取指定股票的最新资产负债表，并将所有列的数据拼接成一个字符串返回。
+        获取指定股票的最新资产负债表，并将所有列的数据拼接成一个字符串返回。参数symbol:str 返回值str
 
         参数:
         symbol (str): 股票代码。
@@ -874,7 +872,7 @@ class StockDataProvider:
 
     def get_individual_stock_fund_flow_rank(self, indicator: str = "今日") -> dict:
         """
-        获取个股资金流排名，并返回格式化结果。
+        获取个股资金流排名，并返回格式化结果。参数indicator:str="今日" 返回值Dict[symbol,str]
 
         参数:
             indicator (str): 资金流动的时间范围，可选值为 "今日", "3日", "5日", "10日"。默认值为 "今日"。
@@ -902,7 +900,7 @@ class StockDataProvider:
 
     def get_individual_stock_fund_flow(self, symbol: str, market: str = "sh") -> dict:
         """
-        获取指定股票的资金流动信息，并返回格式化结果。
+        获取指定股票的资金流动信息，并返回格式化结果。参数symbol:str market:str="sh" 返回值Dict[symbol,str]
 
         参数:
             symbol (str): 股票代码。
@@ -931,7 +929,7 @@ class StockDataProvider:
 
     def get_cash_flow_statement_summary(self) -> dict:
         """
-        获取最近一个财报发行日期的现金流量表数据摘要
+        获取最近一个财报发行日期的现金流量表数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -979,7 +977,7 @@ class StockDataProvider:
 
     def get_profit_statement_summary(self) -> dict:
         """
-        获取最近一个财报发行日期的利润表数据摘要
+        获取最近一个财报发行日期的利润表数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -1032,7 +1030,7 @@ class StockDataProvider:
 
     def get_balance_sheet_summary(self) -> dict:
         """
-        获取最近一个财报发行日期的资产负债表数据摘要
+        获取最近一个财报发行日期的资产负债表数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -1121,7 +1119,7 @@ class StockDataProvider:
 
     def get_stock_report(self, symbol: str) -> str:
         """
-        获取指定股票的个股研报数据，过滤超过180天的数据，并进行统计分析（仅包含2024年数据）。
+        获取指定股票的个股研报数据，过滤超过180天的数据，并进行统计分析（仅包含2024年数据）。返回值str
 
         参数:
             symbol (str): 股票代码。
@@ -1164,7 +1162,7 @@ class StockDataProvider:
 
     def get_financial_forecast_summary(self) -> dict:
         """
-        获取最近一个财报发行日期的业绩预告数据摘要
+        获取最近一个财报发行日期的业绩预告数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -1210,7 +1208,7 @@ class StockDataProvider:
 
     def get_financial_report_summary(self) -> dict:
         """
-        获取最近一个财报发行日期的业绩报表数据摘要
+        获取最近一个财报发行日期的业绩报表数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -1266,7 +1264,7 @@ class StockDataProvider:
 
     def get_top_holdings_by_market(self, market: Literal["北向", "沪股通", "深股通"] = "北向", indicator: Literal["今日排行", "3日排行", "5日排行", "10日排行", "月排行", "季排行", "年排行"] = "月排行") -> dict:
         """
-        获取指定市场的持股个股排行，并返回格式化后的结果。
+        获取指定市场的持股个股排行，并返回格式化后的结果。参数： market:str="北向" indicator="月排行"  返回值Dict[symbol,str]
 
         参数:
             market (str): 市场类型，选择 "北向", "沪股通", "深股通" 之一。默认值为 "北向"。
@@ -1307,7 +1305,7 @@ class StockDataProvider:
 
     def get_stock_comments_summary(self) -> dict:
         """
-        获取东方财富网-数据中心-特色数据-千股千评数据摘要
+        获取东方财富网-数据中心-特色数据-千股千评数据摘要.返回值Dict[symbol,str]
         
         返回值:
             一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
@@ -1357,7 +1355,7 @@ class StockDataProvider:
 
     def get_stock_comments_dataframe(self)->pd.DataFrame:
         """
-        千股千评DataFrame
+        千股千评。返回DataFrame
         返回值：
             名称	类型	描述
             序号	int64	-
@@ -1379,7 +1377,7 @@ class StockDataProvider:
 
     def get_main_business_description(self, symbol: str) -> str:
         """
-        获取同花顺-主营介绍的数据，并返回描述性的字符串
+        获取同花顺-主营介绍的数据，并返str
         
         输入参数:
             symbol (str): 股票代码
@@ -1411,7 +1409,7 @@ class StockDataProvider:
 
     def get_mainbussiness_more(self,symbol)->pd.DataFrame:
         """
-        主营构成
+        主营构成 返回DataFrame
         输入参数:
             symbol:str  股票代码
         返回值:
@@ -1432,7 +1430,7 @@ class StockDataProvider:
 
     def get_mainbussiness_mid(self,symbol:str)->pd.DataFrame:
         """
-        主营构成
+        主营构成.返回DataFrame
         输入参数:
             symbol:str  股票代码
         返回值:
@@ -1444,7 +1442,7 @@ class StockDataProvider:
 
     def get_manager_talk(self,symbol:str)->pd.DataFrame:
         """
-        管理层讨论与分析
+        管理层讨论与分析.返回DataFrame
         输入参数:
             symbol:str  股票代码
         返回值:
@@ -1456,7 +1454,7 @@ class StockDataProvider:
 
     def get_historical_daily_data(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
-        日线数据
+        日线数据 参数symbol: str, start_date: str, end_date: st  返回DataFrame
         返回值：Dict[symbol,list]
         list=名称	类型	描述
             日期	object	交易日
@@ -1476,13 +1474,12 @@ class StockDataProvider:
 
     def get_code_name(self) -> Dict[str, str]:
         """
-        名称和代码的字典，用代码查名称
-        返回值: Dict[代码,名称]
-
+        名称和代码的字典，用代码查名称。返回值: Dict[代码,名称]
+        
         如果根据代码获取股票名称可以这样：
         name = stock_data_provider.get_code_name()[symbol]
         """
-        if self.code_name_list:
+        if self.code_name_list and len(self.code_name_list)>0:
             return self.code_name_list  
 
         spot = ak.stock_info_a_code_name()
@@ -1491,7 +1488,7 @@ class StockDataProvider:
 
     def get_news_updates(self, symbols: List[str],since_time: datetime) -> Dict[str, List[Dict]]:
         """
-        个股新闻更新
+        个股新闻更新.返回值Dict[symbol,str]
         返回值: Dict[symbol,list]
         list=名称	类型	描述
             关键词	object	-
@@ -1536,7 +1533,7 @@ class StockDataProvider:
 
     def get_stock_minute(self,symbol:str, period='1'):
         """
-        个股分钟数据
+        个股分钟数据 参数symbol:str  返回值DataFrame
         输入参数：
             symbol:str 股票代码
             period:str 周期，默认为1，可选值：1,5,15,30,60
@@ -1553,7 +1550,7 @@ class StockDataProvider:
 
     def get_index_data(self, index_symbols: List[str],start_date:str,end_date:str) -> Dict[str, pd.DataFrame]:
         """
-        获取指数数据
+        获取指数数据,参数index_symbols: List[str]  返回值Dict[symbol,DataFrame]
         """
         result = {}
         for index in index_symbols:
@@ -1563,7 +1560,7 @@ class StockDataProvider:
     
     def get_stock_news(self, symbols: List[str]) -> Dict[str, List[Dict]]:
         """
-        获取个股新闻
+        获取个股新闻。参数symbols: List[str] 返回值Dict[symbol,str]
         输入参数:
             symbols: List[str]  股票代码列表
         返回值:
@@ -1583,7 +1580,7 @@ class StockDataProvider:
     
     def get_stock_info(self,symbol: str) -> str:
         """
-        查询指定股票代码的个股信息，并将结果转换为格式化的字符串。
+        查询指定股票代码的个股信息，参数symbol: str  返回str。
 
         参数:
         symbol (str): 股票代码，例如 "603777"。
@@ -1602,7 +1599,7 @@ class StockDataProvider:
 
     def get_realtime_stock_data(self,symbol: str) -> str:
         """
-        查询指定证券代码的最新行情数据，并将结果转换为格式化的字符串。
+        查询指定证券代码的最新行情数据，参数symbol:str 返回str。
 
         参数:
         symbol (str): 证券代码，可以是 A 股个股代码，A 股场内基金代码，A 股指数，美股代码, 美股指数，例如 "SH600000"。
@@ -1621,7 +1618,7 @@ class StockDataProvider:
 
     def get_full_realtime_data(self) -> dict[str, str]:
         """
-        获取并格式化当前证券代码列表的实时行情数据。
+        获取并格式化当前证券代码列表的实时行情数据。返回值Dict[symbol,str]
 
         函数将获取证券代码的最新行情数据，并将其结果转换为格式化的字符串，存储在字典中。
 
@@ -1649,7 +1646,7 @@ class StockDataProvider:
 
     def get_stock_announcements(self,symbols: List[str], date: str = None) -> Dict[str, List[str]]:
         """
-        获取指定日期内指定股票代码的公告信息。
+        获取指定日期内指定股票代码的公告信息。参数symbols: List[str] 返回值Dict[symbol,List[str]]
 
         参数:
         symbols (List[str]): 股票代码列表。
@@ -1671,7 +1668,7 @@ class StockDataProvider:
 
     def stock_info_global_ths(self):
         """
-        同花顺财经 20条
+        同花顺财经 20条,返回DataFrame
         返回值：
             名称	类型	描述
             标题	object	-
@@ -1683,7 +1680,7 @@ class StockDataProvider:
 
     def stock_info_global_futu(self):
         """
-        富途财经 50条
+        富途财经 50条 ,返回DataFrame
         返回值：
             名称	类型	描述
             标题	object	-
@@ -1695,7 +1692,7 @@ class StockDataProvider:
 
     def stock_info_global_sina(self):
         """
-        新浪财经 20条
+        新浪财经 20条 ,返回DataFrame
         返回值：
         名称	类型	描述
         时间	object	-
@@ -1705,7 +1702,7 @@ class StockDataProvider:
 
     def stock_info_global_em(self):
         """
-        东方财富 200条
+        东方财富 200条 ,返回DataFrame
         返回值：
             名称	类型	描述
             标题	object	-
@@ -1717,7 +1714,7 @@ class StockDataProvider:
 
     def summarize_historical_data(self, symbols: List[str]) -> dict:
         """
-        汇总多个股票的历史数据，并生成描述性的字符串。
+        汇总多个股票的历史数据。 参数symbols: List[str] 返回Dict[symbol,str]
         
         输入参数:
             symbols: List[str] 股票代码列表
@@ -1785,7 +1782,7 @@ class StockDataProvider:
 
     def summarize_historical_index_data(self, index_symbols: List[str]) -> dict:
         """
-        汇总多个指数的历史数据，并生成描述性的字符串。
+        汇总多个指数的历史数据， 参数symbols: List[str] 返回Dict[symbol,str]
         备注：上证指数：000001;上证50:000016;上证300：000300；中证1000：000852；中证500：000905
 
         输入参数:
@@ -1839,7 +1836,7 @@ class StockDataProvider:
 
     def get_index_components(self, index_symbol: str) -> list:
         """
-        获取指定指数的最新成分股代码列表。
+        获取指定指数的最新成分股代码列表。参数 index_symbol: str 返回 list
 
         参数:
             index_symbol (str): 指数代码，例如 "000300" 表示沪深300指数。
@@ -1985,7 +1982,7 @@ class StockDataProvider:
 
     def get_concept_board_components(self, symbol: str = '车联网') -> dict:
         """
-        获取指定概念板块的成分股，并返回格式化后的结果。
+        获取指定概念板块的成分股。参数symbol: str = '车联网' 返回值 dict[symbol,str]
 
         参数:
             symbol (str): 概念板块名称，例如 "车联网"。可以通过调用 ak.stock_board_concept_name_em() 查看东方财富-概念板块的所有行业名称。
@@ -2020,7 +2017,7 @@ class StockDataProvider:
 
     def select_stocks_by_concept_board_query(self, query: str) -> dict:
         """
-        根据用户的自然语言查询来筛选概念板块中的股票数据。
+        根据用户的自然语言查询来筛选概念板块中的股票数据。参数 query:str 返回dict[symbol,str]
 
         参数:
         query (str): 用户的自然语言查询，描述了概念板块筛选的条件。
@@ -2120,7 +2117,7 @@ class StockDataProvider:
 
     def get_board_industry_components(self, symbol: str) -> dict:
         """
-        获取指定行业板块的成分股，并返回格式化后的结果。
+        获取指定行业板块的成分股。参数 symbol: str 返回 Dict[symbol,str]
 
         参数:
             symbol (str): 行业板块名称，例如 "小金属"。可以通过调用 ak.stock_board_industry_name_em() 查看东方财富-行业板块的所有行业名称。
@@ -2155,7 +2152,7 @@ class StockDataProvider:
 
     def select_stocks_by_industry_board_query(self, query: str) -> dict:
         """
-        根据用户的自然语言查询来筛选行业板块中的股票数据。
+        根据用户的自然语言查询来筛选行业板块中的股票数据。参数 query: str 返回 Dict[symbol,str]
 
         参数:
         query (str): 用户的自然语言查询，描述了行业板块筛选的条件。
@@ -2367,7 +2364,7 @@ class StockDataProvider:
 
     def select_by_stock_comments(self, query: str) -> dict:
         """
-        根据用户的查询条件筛选千股千评数据。
+        根据用户的查询条件筛选千股千评数据。参数query:str 返回Dict[symbol,str]
 
         此函数使用 akshare 的 stock_comment_em 函数获取千股千评数据，
         然后使用 select_by_query 方法根据用户的查询条件进行筛选。
@@ -2406,7 +2403,7 @@ class StockDataProvider:
 
     def get_baidu_hotrank(self, hour=7, num=20) -> dict:
         """
-        获取百度热门股票排行榜。
+        获取百度热门股票排行榜。参数  hour=7, num=20 返回 Dict[symbol,str]
 
         参数:
         hour (int): 获取最近多少小时的数据，默认为7小时。
@@ -2441,7 +2438,7 @@ class StockDataProvider:
 
     def get_baidu_recommendation(self, hour=7, num=20) -> dict:
         """
-        获取百度股票推荐列表。
+        获取百度股票推荐列表。参数  hour=7, num=20 返回 Dict[symbol,str]
 
         参数:
         hour (int): 获取最近多少小时的数据，默认为7小时。
@@ -2475,7 +2472,7 @@ class StockDataProvider:
 
     def get_baidu_sentiment_rank(self, num=20) -> dict:
         """
-        获取百度股票情绪排名。
+        获取百度股票情绪排名。参数 num=20 返回 Dict[symbol,str]
 
         参数:
         num (int): 需要获取的股票数量，默认为20。
@@ -2510,7 +2507,7 @@ class StockDataProvider:
 
     def get_baidu_analysis_rank(self, num=20) -> dict:
         """
-        获取百度股票分析排名。
+        获取百度股票分析排名。参数 num=20 返回 Dict[symbol,str]
 
         参数:
         num (int): 需要获取的股票数量，默认为20。
@@ -2545,7 +2542,7 @@ class StockDataProvider:
 
     def get_baidu_analysis_summary(self, symbol: str) -> str:
         """
-        获取百度股票分析摘要。
+        获取百度股票分析摘要。参数 symbol: str 返回 Dict[symbol,str]
 
         参数:
         symbol (str): 股票代码，例如 '000725'。
@@ -2575,7 +2572,7 @@ class StockDataProvider:
 
     def get_baidu_stock_news(self, symbol: str, num: int = 20) -> List[str]:
         """
-        获取指定股票的百度快讯新闻。
+        获取指定股票的百度快讯新闻。 参数 symbol: str, num: int = 20 返回 Dict[symbol,str]
 
         参数:
         symbol (str): 股票代码，例如 '000725'。
@@ -2605,7 +2602,7 @@ class StockDataProvider:
 
     def get_baidu_market_news(self, num: int = 40) -> List[str]:
         """
-        获取百度 A 股市场快讯新闻。
+        获取百度 A 股市场快讯新闻。 参数 num: int = 40 返回 Dict[symbol,str]
 
         参数:
         num (int): 需要获取的新闻数量，默认为40。
@@ -2645,7 +2642,7 @@ class StockDataProvider:
 
     def summarizer_news(self, news_source: list[str], query: str="总结市场热点,市场机会,市场风险", max_word: int = 240) -> str:
         """
-        对给定的新闻列表进行摘要，根据指定的查询要求生成一个简洁的总结。
+        对给定的新闻列表进行摘要，根据指定的查询要求生成一个简洁的总结。 参数news_source: list[str], query: str="总结市场热点,市场机会,市场风险", max_word: int = 240 返回值str
 
         这个函数首先将新闻文本分成较小的块，然后对每个块进行摘要。如果摘要的总长度超过指定的最大字数，
         它会继续进行迭代摘要，直到得到一个不超过最大字数的最终摘要。
@@ -2714,7 +2711,7 @@ class StockDataProvider:
 
     def extract_json_from_text(self, text: str) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        从文本中提取JSON对象并返回字典或字典列表。
+        从文本中提取JSON对象并返回字典或字典列表。返回dict或者list
 
         :param text: 包含JSON数据的字符串。
         :return: 解析后的JSON对象（字典或字典列表）。
