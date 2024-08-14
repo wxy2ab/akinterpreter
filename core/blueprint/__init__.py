@@ -1,10 +1,10 @@
 """
 # 如何添加新的模块
 ## 新建四个文件
-- 继承自 StepInfoGenerator  的类
-- 继承自 StepCodeGenerator 的类
-- 继承自 StepExecutor 的类
-- 继承自 BaseStepModel 的类
+- 继承自 StepInfoGenerator  的类  step_info.py
+- 继承自 StepCodeGenerator 的类   code_generator.py
+- 继承自 StepExecutor 的类   step_executor.py
+- 继承自 BaseStepModel 的类  step_model.py
 
 ### StepInfoGenerator
 - 填写 step_description，描述这个步骤的作用，如果需要额外的数据来运作，要写明额外的数据是什么，什么取值，怎么取值
