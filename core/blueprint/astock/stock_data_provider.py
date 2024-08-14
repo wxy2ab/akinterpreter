@@ -1485,6 +1485,7 @@ class StockDataProvider:
         spot = ak.stock_info_a_code_name()
         for index, row in spot.iterrows():
             self.code_name_list[row["code"]] = row["name"]
+        return self.code_name_list 
 
     def get_news_updates(self, symbols: List[str],since_time: datetime) -> Dict[str, List[Dict]]:
         """
