@@ -9,6 +9,8 @@ import requests
 from core.llms._llm_api_client import LLMApiClient
 from  ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
+from ..utils.log import logger
+
 
 class MiniMaxClient(LLMApiClient):
     def __init__(self,  model: str = "abab6.5s-chat"):
@@ -25,12 +27,14 @@ class MiniMaxClient(LLMApiClient):
         self.parameters: Dict[str, Any] = {
             "temperature": 0.9,
             "top_p": 1,
-            "max_tokens": 2048
+            "max_tokens": 8000,
+            "mask_sensitive_info":False
         }
         self.stats: Dict[str, int] = {
             "api_calls": 0,
             "total_tokens": 0
         }
+        self.debug = False
 
     def _make_request(self, messages: List[Dict[str, str]], stream: bool = False, **kwargs) -> Union[Dict, Generator]:
         payload = {
@@ -100,6 +104,8 @@ class MiniMaxClient(LLMApiClient):
             if 'base_resp' in response and response['base_resp']['status_code']!=0:
                 raise Exception(response['base_resp']['status_msg'])
             self.stats["total_tokens"] += response['usage']['total_tokens']
+            if self.debug:
+                logger.info(response["id"])
             return response['choices'][0]['message']['content']
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
