@@ -707,7 +707,7 @@ class StockDataProvider:
             date (str): 交易日，格式为 "YYYYMMDD"。如果未提供，则使用最近的一个交易日。
             
         返回值:
-            一个字符串，包含以下信息的描述：
+            一个字符串，包含所有行业的以下信息：
             - 行业分类
             - 行业层级
             - 行业编码
@@ -726,25 +726,28 @@ class StockDataProvider:
         # 获取数据
         data = ak.stock_industry_pe_ratio_cninfo(symbol=symbol, date=date)
         
-        # 获取最后一行数据
-        latest_data = data.iloc[-1]
+        # 初始化结果字符串
+        result = []
         
-        # 将最后一行数据转换为字符串
-        industry_pe_ratio_info = (
-            f"行业分类: {latest_data['行业分类']}, "
-            f"行业层级: {latest_data['行业层级']}, "
-            f"行业编码: {latest_data['行业编码']}, "
-            f"行业名称: {latest_data['行业名称']}, "
-            f"公司数量: {latest_data['公司数量']}, "
-            f"纳入计算公司数量: {latest_data['纳入计算公司数量']}, "
-            f"总市值-静态: {latest_data['总市值-静态']}亿元, "
-            f"净利润-静态: {latest_data['净利润-静态']}亿元, "
-            f"静态市盈率-加权平均: {latest_data['静态市盈率-加权平均']}, "
-            f"静态市盈率-中位数: {latest_data['静态市盈率-中位数']}, "
-            f"静态市盈率-算术平均: {latest_data['静态市盈率-算术平均']}"
-        )
+        # 遍历所有行，生成字符串
+        for _, row in data.iterrows():
+            industry_pe_ratio_info = (
+                f"行业分类: {row['行业分类']}, "
+                f"行业层级: {row['行业层级']}, "
+                f"行业编码: {row['行业编码']}, "
+                f"行业名称: {row['行业名称']}, "
+                f"公司数量: {row['公司数量']}, "
+                f"纳入计算公司数量: {row['纳入计算公司数量']}, "
+                f"总市值-静态: {row['总市值-静态']}亿元, "
+                f"净利润-静态: {row['净利润-静态']}亿元, "
+                f"静态市盈率-加权平均: {row['静态市盈率-加权平均']}, "
+                f"静态市盈率-中位数: {row['静态市盈率-中位数']}, "
+                f"静态市盈率-算术平均: {row['静态市盈率-算术平均']}"
+            )
+            result.append(industry_pe_ratio_info)
         
-        return industry_pe_ratio_info
+        # 将所有行的信息连接成一个字符串，每行之间用换行符分隔
+        return "\n".join(result)
 
     def get_institute_recommendations(self, indicator: Literal['最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'] = "投资评级选股") -> dict:
         """
