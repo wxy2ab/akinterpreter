@@ -63,7 +63,317 @@ class StockDataProvider:
             股票代码
         """
         return self.stock_finder[name]
+
+    def get_macro_economic_indicators(self) -> str:
+
+        if hasattr(self, 'macro_economic_indicators'):
+            return self.macro_economic_indicators
+
+        result = []
+        
+        # 中国宏观杠杆率
+        try:
+            df = ak.macro_cnbs()
+            latest = df.iloc[-1]
+            result.append(f"中国宏观杠杆率 (截至 {latest['年份']}):\n"
+                        f"居民部门: {latest['居民部门']}%, 非金融企业部门: {latest['非金融企业部门']}%, "
+                        f"政府部门: {latest['政府部门']}%, 实体经济部门: {latest['实体经济部门']}%")
+        except Exception as e:
+            result.append(f"获取中国宏观杠杆率数据失败: {str(e)}")
+
+        # 企业商品价格指数
+        try:
+            df = ak.macro_china_qyspjg()
+            latest = df.iloc[-1]
+            result.append(f"企业商品价格指数 ({latest['月份']}):\n"
+                        f"总指数: {latest['总指数-指数值']}, 同比增长: {latest['总指数-同比增长']}%, "
+                        f"环比增长: {latest['总指数-环比增长']}%")
+        except Exception as e:
+            result.append(f"获取企业商品价格指数数据失败: {str(e)}")
+
+        # 外商直接投资数据
+        try:
+            df = ak.macro_china_fdi()
+            latest = df.iloc[-1]
+            result.append(f"外商直接投资 ({latest['月份']}):\n"
+                        f"当月: {latest['当月']}美元, 同比增长: {latest['当月-同比增长']}%, "
+                        f"累计: {latest['累计']}美元, 同比增长: {latest['累计-同比增长']}%")
+        except Exception as e:
+            result.append(f"获取外商直接投资数据失败: {str(e)}")
+
+        # LPR数据
+        try:
+            df = ak.macro_china_lpr()
+            latest = df.iloc[-1]
+            result.append(f"LPR利率 ({latest['TRADE_DATE']}):\n"
+                        f"1年期: {latest['LPR1Y']}%, 5年期: {latest['LPR5Y']}%")
+        except Exception as e:
+            result.append(f"获取LPR数据失败: {str(e)}")
+
+        # 城镇调查失业率
+        try:
+            df = ak.macro_china_urban_unemployment()
+            latest_month = df['date'].max()
+            latest = df[df['date'] == latest_month]
+            result.append(f"城镇调查失业率 ({latest_month}):")
+            for _, row in latest.iterrows():
+                result.append(f"{row['item']}: {row['value']}%")
+        except Exception as e:
+            result.append(f"获取城镇调查失业率数据失败: {str(e)}")
+
+        # 社会融资规模增量统计
+        try:
+            df = ak.macro_china_shrzgm()
+            latest = df.iloc[0]
+            result.append(f"社会融资规模增量 ({latest['月份']}):\n"
+                        f"当月: {latest['社会融资规模增量']}亿元, "
+                        f"人民币贷款: {latest['其中-人民币贷款']}亿元")
+        except Exception as e:
+            result.append(f"获取社会融资规模增量数据失败: {str(e)}")
+
+        # GDP年率
+        try:
+            df = ak.macro_china_gdp_yearly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"GDP年率 ({latest['日期']}):\n"
+                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取GDP年率数据失败: {str(e)}")
+
+        # CPI年率
+        try:
+            df = ak.macro_china_cpi_yearly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"CPI年率 ({latest['日期']}):\n"
+                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取CPI年率数据失败: {str(e)}")
+
+        # CPI月率
+        try:
+            df = ak.macro_china_cpi_monthly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"CPI月率 ({latest['日期']}):\n"
+                        f"环比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取CPI月率数据失败: {str(e)}")
+
+        # PPI年率
+        try:
+            df = ak.macro_china_ppi_yearly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"PPI年率 ({latest['日期']}):\n"
+                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取PPI年率数据失败: {str(e)}")
+
+        # 进出口年率
+        try:
+            exports_df = ak.macro_china_exports_yoy()
+            imports_df = ak.macro_china_imports_yoy()
+            latest_exports = exports_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            latest_imports = imports_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"进出口年率:\n"
+                        f"出口 ({latest_exports['日期']}): {latest_exports['今值']}%, "
+                        f"进口 ({latest_imports['日期']}): {latest_imports['今值']}%")
+        except Exception as e:
+            result.append(f"获取进出口年率数据失败: {str(e)}")
+
+        # 贸易帐
+        try:
+            df = ak.macro_china_trade_balance()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"贸易帐 ({latest['日期']}):\n"
+                        f"{latest['今值']}亿美元, 预期: {latest['预测值']}亿美元")
+        except Exception as e:
+            result.append(f"获取贸易帐数据失败: {str(e)}")
+
+        # 工业增加值增长
+        try:
+            df = ak.macro_china_industrial_production_yoy()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"工业增加值增长 ({latest['日期']}):\n"
+                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取工业增加值增长数据失败: {str(e)}")
+
+        # PMI数据
+        try:
+            pmi_df = ak.macro_china_pmi_yearly()
+            cx_pmi_df = ak.macro_china_cx_pmi_yearly()
+            cx_services_pmi_df = ak.macro_china_cx_services_pmi_yearly()
+            
+            latest_pmi = pmi_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            latest_cx_pmi = cx_pmi_df.iloc[-2]
+            latest_cx_services_pmi = cx_services_pmi_df.iloc[-2]
+            
+            result.append(f"PMI数据:\n"
+                        f"官方制造业PMI ({latest_pmi['日期']}): {latest_pmi['今值']}\n"
+                        f"财新制造业PMI ({latest_cx_pmi['日期']}): {latest_cx_pmi['今值']}\n"
+                        f"财新服务业PMI ({latest_cx_services_pmi['日期']}): {latest_cx_services_pmi['今值']}")
+        except Exception as e:
+            result.append(f"获取PMI数据失败: {str(e)}")
+
+        # 外汇储备
+        try:
+            df = ak.macro_china_fx_reserves_yearly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"外汇储备 ({latest['日期']}):\n"
+                        f"{latest['今值']}亿美元, 预期: {latest['预测值']}亿美元")
+        except Exception as e:
+            result.append(f"获取外汇储备数据失败: {str(e)}")
+
+        # M2货币供应年率
+        try:
+            df = ak.macro_china_m2_yearly()
+            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
+            result.append(f"M2货币供应年率 ({latest['日期']}):\n"
+                        f"{latest['今值']}%, 预期: {latest['预测值']}%")
+        except Exception as e:
+            result.append(f"获取M2货币供应年率数据失败: {str(e)}")
+
+        self.macro_economic_indicators = "\n\n".join(result)
+        return self.macro_economic_indicators
+
+    def get_main_competitors(self, symbol: str) -> str:
+        """
+        获取主要竞争对手的股票代码和相关信息。
+
+        参数：
+            symbol: str  股票代码
+
+        返回值：
+            str: 格式化的竞争对手信息字符串，如果没有找到竞争对手则返回相应消息
+        """
+        competitors = self.baidu_news_api.get_stock_recommendations(symbol)
+        
+        if not competitors:
+            return "未找到该股票的主要竞争对手信息。"
+        
+        formatted_output = "主要竞争对手信息：\n"
+        for comp in competitors:
+            price_status = "↑" if comp['price']['status'] == 'up' else "↓"
+            ratio_status = "↑" if comp['ratio']['status'] == 'up' else "↓"
+            
+            formatted_output += (
+                f"代码: {comp['code']} | 名称: {comp['name']} | 市场: {comp['market']} | "
+                f"交易所: {comp['exchange']}\n"
+                f"价格: {comp['price']['value']} {price_status} | "
+                f"涨跌幅: {comp['ratio']['value']} {ratio_status}\n"
+                f"------------------------\n"
+            )
+        
+        return formatted_output.strip()
+
+    def get_global_economic_indicators(self) -> str:
+        if hasattr(self, 'global_economic_indicators'):
+            return self.global_economic_indicators
+
+        result = []
+        
+        # 美国 GDP 月率
+        df = ak.macro_usa_gdp_monthly()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"美国GDP月率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
+        
+        # 美国失业率
+        df = ak.macro_usa_unemployment_rate()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"美国失业率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
+        
+        # 美国CPI月率
+        df = ak.macro_usa_cpi_monthly()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"美国CPI月率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
+        
+        # 欧元区GDP季率
+        df = ak.macro_euro_gdp_yoy()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"欧元区GDP季率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
+        
+        # 欧元区失业率
+        df = ak.macro_euro_unemployment_rate_mom()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"欧元区失业率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
+        
+        # 英国GDP年率
+        df = ak.macro_uk_gdp_yearly()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"英国GDP年率: {latest['现值']}% (时间: {latest['时间']}, 前值: {latest['前值']}%)")
+        
+        # 英国失业率
+        df = ak.macro_uk_unemployment_rate()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"英国失业率: {latest['现值']}% (时间: {latest['时间']}, 前值: {latest['前值']}%)")
+        
+        # 中国GDP年率
+        df = ak.macro_china_gdp_yearly()
+        if not df.empty:
+            latest = df.iloc[-1]
+            result.append(f"中国GDP年率: {latest['今值']}% (日期: {latest['统计时间']}, 前值: {latest['前值']}%)")
+        
+        # 中国失业率
+        df = ak.macro_china_urban_unemployment()
+        if not df.empty:
+            # 筛选出全国城镇调查失业率的最新数据
+            latest = df[df['item'] == '全国城镇调查失业率'].iloc[0]
+            result.append(f"中国城镇调查失业率: {latest['value']}% (日期: {latest['date']})")
     
+        
+        self.global_economic_indicators =  "\n".join(result)
+        return self.global_economic_indicators
+
+    def get_esg_score(self, symbol: str) -> str:
+        # 检查缓存是否存在
+        if hasattr(self, 'esg_rate_cache'):
+            if symbol in self.esg_rate_cache:
+                return self.esg_rate_cache[symbol]
+            else:
+                return f"No ESG data found for {symbol}"
+        
+        # 如果缓存不存在或symbol不在缓存中，则重新获取数据
+        df = ak.stock_esg_rate_sina()
+        
+        # 筛选最新季度
+        df['评级季度'] = pd.to_datetime(df['评级季度'], format='%YQ%q')
+        latest_quarter = df['评级季度'].max()
+        df = df[df['评级季度'] == latest_quarter]
+        
+        # 筛选交易市场为cn
+        df = df[df['交易市场'] == 'cn']
+        
+        # 处理成分股代码
+        df['symbol'] = df['成分股代码'].str.replace(r'^[A-Z]+', '', regex=True)
+        
+        # 创建结果字典
+        result_dict = {}
+        
+        for sym in df['symbol'].unique():
+            sym_data = df[df['symbol'] == sym]
+            ratings = []
+            for _, row in sym_data.iterrows():
+                rating = f"{row['评级机构']}: {row['评级']}"
+                if pd.notna(row['标识']):
+                    rating += f" ({row['标识']})"
+                ratings.append(rating)
+            
+            result_str = f"ESG Ratings for {sym} (as of {latest_quarter.strftime('%Y Q%q')}):\n"
+            result_str += "\n".join(ratings)
+            result_dict[sym] = result_str
+        
+        # 保存缓存
+        self.esg_rate_cache = result_dict
+        
+        # 返回请求的symbol的数据
+        return result_dict.get(symbol, f"No ESG data found for {symbol}")
+
     def get_cctv_news(self, days=30) -> List[dict]:
         """
         获取最近指定天数的CCTV新闻联播内容，参数需要获取的天数 days=30 ，返回列表，包含date、title、content
@@ -3172,6 +3482,9 @@ class StockDataProvider:
             - get_xueqiu_hot_deal                       获取雪球交易排行榜，参数num: int = 100，返回值Dict[symbol,str]
             - get_wencai_hot_rank                       获取问财热门股票排名，参数num: int = 100，返回值Dict[symbol,str]
             - get_eastmoney_hot_rank                    获取东方财富人气榜-A股，参数num: int = 100，返回值Dict[symbol,str]
+        宏观经济
+            - get_macro_economic_indicators             获取中国宏观经济数据的文字描述
+            - get_global_economic_indicators            获取全球经济数据的文字描述
         用于获取市场整体信息的函数：
             - stock_market_desc                         市场平均市盈率等市场指标
             - get_current_buffett_index                 市场的巴菲特指数
@@ -3190,6 +3503,8 @@ class StockDataProvider:
             - get_news_updates                            获取某个时间以后的个股新闻
             - get_vote_baidu                              获取百度股市通的股票投票数据。参数 symbol:str 返回str
             - get_stock_profit_forecast                   获取指定股票的盈利预测数据。symbol: str ,返回str 盈利预测字符串
+            - get_esg_score                               获取指定股票的ESG评分数据。symbol: str ,返回str ESG评分字符串     
+            - get_main_competitors                        获取主要竞争对手信息。symbol: str ,返回str 竞争对手信息字符串 
         用于代码查询的函数
             - search_index_code                         通过名称模糊查询指数代码
             - search_stock_code                         通过名称模糊查询股票代码
@@ -3220,4 +3535,5 @@ class StockDataProvider:
         
         """
         return prompt
+    
     

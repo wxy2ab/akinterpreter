@@ -1,7 +1,11 @@
 from datetime import datetime
 import hashlib
+import json
+import os
 import random
+import re
 import time
+from typing import Dict, List, Optional
 from urllib.parse import quote
 import requests
 
@@ -16,27 +20,65 @@ class BaiduFinanceAPI:
             'hotrank': 'https://finance.pae.baidu.com/vapi/v1/hotrank',
             'recommendation_list': 'https://finance.pae.baidu.com/selfselect/listsugrecomm',
             'sentiment_rank': 'https://finance.pae.baidu.com/vapi/sentimentrank',
-            'analysis_rank': 'https://finance.pae.baidu.com/vapi/v1/analysisrank'  # 添加分析排行榜查询的URL
+            'analysis_rank': 'https://finance.pae.baidu.com/vapi/v1/analysisrank',
+            'report_basics': 'https://finance.pae.baidu.com/vapi/v1/getreportbasics',
+            'stock_recommend':'https://finance.pae.baidu.com/vapi/v1/stock/recommend'
         }
         self._add_header()
 
     def _add_header(self):
-        self.headers = {
-            'accept': 'application/vnd.finance-web.v1+json',
-            'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
-            'origin': 'https://gushitong.baidu.com',
-            'priority': 'u=1, i',
-            'referer': 'https://gushitong.baidu.com/',
-            'sec-ch-ua': '"Not)A;Brand";v="99", "Microsoft Edge";v="127", "Chromium";v="127"',
-            'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"',
-            'sec-fetch-dest': 'empty',
-            'sec-fetch-mode': 'cors',
-            'sec-fetch-site': 'same-site',
-            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0',
-            'cookie': '__bid_n=18e6eb2425d2304866020a; BAIDUID=564AD52829EF1290DDC1A20DCC14F220:FG=1; BAIDUID_BFESS=564AD52829EF1290DDC1A20DCC14F220:FG=1; BIDUPSID=564AD52829EF1290DDC1A20DCC14F220; PSTM=1714397940; ZFY=3ffAdSTQ3amiXQ393UWe0Uy1s70:BPIai4AGEBTM6yIQ:C; H_PS_PSSID=60275_60287_60297_60325; MCITY=-131%3A; BDUSS=X56Q3pvU1ZoNFBUaVZmWHh5QjFMQWRaVzNWcXRMc0NESTJwQ25wdm9RYlVJYnRtRVFBQUFBJCQAAAAAAAAAAAEAAACgejQAd3h5MmFiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANSUk2bUlJNma; BDUSS_BFESS=X56Q3pvU1ZoNFBUaVZmWHh5QjFMQWRaVzNWcXRMc0NESTJwQ25wdm9RYlVJYnRtRVFBQUFBJCQAAAAAAAAAAAEAAACgejQAd3h5MmFiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAANSUk2bUlJNma; newlogin=1; RT="z=1&dm=baidu.com&si=ec229f0d-1099-40a1-a3eb-7e95c88c7a95&ss=lzlj98wo&sl=1&tt=93&bcn=https%3A%2F%2Ffclog.baidu.com%2Flog%2Fweirwood%3Ftype%3Dperf&ld=10z"; ab_sr=1.0.1_YmQ1NjZiMzJjOWMzZTFiOGM2MTQxYWE5MDcxNWM0MWZiODg3YjkxNTBjYTQ5ZmQ3NzYwOTAwOWQ1MTgwYTE5MDZmZTAwNWY0N2U4YWM1OWNlMzRhODA3ZTdhMGQ0MDI3YzI3MmQ0MTA2NmY4MTU4ODBjMDJjNWQzMTJiMDU0YzNiODc0MTQzNjFhOGI2YzZlODAzODBmMjcxZTY0OTI1Nw=='
-        }
+        header_file = './json/baidu_headers.json'
+        if os.path.exists(header_file):
+            with open(header_file, 'r') as f:
+                self.headers = json.load(f)
+        else:
+            self.headers = {
+                'accept': 'application/vnd.finance-web.v1+json',
+                'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8,en-GB;q=0.7,en-US;q=0.6',
+                'origin': 'https://gushitong.baidu.com',
+                'referer': 'https://gushitong.baidu.com/',
+                'sec-ch-ua': '"Not)A;Brand";v="99", "Microsoft Edge";v="127", "Chromium";v="127"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-ch-ua-platform': '"Windows"',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-site',
+                'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36 Edg/127.0.0.0'
+            }
+    def save_headers_from_command(self, command_string: str):
+        """
+        从 cURL 或 PowerShell 命令字符串中提取 headers 信息并保存到文件。
 
+        :param command_string: cURL 或 PowerShell 命令字符串
+        """
+        headers = {}
+
+        # 提取 headers
+        if 'curl' in command_string:
+            # 处理 cURL 命令
+            header_pattern = r'-H ["\']([^:]+):\s*([^"\']+)["\']'
+        else:
+            # 处理 PowerShell 命令
+            header_pattern = r'"([^"]+)"="([^"]+)"'
+
+        matches = re.findall(header_pattern, command_string)
+        for key, value in matches:
+            # 移除可能的引号
+            key = key.strip("'\"")
+            value = value.strip("'\"")
+            headers[key] = value
+
+        # 特殊处理 cookie
+        cookie_match = re.search(r'-H ["\']cookie:\s*([^"\']+)["\']', command_string)
+        if cookie_match:
+            headers['cookie'] = cookie_match.group(1)
+
+        # 保存到文件
+        os.makedirs('./json', exist_ok=True)
+        with open('./json/baidu_headers.json', 'w', encoding='utf-8') as f:
+            json.dump(headers, f, ensure_ascii=False, indent=2)
+
+        print("Headers have been saved to './json/baidu_headers.json'")
     def generate_acs_token(self):
         current_time = int(time.time() * 1000)
         random_num = random.randint(1000000000000000, 9999999999999999)  # 16位随机数
@@ -57,6 +99,79 @@ class BaiduFinanceAPI:
         final_token = f"{token}_{hash_value}_{extra_chars}"
 
         return final_token
+    def get_stock_recommendations(self, code: str, market: str = 'ab', sort_key: str = 'market_value', 
+                                  sort_type: str = 'down', page_num: int = 0, page_size: int = 10) -> Optional[List[Dict]]:
+        """
+        获取股票推荐列表。
+
+        :param code: 股票代码
+        :param market: 市场类型，默认为 'ab'
+        :param sort_key: 排序关键字，默认为 'market_value'
+        :param sort_type: 排序类型，默认为 'down'
+        :param page_num: 页码，默认为 0
+        :param page_size: 每页数量，默认为 6
+        :return: 推荐股票列表，如果出错则返回 None
+        """
+        url = self.base_urls['stock_recommend']
+        params = {
+            'code': code,
+            'market': market,
+            'sortKey': sort_key,
+            'sortType': sort_type,
+            'pn': page_num,
+            'rn': page_size,
+            'finClientType': 'pc'
+        }
+        headers = self.headers.copy()
+        headers['acs-token'] = self.generate_acs_token()
+
+        try:
+            response = requests.get(url, params=params, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            if data['ResultCode'] == 0 and 'Result' in data and 'list' in data['Result']:
+                return data['Result']['list']
+            else:
+                print(f"Error in API response: {data.get('ResultCode', 'Unknown error')}")
+                return None
+        except requests.RequestException as e:
+            print(f"Error fetching stock recommendations: {e}")
+            return None
+    def get_report_basics(self, code: str, name: str):
+        """
+        获取股票的报告基础信息。
+
+        :param code: 股票代码
+        :param name: 股票名称
+        :return: 处理后的报告基础信息
+        """
+        url = self.base_urls['report_basics']
+        params = {
+            'code': code,
+            'name': name,
+            'finClientType': 'pc'
+        }
+        headers = self.headers.copy()
+        headers['acs-token'] = self.generate_acs_token()
+
+        try:
+            response = requests.get(url, params=params, headers=headers)
+            response.raise_for_status()
+            data = response.json()
+
+            if data['ResultCode'] == 0 and 'Result' in data:
+                result = data['Result']
+                return {
+                    'description': result.get('desc', ''),
+                    'pdf_url': result.get('pdfUrl', '')
+                }
+            else:
+                print(f"Error in API response: {data.get('ResultCode', 'Unknown error')}")
+                return None
+        except requests.RequestException as e:
+            print(f"Error fetching report basics: {e}")
+            return None
 
     def fetch_news(self, rn=6, pn=0):
         """
