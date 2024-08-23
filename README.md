@@ -251,5 +251,5 @@ python main.py
 - [ak_code_library](https://github.com/wxy2ab/ak_code_library)  由akinterpreter 生成的代码，会放在这个仓库，方便大家使用
 - [llm_dealer](https://github.com/wxy2ab/llm_dealer)  llm交易员，AI选股等实验性项目
 
-## 微信
-![微信](./docs/wechat.jpg)
+## 关注公众号获得更多信息
+![公众号](https://files.mdnice.com/user/71245/352a9efa-2033-4b15-9c47-006f78f20893.jpg)
