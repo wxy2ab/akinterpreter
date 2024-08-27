@@ -22,7 +22,7 @@ class MiniMaxProClient(LLMApiClient):
             "temperature": 0.1,
             "top_p": 0.95,
             "tokens_to_generate": 8000,
-            "mask_sensitive_info": True,
+            "mask_sensitive_info": False,
             "bot_setting": [
                 {
                     "bot_name": "信息处理专家",
