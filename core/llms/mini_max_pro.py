@@ -26,7 +26,7 @@ class MiniMaxProClient(LLMApiClient):
             "bot_setting": [
                 {
                     "bot_name": "信息处理专家",
-                    "content": "你擅长信息处理，严格遵循指令，输出结构完整的JSON"
+                    "content": "你擅长信息处理，严格遵循指令，删除编写代码、输出结构完整的JSON、输出结构优秀的markdown"
                 }
             ],
             "reply_constraints": {"sender_type": "BOT", "sender_name": "信息处理专家"},

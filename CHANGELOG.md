@@ -13,3 +13,8 @@
 - 新增AI筛选期货合约代码
 - 修复旧的llm_dealer几处bug
 - 新增ctp_futures_strategy.py 支持新的 base_futures_strategy.py
+
+## 2024年8月27日
+- 在llm_dealer中 新增了github action 定时执行选股
+- 在llm_dealer中 新增了个股解读
+- 在llm_dealer中 新增了个股预测
