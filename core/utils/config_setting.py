@@ -14,26 +14,31 @@ class Config(metaclass=Singleton):
         self.config = configparser.ConfigParser()
         
         if os.path.exists(path):
-            self.config.read(path, encoding='utf8')
+            self.config.read(path, encoding='utf-8')
             self.use_file = True
         else:
             self.use_file = False
 
     def get(self, key: str = "token", /, section: str = "Default"):
+        value = None
         if self.use_file:
-            if not self.config.has_section(section):
-                self.config.add_section(section)
-            return self.config[section].get(key)
-        else:
-            return os.environ.get(key.upper())
+            if self.config.has_section(section):
+                value = self.config[section].get(key)
+        
+        # 如果在文件中没有找到值，或者不使用文件，尝试从环境变量获取
+        if value is None:
+            value = os.environ.get(key.upper())
+        
+        return value
 
     def has_key(self, key: str = "token", /, section: str = "Default"):
         if self.use_file:
-            if not self.config.has_section(section):
-                self.config.add_section(section)
-            return key in self.config[section]
-        else:
-            return key.upper() in os.environ
+            if self.config.has_section(section):
+                if key in self.config[section]:
+                    return True
+        
+        # 如果在文件中没有找到，或者不使用文件，检查环境变量
+        return key.upper() in os.environ
 
     def set(self, key: str = "token", value: str = "", /, section: str = "Default"):
         if self.use_file:
