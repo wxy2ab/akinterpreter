@@ -1,4 +1,5 @@
 import logging
+import pickle
 import re
 from typing import Any, Callable, List, Dict, Tuple, Optional, Union ,Literal
 import numpy as np
@@ -15,6 +16,7 @@ from .baidu_news import BaiduFinanceAPI
 from .index_finder import index_finder
 from .stock_symbol_provider import StockSymbolProvider
 import ta
+from tenacity import retry,retry_if_exception,stop_after_attempt,wait_fixed,wait_exponential
 
 
 
@@ -43,6 +45,13 @@ class StockDataProvider:
         self.new_stock_pool_cache = {} 
         self.strong_stock_pool_cache = {}  
         self.previous_day_stock_pool_cache = {}
+        self.institutional_holdings_cache = {}
+        self.big_deal_cache = {}
+        self.sector_cache = {}
+        self.stock_lg_code_cache = {}
+        self.stock_sector_update_time = None
+        self.sector_cache_file_path = './json/sector.pickle'
+        self.logger = logging.getLogger(__name__)
 
     def search_index_code(self,name:str)->str:
         """
@@ -63,6 +72,79 @@ class StockDataProvider:
             股票代码
         """
         return self.stock_finder[name]
+
+    def get_stock_sector(self, symbol: str) -> str:
+        """
+        查询指定股票(symbol)的所属行业。
+        """
+        # 如果缓存为空，尝试从文件加载
+        if not self.sector_cache:
+            self._load_sector_cache()
+
+        # 检查缓存中是否已存在该symbol的行业信息
+        if symbol in self.sector_cache:
+            return self.sector_cache[symbol]
+
+        # 如果缓存中没有，更新整个缓存
+        self._update_sector_cache()
+
+        # 再次检查缓存
+        return self.sector_cache.get(symbol, "未找到所属行业")
+
+    def _load_sector_cache(self):
+        """从文件加载缓存"""
+        try:
+            if os.path.exists(self.sector_cache_file_path):
+                with open(self.sector_cache_file_path, 'rb') as f:
+                    self.sector_cache = pickle.load(f)
+                self.logger.info(f"Loaded {len(self.sector_cache)} items from sector cache.")
+            else:
+                self.logger.info("Sector cache file does not exist. Will create a new one.")
+        except Exception as e:
+            self.logger.error(f"Error loading sector cache: {str(e)}")
+            self.sector_cache = {}
+
+    def _update_sector_cache(self):
+        """更新整个行业缓存"""
+        if self.stock_sector_update_time and datetime.now() - self.stock_sector_update_time < timedelta(days=1):
+            self.logger.info("Sector cache is up to date. Skipping update.")
+            return
+        try:
+            # 获取所有行业板块数据
+            industry_df = ak.stock_board_industry_name_em()
+            
+            new_cache = {}
+            for _, industry in industry_df.iterrows():
+                industry_code = industry['板块代码']
+                industry_name = industry['板块名称']
+
+                try:
+                    cons_df = ak.stock_board_industry_cons_em(symbol=industry_name)
+                    for code in cons_df['代码'].values:
+                        code_str = str(code)
+                        if code_str in new_cache:
+                            new_cache[code_str] += f", {industry_name}"
+                        else:
+                            new_cache[code_str] = industry_name
+                except Exception as e:
+                    self.logger.warning(f"Error fetching constituents for industry {industry_name}: {str(e)}")
+
+            # 更新缓存
+            self.sector_cache = new_cache
+            self._save_sector_cache()
+            self.stock_sector_update_time = datetime.now()
+            self.logger.info(f"Updated sector cache with {len(self.sector_cache)} items.")
+        except Exception as e:
+            self.logger.error(f"Error updating sector cache: {str(e)}")
+
+    def _save_sector_cache(self):
+        """保存缓存到文件"""
+        try:
+            with open(self.sector_cache_file_path, 'wb') as f:
+                pickle.dump(self.sector_cache, f)
+            self.logger.info(f"Saved {len(self.sector_cache)} items to sector cache file.")
+        except Exception as e:
+            self.logger.error(f"Error saving sector cache: {str(e)}")
 
     def get_macro_economic_indicators(self) -> str:
 
@@ -423,7 +505,7 @@ class StockDataProvider:
         stock_data = ak.stock_zh_a_hist(symbol="000001", period="daily", start_date=start_date_str, end_date=today_str, adjust="")
 
         # 提取交易日期
-        trading_dates = stock_data['日期'].apply(lambda x: datetime.strptime(x, "%Y-%m-%d")).tolist()
+        trading_dates = stock_data['日期'].apply(lambda x: x.strftime( "%Y%m%d")).tolist()
         trading_dates.sort()
         return trading_dates
 
@@ -437,16 +519,18 @@ class StockDataProvider:
         if self.previous_trading_date_cache and self.previous_trading_date_cache_time.date() == now.date():
             return self.previous_trading_date_cache
 
-        trading_dates = self._fetch_trading_dates()
+        trading_dates = self._fetch_trading_dates()  # 假设这个函数返回字符串列表
 
         # 如果最近交易日期是今天，则返回上一个交易日期
-        if trading_dates[-1].strftime("%Y%m%d") == now.strftime("%Y%m%d"):
+        today_str = now.strftime("%Y%m%d")
+        if trading_dates[-1] == today_str:
             previous_trading_date = trading_dates[-2]
         else:
             previous_trading_date = trading_dates[-1]
 
-        self.previous_trading_date_cache = previous_trading_date.strftime("%Y%m%d")
+        self.previous_trading_date_cache = previous_trading_date
         self.previous_trading_date_cache_time = now
+
         return self.previous_trading_date_cache
     
     def get_latest_trading_date(self) -> str:
@@ -479,6 +563,76 @@ class StockDataProvider:
         self.latest_trading_date_cache = latest_trading_date.strftime("%Y%m%d")
         self.latest_trading_date_cache_time = now
         return self.latest_trading_date_cache
+
+    def get_stock_big_deal(self, symbol: str) -> str:
+        """
+        获取指定股票的大单追踪数据，并根据交易时间决定是否缓存结果。
+
+        在交易时间内（9:30 - 15:00），直接获取数据并返回，不进行缓存。
+        在非交易时间，如果缓存中有该股票的数据，则返回缓存数据；
+        如果缓存中没有，则获取数据后进行缓存，并返回格式化的结果。
+
+        Args:
+            symbol (str): 要查询的股票代码（symbol）。
+
+        Returns:
+            str: 查询结果。如果找到对应的symbol，返回格式化为可读字符串的行数据；
+                 如果找不到对应的symbol，返回“暂时没有数据”。
+                 如果数据获取失败，返回错误信息。
+        """
+        # 检查并初始化big_deal_cache
+        if not hasattr(self, "big_deal_cache"):
+            self.big_deal_cache = {}
+
+        now = datetime.now()
+        market_open_time = now.replace(hour=9, minute=30, second=0, microsecond=0)
+        market_close_time = now.replace(hour=15, minute=0, second=0, microsecond=0)
+
+        # 判断是否在交易时间内
+        if market_open_time <= now <= market_close_time:
+            # 交易时间内，不进行缓存，直接获取数据
+            try:
+                stock_fund_flow_big_deal_df = ak.stock_fund_flow_big_deal()
+            except Exception as e:
+                return f"获取数据失败: {str(e)}"
+
+            # 查找并返回symbol对应的数据
+            result_row = stock_fund_flow_big_deal_df[stock_fund_flow_big_deal_df['股票代码'] == int(symbol)]
+            if not result_row.empty:
+                row = result_row.iloc[0]
+                formatted_row = (
+                    f"成交时间: {row['成交时间']}, 股票代码: {row['股票代码']}, 股票简称: {row['股票简称']}, "
+                    f"成交价格: {row['成交价格']}, 成交量: {row['成交量']}股, 成交额: {row['成交额']}万元, "
+                    f"大单性质: {row['大单性质']}, 涨跌幅: {row['涨跌幅']}, 涨跌额: {row['涨跌额']}"
+                )
+                return formatted_row
+            else:
+                return "暂时没有数据"
+        else:
+            # 非交易时间，从缓存中获取数据
+            if symbol in self.big_deal_cache:
+                return self.big_deal_cache[symbol]
+            else:
+                # 如果缓存中没有，则获取数据并缓存
+                try:
+                    stock_fund_flow_big_deal_df = ak.stock_fund_flow_big_deal()
+                except Exception as e:
+                    return f"获取数据失败: {str(e)}"
+
+                # 缓存数据
+                for index, row in stock_fund_flow_big_deal_df.iterrows():
+                    code = str(row['股票代码'])
+                    formatted_row = (
+                        f"成交时间: {row['成交时间']}, 股票代码: {row['股票代码']}, 股票简称: {row['股票简称']}, "
+                        f"成交价格: {row['成交价格']}, 成交量: {row['成交量']}股, 成交额: {row['成交额']}万元, "
+                        f"大单性质: {row['大单性质']}, 涨跌幅: {row['涨跌幅']}, 涨跌额: {row['涨跌额']}"
+                    )
+                    self.big_deal_cache[code] = formatted_row
+
+                if symbol in self.big_deal_cache:
+                    return self.big_deal_cache[symbol]
+                else:
+                    return "暂时没有数据"
 
     def get_rebound_stock_pool(self, date: str = None) -> dict:
         """
@@ -938,6 +1092,7 @@ class StockDataProvider:
 
         return "\n".join(result)
 
+    @retry(stop=stop_after_attempt(3),wait=wait_fixed(3))
     def get_current_buffett_index(self)->str:
         """
         获取当前巴菲特指数的最新数据.返回值str
@@ -968,6 +1123,7 @@ class StockDataProvider:
         
         return buffett_index_info
 
+    @retry(retry=retry_if_exception(Exception),stop=stop_after_attempt(3),wait=wait_fixed(3))
     def get_stock_a_indicators(self, symbol: str) -> str:
         """
         获取指定股票的A股个股指标的最新数据.参数symbol:str 返回值str
@@ -986,6 +1142,12 @@ class StockDataProvider:
             - 股息率TTM
             - 总市值
         """
+        if len(self.stock_lg_code_cache) == 0:
+            df = ak.stock_a_indicator_lg(symbol="all")
+            for _, row in df.iterrows():
+                self.stock_lg_code_cache[row['code']] = row['stock_name']
+        if symbol not in self.stock_lg_code_cache:
+            return f"股票代码{symbol}暂无数据"
         # 获取数据
         data = ak.stock_a_indicator_lg(symbol=symbol)
         
@@ -1008,27 +1170,16 @@ class StockDataProvider:
         
         return stock_indicators_info
 
-    def get_industry_pe_ratio(self, symbol: str, date: str = None) -> str:
+    def get_industry_pe_ratio(self, symbol: str, date: str = None) -> Dict[str, str]:
         """
-        获取指定日期和行业分类的行业市盈率数据。参数symbol:str 返回值str
-        
+        获取指定日期和行业分类的行业市盈率数据。
+
         输入参数:
             symbol (str): 行业分类，选择 {"证监会行业分类", "国证行业分类"}
             date (str): 交易日，格式为 "YYYYMMDD"。如果未提供，则使用最近的一个交易日。
             
         返回值:
-            一个字符串，包含所有行业的以下信息：
-            - 行业分类
-            - 行业层级
-            - 行业编码
-            - 行业名称
-            - 公司数量
-            - 纳入计算公司数量
-            - 总市值-静态
-            - 净利润-静态
-            - 静态市盈率-加权平均
-            - 静态市盈率-中位数
-            - 静态市盈率-算术平均
+            Dict[str, str]: 一个字典，键为行业名称，值为包含该行业信息的字符串
         """
         if not date:
             date = self.get_previous_trading_date()
@@ -1036,16 +1187,16 @@ class StockDataProvider:
         # 获取数据
         data = ak.stock_industry_pe_ratio_cninfo(symbol=symbol, date=date)
         
-        # 初始化结果字符串
-        result = []
+        # 初始化结果字典
+        result = {}
         
-        # 遍历所有行，生成字符串
+        # 遍历所有行，生成字符串并添加到字典中
         for _, row in data.iterrows():
+            industry_name = row['行业名称']
             industry_pe_ratio_info = (
                 f"行业分类: {row['行业分类']}, "
                 f"行业层级: {row['行业层级']}, "
                 f"行业编码: {row['行业编码']}, "
-                f"行业名称: {row['行业名称']}, "
                 f"公司数量: {row['公司数量']}, "
                 f"纳入计算公司数量: {row['纳入计算公司数量']}, "
                 f"总市值-静态: {row['总市值-静态']}亿元, "
@@ -1054,10 +1205,9 @@ class StockDataProvider:
                 f"静态市盈率-中位数: {row['静态市盈率-中位数']}, "
                 f"静态市盈率-算术平均: {row['静态市盈率-算术平均']}"
             )
-            result.append(industry_pe_ratio_info)
+            result[industry_name] = industry_pe_ratio_info
         
-        # 将所有行的信息连接成一个字符串，每行之间用换行符分隔
-        return "\n".join(result)
+        return result
 
     def get_institute_recommendations(self, indicator: Literal['最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'] = "投资评级选股") -> dict:
         """
@@ -1169,6 +1319,90 @@ class StockDataProvider:
         
         return recommendation_summary
 
+    def _get_file_content_cninfo(self, file: str) -> str:
+        """
+        获取 JS 文件的内容
+        :param file: 文件名
+        :type file: str
+        :return: 文件内容
+        :rtype: str
+        """
+        import pathlib
+        module_path = pathlib.Path(__file__).resolve().parent
+        file_path = module_path / file
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                return f.read()
+        except UnicodeDecodeError:
+            # 如果 UTF-8 解码失败，尝试使用 ISO-8859-1
+            with open(file_path, "r", encoding="iso-8859-1") as f:
+                return f.read()
+    def stock_rank_forecast_cninfo(self,date: str = "20240630") -> pd.DataFrame:
+        """
+        巨潮资讯-数据中心-评级预测-投资评级
+        http://webapi.cninfo.com.cn/#/thematicStatistics?name=%E6%8A%95%E8%B5%84%E8%AF%84%E7%BA%A7
+        :param date: 查询日期
+        :type date: str
+        :return: 投资评级
+        :rtype: pandas.DataFrame
+        """
+        import py_mini_racer
+        import requests
+        url = "http://webapi.cninfo.com.cn/api/sysapi/p_sysapi1089"
+        params = {"tdate": "-".join([date[:4], date[4:6], date[6:]])}
+        js_code = py_mini_racer.MiniRacer()
+        js_content = self._get_file_content_cninfo("cninfo.js")
+        js_code.eval(js_content)
+        mcode = js_code.call("getResCode1")
+        headers = {
+            "Accept": "*/*",
+            "Accept-Enckey": mcode,
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Cache-Control": "no-cache",
+            "Content-Length": "0",
+            "Host": "webapi.cninfo.com.cn",
+            "Origin": "http://webapi.cninfo.com.cn",
+            "Pragma": "no-cache",
+            "Proxy-Connection": "keep-alive",
+            "Referer": "http://webapi.cninfo.com.cn/",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/93.0.4577.63 Safari/537.36",
+            "X-Requested-With": "XMLHttpRequest",
+        }
+        r = requests.post(url, params=params, headers=headers)
+        data_json = r.json()
+        temp_df = pd.DataFrame(data_json["records"])
+        temp_df.columns = [
+            "证券简称",
+            "发布日期",
+            "前一次投资评级",
+            "评级变化",
+            "目标价格-上限",
+            "是否首次评级",
+            "投资评级",
+            "研究员名称",
+            "研究机构简称",
+            "目标价格-下限",
+            "证券代码",
+        ]
+        temp_df = temp_df[
+            [
+                "证券代码",
+                "证券简称",
+                "发布日期",
+                "研究机构简称",
+                "研究员名称",
+                "投资评级",
+                "是否首次评级",
+                "评级变化",
+                "前一次投资评级",
+                "目标价格-下限",
+                "目标价格-上限",
+            ]
+        ]
+        temp_df["目标价格-上限"] = pd.to_numeric(temp_df["目标价格-上限"], errors="coerce")
+        temp_df["目标价格-下限"] = pd.to_numeric(temp_df["目标价格-下限"], errors="coerce")
+        return temp_df
     def get_investment_ratings(self, date: str = None) -> dict:
         """
         获取投资评级数据，并返回格式化结果。返回值Dict[symbol,str]
@@ -1904,6 +2138,54 @@ class StockDataProvider:
         """
         return ak.stock_zh_a_hist(symbol=symbol,period="daily", start_date=start_date, end_date=end_date)
 
+    def calculate_stock_correlations(self, symbols: List[str], days: int = 120) -> pd.DataFrame:
+        """
+        计算给定股票列表的相关性矩阵。
+
+        该方法获取指定股票的历史数据，计算它们在给定时间段内的收盘价相关性，
+        并返回相关性矩阵。
+
+        参数：
+        symbols (List[str]): 要分析的股票代码列表。
+        days (int, 可选): 用于计算相关性的过去天数。默认为120天。
+
+        返回：
+        pd.DataFrame: 一个相关性矩阵，其中行和列都标记有股票代码。
+                      每个单元格表示两个股票之间的相关系数。
+
+        注意：
+        - 相关性基于股票的收盘价计算。
+        - 如果某个股票的数据不可用，它将被排除在相关性矩阵之外。
+        - 该方法会打印出没有数据或数据获取错误的股票的消息。
+        """
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+
+        close_prices = pd.DataFrame()
+
+        for symbol in symbols:
+            try:
+                df = self.get_historical_daily_data(symbol, start_date, end_date)
+                if not df.empty and '收盘' in df.columns:
+                    close_prices[symbol] = df['收盘']
+                else:
+                    print(f"未找到股票 {symbol} 的数据或数据不完整")
+            except Exception as e:
+                print(f"获取股票 {symbol} 的数据时出错：{str(e)}")
+
+        if close_prices.empty:
+            print("没有足够的数据来计算相关性")
+            return pd.DataFrame()
+
+        # 确保所有股票的数据长度一致
+        min_length = min(len(close_prices[col]) for col in close_prices.columns)
+        close_prices = close_prices.tail(min_length)
+
+        # 计算相关性矩阵
+        correlation_matrix = close_prices.corr()
+
+        return correlation_matrix
+
     def get_code_name(self) -> Dict[str, str]:
         """
         名称和代码的字典，用代码查名称。返回值: Dict[代码,名称]
@@ -1918,6 +2200,12 @@ class StockDataProvider:
         for index, row in spot.iterrows():
             self.code_name_list[row["code"]] = row["name"]
         return self.code_name_list 
+
+    def is_stock(self,symbol:str)->bool:
+        """
+        判断是否是股票
+        """
+        return symbol in self.get_code_name()
 
     def get_news_updates(self, symbols: List[str],since_time: datetime) -> Dict[str, List[Dict]]:
         """
@@ -1964,6 +2252,126 @@ class StockDataProvider:
         
         return formatted_news_list
 
+    def get_market_news_300_update(self, since: Optional[datetime] = None) -> Tuple[List[str], Optional[datetime]]:
+        """
+        获取 get_market_news_300 的新闻更新,返回值Tuple[List[str], Optional[datetime]]
+        """
+        news_data = ak.stock_info_global_cls()
+        
+        if news_data.empty:
+            return [], None
+        
+        data = news_data if since is None else news_data[news_data["发布时间"] > since.time()]
+        
+        if data.empty:
+            return [], since  # 如果没有新数据，返回空列表和原始的since时间
+
+        dict_data = data.to_dict(orient="list")
+        formatted_news_list = [
+            f"标题: {title}, 内容: {content}, 发布日期: {publish_date}, 发布时间: {publish_time}"
+            for title, content, publish_date, publish_time in zip(
+                dict_data.get("标题", []),
+                dict_data.get("内容", []),
+                dict_data.get("发布日期", []),
+                dict_data.get("发布时间", [])
+            )
+        ]
+        
+        # 将最后一条新闻的日期和时间转换为datetime对象
+        try:
+            last_date = data.iloc[-1]["发布日期"]
+            last_time = data.iloc[-1]["发布时间"]
+            
+            # 确保 last_date 是 date 对象，last_time 是 time 对象
+            if isinstance(last_date, str):
+                last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
+            if isinstance(last_time, str):
+                last_time = datetime.strptime(last_time, "%H:%M:%S").time()
+            
+            last_datetime = datetime.combine(last_date, last_time)
+        except (IndexError, KeyError, ValueError) as e:
+            last_datetime = datetime.now()
+
+        return formatted_news_list, last_datetime
+
+    def get_sector_fund_flow_rank(self, indicator: str = "今日", sector_type: str = "行业资金流", top_n: int = 10) -> str:
+        """
+        获取板块资金流排名数据,indicator: str = "今日", sector_type: str = "行业资金流", top_n: int = 10 ，返回流向字符串
+
+        参数:
+        indicator (str): 时间范围，可选 "今日", "5日", "10日"
+        sector_type (str): 板块类型，可选 "行业资金流", "概念资金流", "地域资金流"
+        top_n (int): 返回前n行数据，-1 表示返回所有数据
+
+        返回:
+        str: 格式化的板块资金流排名数据
+        """
+        try:
+            # 获取数据
+            df = ak.stock_sector_fund_flow_rank(indicator=indicator, sector_type=sector_type)
+
+            # 找到包含“涨跌幅”关键词的列名，并按照此列排序
+            change_column = next((col for col in df.columns if '涨跌幅' in col), None)
+            if change_column:
+                df = df.sort_values(by=change_column, ascending=False)
+
+            # 选择前 top_n 行，如果 top_n 为 -1，则选择所有行
+            if top_n != -1:
+                df = df.head(top_n)
+
+            # 格式化输出
+            result = f"板块资金流排名 ({sector_type} - {indicator}, Top {top_n if top_n != -1 else 'All'}):\n\n"
+            for _, row in df.iterrows():
+                result += f"{row['序号']}. {row['名称']} ({change_column}: {row[change_column]}%)\n"
+                for col in df.columns:
+                    if col not in ['序号', '名称', change_column]:
+                        value = row[col]
+                        # 判断数据类型来格式化输出
+                        if isinstance(value, (float, int)):
+                            result += f"   {col}: {value:.2f}\n"
+                        else:
+                            result += f"   {col}: {value}\n"
+                result += "\n"
+
+            return result
+        except Exception as e:
+            return f"获取板块资金流排名数据时出错: {str(e)}"
+
+    def get_stock_main_fund_flow(self, symbol: str = "全部股票", top_n: int = 10) -> str:
+        """
+        获取主力资金流向排名数据
+
+        参数:
+        symbol (str): 股票类型，可选 "全部股票", "沪深A股", "沪市A股", "科创板", "深市A股", "创业板", "沪市B股", "深市B股"
+        top_n (int): 返回前n行数据，-1 表示返回所有数据
+
+        返回:
+        str: 格式化的主力资金流向排名数据
+        """
+        try:
+            # 获取数据
+            df = ak.stock_main_fund_flow(symbol=symbol)
+
+            # 根据今日主力净占比排序
+            df = df.sort_values(by='今日排行榜-主力净占比', ascending=False)
+
+            # 选择前 top_n 行，如果 top_n 为 -1，则选择所有行
+            if top_n != -1:
+                df = df.head(top_n)
+
+            # 格式化输出
+            result = f"主力资金流向排名 ({symbol}, Top {top_n if top_n != -1 else 'All'}):\n\n"
+            for _, row in df.iterrows():
+                result += f"{row['序号']}. {row['名称']} ({row['代码']}) - {row['所属板块']}\n"
+                result += f"   最新价: {row['最新价']:.2f}\n"
+                result += f"   今日排行榜: 主力净占比 {row['今日排行榜-主力净占比']:.2f}%, 排名 {row['今日排行榜-今日排名']}, 涨跌幅 {row['今日排行榜-今日涨跌']:.2f}%\n"
+                result += f"   5日排行榜: 主力净占比 {row['5日排行榜-主力净占比']:.2f}%, 排名 {row['5日排行榜-5日排名']}, 涨跌幅 {row['5日排行榜-5日涨跌']:.2f}%\n"
+                result += f"   10日排行榜: 主力净占比 {row['10日排行榜-主力净占比']:.2f}%, 排名 {row['10日排行榜-10日排名']}, 涨跌幅 {row['10日排行榜-10日涨跌']:.2f}%\n\n"
+
+            return result
+        except Exception as e:
+            return f"获取主力资金流向排名数据时出错: {str(e)}"
+
     def get_stock_minute(self,symbol:str, period='1'):
         """
         个股分钟数据 参数symbol:str  返回值DataFrame
@@ -1990,7 +2398,75 @@ class StockDataProvider:
             data = ak.index_zh_a_hist(symbol=index,period="daily",start_date=start_date,end_date=end_date)
             result[index] = data
         return result
-    
+    def find_index_codes(self,names: List[str]) -> Dict[str, str]:
+        # 获取所有指数数据
+        stock_zh_index_spot_sina_df = ak.stock_zh_index_spot_sina()
+        
+        # 创建一个字典来存储结果
+        result = {}
+        
+        # 将DataFrame的'名称'和'代码'列转换为字典，以便快速查找
+        name_code_dict = dict(zip(stock_zh_index_spot_sina_df['名称'], stock_zh_index_spot_sina_df['代码']))
+        
+        # 遍历输入的名称列表
+        for name in names:
+            if name in name_code_dict:
+                result[name] = name_code_dict[name]
+        
+        return result
+    def fetch_historical_index_data(self,symbols: List[str], days: int = 120) -> Dict[str, pd.DataFrame]:
+        result = {}
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+        
+        for symbol in symbols:
+            try:
+                df = ak.stock_zh_index_daily_em(symbol=symbol, start_date=start_date, end_date=end_date)
+                if not df.empty:
+                    result[symbol] = df
+                else:
+                    print(f"No data found for symbol: {symbol}")
+            except Exception as e:
+                print(f"Error fetching data for symbol {symbol}: {str(e)}")
+        
+        return result
+    def calculate_industry_correlations(self, names: List[str], days: int = 120) -> pd.DataFrame:
+        """
+        计算给定行业指数的相关性矩阵。
+
+        该方法获取指定行业指数的历史数据，计算它们在给定时间段内的收盘价相关性，
+        并返回相关性矩阵。
+
+        参数：
+        names (List[str]): 要分析的行业指数名称列表。
+        days (int, 可选): 用于计算相关性的过去天数。默认为120天。
+
+        返回：
+        pd.DataFrame: 一个相关性矩阵，其中行和列都标记有行业指数名称。
+                      每个单元格表示两个指数之间的相关系数。
+
+        注意：
+        - 相关性基于指数的收盘价计算。
+        - 如果某个指数的数据不可用，它将被排除在相关性矩阵之外。
+        - 该方法会打印出没有数据或数据获取错误的指数的消息。
+        """
+        # 获取指数代码
+        index_codes = self.find_index_codes(names)
+        
+        # 获取历史数据
+        historical_data = self.fetch_historical_index_data(list(index_codes.values()), days)
+        
+        # 准备一个DataFrame来存储所有指数的收盘价
+        close_prices = pd.DataFrame()
+        
+        for name, code in index_codes.items():
+            if code in historical_data:
+                close_prices[name] = historical_data[code]['close']
+        
+        # 计算相关性矩阵
+        correlation_matrix = close_prices.corr()
+        
+        return correlation_matrix
     def get_stock_news(self, symbols: List[str]) -> Dict[str, List[Dict]]:
         """
         获取个股新闻。参数symbols: List[str] 返回值Dict[symbol,str]
@@ -2030,6 +2506,8 @@ class StockDataProvider:
         异常:
         ValueError: 如果无法获取股票新闻
         """
+        if "." in symbol:
+            symbol = symbol.split(".")[0]
         try:
             # 计算起始日期
             end_date = datetime.now()
@@ -2090,6 +2568,8 @@ class StockDataProvider:
         异常:
         ValueError: 如果无法获取股票数据
         """
+        if "." in symbol:
+            symbol = symbol.split(".")[0]
         try:
             # 使用 akshare 的 stock_bid_ask_em 函数获取最新行情数据
             df = ak.stock_bid_ask_em(symbol=symbol)
@@ -2124,6 +2604,7 @@ class StockDataProvider:
         """
         return self.get_code_name()[symbol]
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def get_stock_info(self,symbol: str) -> str:
         """
         查询指定股票代码的个股信息，参数symbol: str  返回str。
@@ -2143,22 +2624,65 @@ class StockDataProvider:
         
         return stock_info_str
 
-    def get_realtime_stock_data(self,symbol: str) -> str:
+    def get_realtime_stock_data(self, symbol: str) -> str:
         """
         查询指定证券代码的最新行情数据，参数symbol:str 返回str。
 
         参数:
-        symbol (str): 证券代码，可以是 A 股个股代码，A 股场内基金代码，A 股指数，美股代码, 美股指数，例如 "SH600000"。
+        symbol (str): 证券代码，可以是 A 股个股代码 例如 "600000"。
 
         返回:
         str: 最新行情数据的格式化字符串，包括代码、现价、涨幅、最高价、最低价、市盈率、成交量等信息。
         """
 
         # 获取实时行情数据
-        stock_spot_df = ak.stock_individual_spot_xq(symbol=symbol)
+        stock_spot_df = ak.stock_zh_a_spot_em()
+        stock_spot_df = stock_spot_df[stock_spot_df['代码'] == symbol]
 
-        # 将数据转换为可读的字符串格式
-        stock_spot_str = "\n".join([f"{row['item']}: {row['value']}" for _, row in stock_spot_df.iterrows()])
+        if stock_spot_df.empty:
+            return f"未找到证券代码 {symbol} 的数据"
+
+        # 定义需要显示的字段及其格式化方式
+        fields = [
+            ('代码', '{}'),
+            ('名称', '{}'),
+            ('最新价', '{:.2f}'),
+            ('涨跌幅', '{:.2f}%'),
+            ('涨跌额', '{:.2f}'),
+            ('成交量', '{:.0f}手'),
+            ('成交额', '{:.2f}元'),
+            ('振幅', '{:.2f}%'),
+            ('最高', '{:.2f}'),
+            ('最低', '{:.2f}'),
+            ('今开', '{:.2f}'),
+            ('昨收', '{:.2f}'),
+            ('量比', '{:.2f}'),
+            ('换手率', '{:.2f}%'),
+            ('市盈率-动态', '{:.2f}'),
+            ('市净率', '{:.2f}'),
+            ('总市值', '{:.2f}元'),
+            ('流通市值', '{:.2f}元'),
+            ('涨速', '{:.2f}'),
+            ('5分钟涨跌', '{:.2f}%'),
+            ('60日涨跌幅', '{:.2f}%'),
+            ('年初至今涨跌幅', '{:.2f}%')
+        ]
+
+        # 格式化数据
+        formatted_data = []
+        for field, format_str in fields:
+            if field in stock_spot_df.columns:
+                value = stock_spot_df[field].values[0]
+                if pd.notna(value):  # 检查是否为NaN
+                    formatted_value = format_str.format(value)
+                    formatted_data.append(f"{field}: {formatted_value}")
+                else:
+                    formatted_data.append(f"{field}: 无数据")
+            else:
+                formatted_data.append(f"{field}: 无数据")
+
+        # 将格式化的数据转换为字符串
+        stock_spot_str = "\n".join(formatted_data)
         
         return stock_spot_str
 
@@ -2173,17 +2697,17 @@ class StockDataProvider:
         """
 
         # 获取实时行情数据
-        stock_spot_df = ak.stock_individual_spot_xq()
+        stock_spot_df = ak.stock_sz_a_spot_em()
 
         # 初始化一个字典来存储结果
         formatted_data = {}
 
         # 遍历实时数据的每一行
         for _, row in stock_spot_df.iterrows():
-            symbol = row['symbol']
+            symbol = row['代码']
             
             # 将数据转换为可读的字符串格式
-            stock_spot_str = "\n".join([f"{item}: {value}" for item, value in row.items() if item != 'symbol'])
+            stock_spot_str = "\n".join([f"{item}: {value}" for item, value in row.items() if item != '代码'])
 
             # 存储在字典中
             formatted_data[symbol] = stock_spot_str
@@ -2203,7 +2727,7 @@ class StockDataProvider:
         """
         result = {}
         if not date:
-            date = self.get_last_trade_date()
+            date = self.get_latest_trading_date()
         df = ak.stock_gsrl_gsdt_em(date=date)
         for symbol in symbols:
             result[symbol] = []
@@ -2258,10 +2782,10 @@ class StockDataProvider:
         """
         return ak.stock_info_global_em()
 
-    def summarize_historical_data(self, symbols: List[str]) -> dict:
+    def summarize_historical_data(self, symbols: List[str],days: int = 180) -> dict:
         summary_dict = {}
         end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
 
         for symbol in symbols:
             if symbol in self.historical_data_cache:
@@ -2274,52 +2798,58 @@ class StockDataProvider:
                 summary_dict[symbol] = "未找到数据"
                 continue
 
+            # 检查数据点是否足够
+            if len(df) < 14:
+                summary_dict[symbol] = f"数据点不足，仅有 {len(df)} 个数据点，无法计算所有技术指标"
+                continue
+
             # 保留原有的指标计算
-            df['MA20'] = ta.trend.sma_indicator(df['收盘'], window=20)
-            df['MA50'] = ta.trend.sma_indicator(df['收盘'], window=50)
-            df['RSI'] = ta.momentum.rsi(df['收盘'], window=14)
+            df['MA20'] = ta.trend.sma_indicator(df['收盘'], window=min(20, len(df)))
+            df['MA50'] = ta.trend.sma_indicator(df['收盘'], window=min(50, len(df)))
+            df['RSI'] = ta.momentum.rsi(df['收盘'], window=min(14, len(df)))
             macd = ta.trend.MACD(df['收盘'])
             df['MACD'] = macd.macd()
             df['MACD_signal'] = macd.macd_signal()
-            bb = ta.volatility.BollingerBands(df['收盘'], window=20, window_dev=2)
+            bb = ta.volatility.BollingerBands(df['收盘'], window=min(20, len(df)), window_dev=2)
             df['BB_upper'] = bb.bollinger_hband()
             df['BB_lower'] = bb.bollinger_lband()
 
-            # 新增指标
-            df['ATR'] = ta.volatility.average_true_range(df['最高'], df['最低'], df['收盘'], window=14)
-            
-            stoch = ta.momentum.StochasticOscillator(df['最高'], df['最低'], df['收盘'])
-            df['Stoch_K'] = stoch.stoch()
-            df['Stoch_D'] = stoch.stoch_signal()
-            
-            df['RSI_9'] = ta.momentum.rsi(df['收盘'], window=9)
-            
-            df['OBV'] = ta.volume.on_balance_volume(df['收盘'], df['成交量'])
-            
-            df['Momentum'] = ta.momentum.roc(df['收盘'], window=10)
-            
-            df['ADL'] = ta.volume.acc_dist_index(df['最高'], df['最低'], df['收盘'], df['成交量'])
-            
-            df['Williams_R'] = ta.momentum.williams_r(high=df['最高'], low=df['最低'], close=df['收盘'], lbp=14)
+            # 新增指标，确保数据点足够
+            if len(df) >= 14:
+                df['ATR'] = ta.volatility.average_true_range(df['最高'], df['最低'], df['收盘'], window=14)
+                
+                stoch = ta.momentum.StochasticOscillator(df['最高'], df['最低'], df['收盘'])
+                df['Stoch_K'] = stoch.stoch()
+                df['Stoch_D'] = stoch.stoch_signal()
+                
+                df['RSI_9'] = ta.momentum.rsi(df['收盘'], window=9)
+                
+                df['OBV'] = ta.volume.on_balance_volume(df['收盘'], df['成交量'])
+                
+                df['Momentum'] = ta.momentum.roc(df['收盘'], window=min(10, len(df)))
+                
+                df['ADL'] = ta.volume.acc_dist_index(df['最高'], df['最低'], df['收盘'], df['成交量'])
+                
+                df['Williams_R'] = ta.momentum.williams_r(high=df['最高'], low=df['最低'], close=df['收盘'], lbp=min(14, len(df)))
 
             # 获取数据统计（包括新增指标）
             latest_close = df['收盘'].iloc[-1]
             highest_close = df['收盘'].max()
             lowest_close = df['收盘'].min()
             avg_volume = df['成交量'].mean()
-            latest_rsi = df['RSI'].iloc[-1]
-            latest_macd = df['MACD'].iloc[-1]
-            latest_macd_signal = df['MACD_signal'].iloc[-1]
-            bb_upper = df['BB_upper'].iloc[-1]
-            bb_lower = df['BB_lower'].iloc[-1]
-            latest_atr = df['ATR'].iloc[-1]
-            latest_stoch_k = df['Stoch_K'].iloc[-1]
-            latest_stoch_d = df['Stoch_D'].iloc[-1]
-            latest_rsi_9 = df['RSI_9'].iloc[-1]
-            latest_obv = df['OBV'].iloc[-1]
-            latest_momentum = df['Momentum'].iloc[-1]
-            latest_adl = df['ADL'].iloc[-1]
-            latest_williams_r = df['Williams_R'].iloc[-1]
+            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df else None
+            latest_macd = df['MACD'].iloc[-1] if 'MACD' in df else None
+            latest_macd_signal = df['MACD_signal'].iloc[-1] if 'MACD_signal' in df else None
+            bb_upper = df['BB_upper'].iloc[-1] if 'BB_upper' in df else None
+            bb_lower = df['BB_lower'].iloc[-1] if 'BB_lower' in df else None
+            latest_atr = df['ATR'].iloc[-1] if 'ATR' in df else None
+            latest_stoch_k = df['Stoch_K'].iloc[-1] if 'Stoch_K' in df else None
+            latest_stoch_d = df['Stoch_D'].iloc[-1] if 'Stoch_D' in df else None
+            latest_rsi_9 = df['RSI_9'].iloc[-1] if 'RSI_9' in df else None
+            latest_obv = df['OBV'].iloc[-1] if 'OBV' in df else None
+            latest_momentum = df['Momentum'].iloc[-1] if 'Momentum' in df else None
+            latest_adl = df['ADL'].iloc[-1] if 'ADL' in df else None
+            latest_williams_r = df['Williams_R'].iloc[-1] if 'Williams_R' in df else None
 
             # 生成描述性的字符串
             description = (
@@ -2328,22 +2858,34 @@ class StockDataProvider:
                 f"最近半年内最高收盘价: {highest_close:.2f}\n"
                 f"最近半年内最低收盘价: {lowest_close:.2f}\n"
                 f"最近半年平均成交量: {avg_volume:.0f}\n"
-                f"最新RSI(14): {latest_rsi:.2f}\n"
-                f"最新MACD: {latest_macd:.2f}\n"
-                f"最新MACD信号线: {latest_macd_signal:.2f}\n"
-                f"布林带上轨: {bb_upper:.2f}\n"
-                f"布林带下轨: {bb_lower:.2f}\n"
-                f"MA20: {df['MA20'].iloc[-1]:.2f}\n"
-                f"MA50: {df['MA50'].iloc[-1]:.2f}\n"
-                f"ATR(14): {latest_atr:.2f}\n"
-                f"随机振荡器K(14): {latest_stoch_k:.2f}\n"
-                f"随机振荡器D(14): {latest_stoch_d:.2f}\n"
-                f"RSI(9): {latest_rsi_9:.2f}\n"
-                f"OBV: {latest_obv:.0f}\n"
-                f"价格动量(10): {latest_momentum:.2f}%\n"
-                f"ADL: {latest_adl:.0f}\n"
-                f"威廉指标(14): {latest_williams_r:.2f}"
             )
+
+            if latest_rsi is not None:
+                description += f"最新RSI(14): {latest_rsi:.2f}\n"
+            if latest_macd is not None and latest_macd_signal is not None:
+                description += f"最新MACD: {latest_macd:.2f}\n"
+                description += f"最新MACD信号线: {latest_macd_signal:.2f}\n"
+            if bb_upper is not None and bb_lower is not None:
+                description += f"布林带上轨: {bb_upper:.2f}\n"
+                description += f"布林带下轨: {bb_lower:.2f}\n"
+            if 'MA20' in df and 'MA50' in df:
+                description += f"MA20: {df['MA20'].iloc[-1]:.2f}\n"
+                description += f"MA50: {df['MA50'].iloc[-1]:.2f}\n"
+            if latest_atr is not None:
+                description += f"ATR(14): {latest_atr:.2f}\n"
+            if latest_stoch_k is not None and latest_stoch_d is not None:
+                description += f"随机振荡器K(14): {latest_stoch_k:.2f}\n"
+                description += f"随机振荡器D(14): {latest_stoch_d:.2f}\n"
+            if latest_rsi_9 is not None:
+                description += f"RSI(9): {latest_rsi_9:.2f}\n"
+            if latest_obv is not None:
+                description += f"OBV: {latest_obv:.0f}\n"
+            if latest_momentum is not None:
+                description += f"价格动量(10): {latest_momentum:.2f}%\n"
+            if latest_adl is not None:
+                description += f"ADL: {latest_adl:.0f}\n"
+            if latest_williams_r is not None:
+                description += f"威廉指标(14): {latest_williams_r:.2f}"
             
             summary_dict[symbol] = description
         
@@ -2440,6 +2982,36 @@ class StockDataProvider:
             return docstring.strip()
         else:
             return f"函数 '{function_name}' 没有 __docstring__。"
+
+    def get_institutional_holdings(self, symbol: str) -> str:
+        # 计算当前年份和季度
+        now = datetime.now()
+        year = str(now.year)
+        quarter = (now.month - 1) // 3 + 1  # 计算当前季度
+        report_symbol = f"{year}{quarter}"
+
+        # 获取数据
+        try:
+            stock_institute_hold_df = ak.stock_institute_hold(symbol=report_symbol)
+        except Exception as e:
+            return f"获取数据失败: {str(e)}"
+
+        # 遍历数据，将其保存到缓存中
+        for index, row in stock_institute_hold_df.iterrows():
+            code = row['证券代码']
+            formatted_row = (
+                f"证券代码: {row['证券代码']}, 证券简称: {row['证券简称']}, "
+                f"机构数: {row['机构数']}, 机构数变化: {row['机构数变化']}, "
+                f"持股比例: {row['持股比例']}%, 持股比例增幅: {row['持股比例增幅']}%, "
+                f"占流通股比例: {row['占流通股比例']}%, 占流通股比例增幅: {row['占流通股比例增幅']}%"
+            )
+            self.institutional_holdings_cache[code] = formatted_row
+
+        # 从缓存中获取数据
+        if symbol in self.institutional_holdings_cache:
+            return self.institutional_holdings_cache[symbol]
+        else:
+            return "上个季报暂无数据"
 
     def select_stock_by_query(self, query: str):
         """
@@ -2561,6 +3133,8 @@ class StockDataProvider:
         返回:
         float: 计算得到的波动率
         """
+        if "." in symbol:
+            symbol = symbol.split(".")[0]
         # 获取历史收盘价数据
         end_date = datetime.now().strftime('%Y%m%d')
         start_date = (datetime.now() - timedelta(days=period)).strftime('%Y%m%d')
@@ -2593,6 +3167,8 @@ class StockDataProvider:
         """
         try:
             # 使用 akshare 的 stock_bid_ask_em 函数获取行情数据
+            if "." in symbol:
+                symbol= symbol.split(".")[0]
             df = ak.stock_bid_ask_em(symbol=symbol)
             
             # 从返回的数据中提取最新价格
@@ -3043,7 +3619,7 @@ class StockDataProvider:
         df = ak.stock_hot_tweet_xq(symbol="最热门")
         result = {}
         for _, row in df.head(num).iterrows():
-            code = self.rremove_prefix(row['股票代码'])
+            code = self.remove_prefix(row['股票代码'])
             info = f"股票简称: {row['股票简称']}, 讨论: {row['关注']:.0f}, 最新价: {row['最新价']:.2f}"
             result[code] = info
         return result
@@ -3053,7 +3629,7 @@ class StockDataProvider:
         df = ak.stock_hot_deal_xq(symbol="最热门")
         result = {}
         for _, row in df.head(num).iterrows():
-            code = self.rremove_prefix(row['股票代码'])
+            code = self.remove_prefix(row['股票代码'])
             info = f"股票简称: {row['股票简称']}, 交易: {row['关注']:.0f}, 最新价: {row['最新价']:.2f}"
             result[code] = info
         return result
@@ -3074,10 +3650,26 @@ class StockDataProvider:
         df = ak.stock_hot_rank_em()
         result = {}
         for _, row in df.head(num).iterrows():
-            code = self.rremove_prefix(row['代码'])
+            code = self.remove_prefix(row['代码'])
             info = f"股票名称: {row['股票名称']}, 最新价: {row['最新价']:.2f}, 涨跌额: {row['涨跌额']:.2f}, 涨跌幅: {row['涨跌幅']:.2f}%"
             result[code] = info
         return result
+    
+    def rremove_prefix(self, code: str) -> str:
+        """
+        使用正则表达式移除股票代码的前缀（如 'SH'、'SZ'、'BJ'），不区分大小写。
+
+        参数:
+        code (str): 原始股票代码
+
+        返回:
+        str: 移除前缀后的股票代码
+        """
+        # 正则表达式模式：匹配开头的 SH, SZ, 或 BJ，不区分大小写
+        pattern = r'^(sh|sz|bj)'
+        
+        # 使用 re.sub 来替换匹配的前缀为空字符串
+        return re.sub(pattern, '', code, flags=re.IGNORECASE)
 
     def get_baidu_hotrank(self, hour=7, num=20) -> dict:
         """
@@ -3112,6 +3704,51 @@ class StockDataProvider:
             )
             result[item['code']] = stock_info
         
+        return result
+
+    def get_combined_hot_stocks(self, num: int = 100) -> List[str]:
+        """
+        获取综合的热门股票列表，包括雪球讨论、雪球交易、问财热门、东方财富人气榜和百度热榜。
+
+        参数:
+        num (int): 从每个来源获取的股票数量，默认为100。
+
+        返回:
+        List[str]: 交叉合并后的去重股票代码列表。
+        """
+        symbol_dict = self.get_code_name()
+
+        wencai = []
+
+        # 获取各个来源的热门股票
+        xueqiu_tweet = list(self.get_xueqiu_hot_tweet(num).keys())
+        xueqiu_deal = list(self.get_xueqiu_hot_deal(num).keys())
+        eastmoney = list(self.get_eastmoney_hot_rank(num).keys())
+        baidu = list(self.get_baidu_hotrank(num=num).keys())
+        try:
+            wencai = list(self.get_wencai_hot_rank(num).keys())
+        except Exception as e:
+            pass
+        
+        # 将所有列表合并到一个列表中
+        all_lists = [xueqiu_tweet, xueqiu_deal, eastmoney, baidu]
+        if len(wencai)>0:
+            all_lists.append(wencai)
+
+        # 创建一个集合来存储已经添加的股票代码，用于去重
+        seen = set()
+        result = []
+
+        # 交叉合并列表
+        max_length = max(len(lst) for lst in all_lists)
+        for i in range(max_length):
+            for lst in all_lists:
+                if i < len(lst):
+                    stock = lst[i]
+                    if stock not in seen and stock in symbol_dict:
+                        seen.add(stock)
+                        result.append(stock)
+
         return result
 
     def get_baidu_recommendation(self, hour=7, num=20) -> dict:
@@ -3263,6 +3900,9 @@ class StockDataProvider:
 
         # 获取分析数据
         analysis_data = self.baidu_news_api.fetch_analysis(code=symbol, market=market)
+
+        if analysis_data == "数据不可用":
+            return "数据不可用"
         
         # 格式化结果
         formatted_analysis = (
@@ -3430,13 +4070,22 @@ class StockDataProvider:
         # 返回最终的摘要
         return " ".join(summaries)[:max_word]
 
-    def extract_json_from_text(self, text: str) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+    def replace_sensitive_subtitle(self,contents:list[str])->list[str]:
+        sensitive_subtitle_pair=[{"近日":"最近"}]
+        # 替换敏感词
+        for pair in sensitive_subtitle_pair:
+            for key, value in pair.items():
+                contents = [content.replace(key, value) for content in contents]
+        return contents
+
+    def extract_json_from_text(self, text: str, max_attempts: int = 4) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
-        从文本中提取JSON对象并返回字典或字典列表。返回dict或者list
+        从文本中提取JSON对象并返回字典或字典列表。允许多次尝试修复JSON。
 
         :param text: 包含JSON数据的字符串。
+        :param max_attempts: 最大修复尝试次数，默认为3。
         :return: 解析后的JSON对象（字典或字典列表）。
-        :raises JSONDecodeError: 如果未能找到有效的JSON数据。
+        :raises JSONDecodeError: 如果在多次尝试后仍未能找到有效的JSON数据。
         """
         json_match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
         if not json_match:
@@ -3447,7 +4096,46 @@ class StockDataProvider:
         if json_match:
             json_str = json_match.group(1) if '```json' in json_match.group() else json_match.group()
             json_str = json_str.replace("'", "\"")
-            return json.loads(json_str)
+            
+            for attempt in range(max_attempts):
+                try:
+                    return json.loads(json_str, strict=False)
+                except Exception as err:
+                    if attempt == max_attempts - 1:
+                        raise err
+                    
+                    fix_prompt = f"""
+                    以下JSON字符串解析时发生错误：
+
+                    ```json
+                    {json_str}
+                    ```
+
+                    错误信息：{str(err)}
+
+                    请帮我修复这个JSON。要求：
+
+                    尽可能保持原始数据不变。
+                    只修复导致解析错误的问题，不要改变有效的数据结构和值。
+                    特别注意检查并修复以下常见问题：
+                    缺少逗号
+                    多余的逗号
+                    未闭合的引号
+                    未闭合的括号
+                    双斜杠注释
+                    内部嵌套的引号冲突（请将内层引号改为不同符号或使用转义字符）
+                    如果有多个错误，请尝试一次性修复所有错误。
+                    返回修复后的完整JSON，用```json  ```包裹。
+                    不要添加任何解释，只返回修复后的JSON。
+                    """
+                    
+                    response = self.llm_client.one_chat(fix_prompt)
+                    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
+                    if json_match:
+                        json_str = json_match.group(1)
+                    else:
+                        json_str = response  # 如果没有找到```json```包裹，就使用整个响应
+                    json_str = json_str.replace("'", "\"")
         
         raise json.JSONDecodeError("No valid JSON found in the text", text, 0)
     
@@ -3488,6 +4176,9 @@ class StockDataProvider:
         用于获取市场整体信息的函数：
             - stock_market_desc                         市场平均市盈率等市场指标
             - get_current_buffett_index                 市场的巴菲特指数
+            - get_sector_fund_flow_rank                 行业资金流向,返回值str
+            - get_a_stock_pb_stats                      获取市场市净率统计
+            - get_a_stock_pe_ratios                      获取市场市盈率统计
         用于财报日期的函数
             - get_latest_financial_report_date           上一个财报日
             - get_next_financial_report_date             下一个财报日
@@ -3505,12 +4196,20 @@ class StockDataProvider:
             - get_stock_profit_forecast                   获取指定股票的盈利预测数据。symbol: str ,返回str 盈利预测字符串
             - get_esg_score                               获取指定股票的ESG评分数据。symbol: str ,返回str ESG评分字符串     
             - get_main_competitors                        获取主要竞争对手信息。symbol: str ,返回str 竞争对手信息字符串 
+            - get_stock_big_deal                          获取大单数据,参数symbol: str ,返回str 大单数据字符串
+            - get_recent_recommendations_summary          最近半年机构推荐汇总，参数symbol: str ,返回str 机构推荐汇总字符串
+            - get_one_stock_news                         获取指定股票的最近新闻，参数symbol: str ,返回List[str] 新闻列表
+            - get_realtime_stock_data                    获取指定股票的实时数据，参数symbol: str ,返回str 实时数据字符串
+            - get_stock_announcements                    获取指定股票的公告，参数symbols: List[str] ,返回Dict[symbol,List[str]] 公告列表
+            - calculate_stock_correlations               计算股票相关性，参数symbols: List[str] ,返回pd.DataFrame 相关性矩阵
         用于代码查询的函数
             - search_index_code                         通过名称模糊查询指数代码
             - search_stock_code                         通过名称模糊查询股票代码
         用于查询财务数据
             - get_financial_analysis_summary            个股的财务分析指标
             - get_key_financial_indicators              关键财务指标
+            - get_financial_forecast_summary            个股的财务预测指标.返回全部股票的财务预测dict
+            - get_financial_report_summary              个股的财务报告摘要.一个字典，键是股票代码，值是描述性的字符串
         用于查询财务数据细节(非必要勿使用)
             - get_balance_sheet_summary                 资产负债表摘要
             - get_profit_statement_summary              利润表摘要
@@ -3532,7 +4231,10 @@ class StockDataProvider:
             - summarizer_news                           把新闻数据根据 query 的要求 总结出短摘要
         用于解析llm_client的json输出
             - extract_json_from_text                    从text中提取json,返回dict或者list
-        
+        行业数据
+            - get_industry_pe_ratio                      获取行业市盈率，参数，symbol 行业，Dict[行业名称,str]
+            - get_stock_sector                           获取股票所属行业，参数symbol，返回str
+            - calculate_industry_correlations            计算行业相关性，参数names: List[str], days: int = 120 返回pd.DataFrame
         """
         return prompt
     
