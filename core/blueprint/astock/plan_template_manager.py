@@ -55,7 +55,7 @@ class PlanTemplateManager:
             content = f.read()
         
         # 将内容分割成多个部分
-        sections = re.split(r'(?m)^###\s*', content)[1:]  # 跳过第一个空白分割
+        sections = re.split(r'(?m)^######\s*', content)[1:]  # 跳过第一个空白分割
         
         self.templates = []
         for section in sections:
@@ -67,7 +67,7 @@ class PlanTemplateManager:
     def save_templates_to_file(self, file_path: str):
         with open(file_path, 'w', encoding='utf-8') as f:
             for template in self.templates:
-                f.write(f"### {template['description']}\n")
+                f.write(f"###### {template['description']}\n")
                 f.write(f"{template['template']}\n\n")
 
     def get_best_template(self, query: str) -> Optional[Dict]:
