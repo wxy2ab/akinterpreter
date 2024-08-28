@@ -4,6 +4,7 @@
 
 ## 2024年8月28日
 - 在llm_dealer中 新增资产组合投资建议
+- 在llm_dealer中 新增推荐投资组合
 
 ## 2024年8月27日
 - 在llm_dealer中 新增了github action 定时执行选股

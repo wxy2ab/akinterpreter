@@ -413,6 +413,27 @@ class StockDataProvider:
         return self.global_economic_indicators
 
     def get_esg_score(self, symbol: str) -> str:
+        """
+        获取ESG评分
+        
+        :param symbol: 股票代码（不包含后缀）
+        :return: ESG评分或未找到数据的提示
+        """
+        if not hasattr(self, 'esg_rate_cache') or self.esg_rate_cache is None:
+            self._load_esg_data()
+        
+        if symbol in self.esg_rate_cache:
+            return self.esg_rate_cache[symbol]
+        else:
+            return f"No ESG data found for {symbol}"
+
+    def _load_esg_data(self):
+        df = ak.stock_esg_hz_sina()
+        # 移除股票代码中的后缀（如.SZ或.SH）
+        df['股票代码'] = df['股票代码'].str.split('.').str[0]
+        self.esg_rate_cache = dict(zip(df['股票代码'], df['ESG评分'].astype(str)))
+
+    def get_esg_score_sina(self, symbol: str) -> str:
         # 检查缓存是否存在
         if hasattr(self, 'esg_rate_cache'):
             if symbol in self.esg_rate_cache:
@@ -1041,7 +1062,7 @@ class StockDataProvider:
         """
         # 获取数据
         pb_stats_df = ak.stock_a_all_pb()
-
+        pb_stats_df =pb_stats_df.tail(10)
         # 处理数据并生成易于理解的字符串
         result = []
         for _, row in pb_stats_df.iterrows():
@@ -1068,6 +1089,7 @@ class StockDataProvider:
         """
         # 获取数据
         pe_ratios_df = ak.stock_a_ttm_lyr()
+        pe_ratios_df = pe_ratios_df.tail(10)
 
         # 处理数据并生成易于理解的字符串
         result = []
@@ -1313,7 +1335,7 @@ class StockDataProvider:
             f"目标价统计:\n"
             f" - 最高目标价: {max_target_price}\n"
             f" - 最低目标价: {min_target_price}\n"
-            f" - 平均目标价: {avg_target_price:.2f}\n"
+            f" - 平均目标价: {avg_target_price}\n"
             f" - 最多的目标价区间: {most_common_range}\n"
         )
         
@@ -1337,6 +1359,7 @@ class StockDataProvider:
             # 如果 UTF-8 解码失败，尝试使用 ISO-8859-1
             with open(file_path, "r", encoding="iso-8859-1") as f:
                 return f.read()
+
     def stock_rank_forecast_cninfo(self,date: str = "20240630") -> pd.DataFrame:
         """
         巨潮资讯-数据中心-评级预测-投资评级
@@ -1403,6 +1426,7 @@ class StockDataProvider:
         temp_df["目标价格-上限"] = pd.to_numeric(temp_df["目标价格-上限"], errors="coerce")
         temp_df["目标价格-下限"] = pd.to_numeric(temp_df["目标价格-下限"], errors="coerce")
         return temp_df
+
     def get_investment_ratings(self, date: str = None) -> dict:
         """
         获取投资评级数据，并返回格式化结果。返回值Dict[symbol,str]
@@ -1710,7 +1734,7 @@ class StockDataProvider:
         
         return summary_dict
 
-    def get_stock_info(self,symbol:str)->pd.DataFrame:
+    def get_stock_info_df(self,symbol:str)->pd.DataFrame:
         """
         公司概况
         输入参数:symbol	str	股票代码
@@ -2186,6 +2210,7 @@ class StockDataProvider:
 
         return correlation_matrix
 
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
     def get_code_name(self) -> Dict[str, str]:
         """
         名称和代码的字典，用代码查名称。返回值: Dict[代码,名称]
@@ -2398,6 +2423,7 @@ class StockDataProvider:
             data = ak.index_zh_a_hist(symbol=index,period="daily",start_date=start_date,end_date=end_date)
             result[index] = data
         return result
+
     def find_index_codes(self,names: List[str]) -> Dict[str, str]:
         # 获取所有指数数据
         stock_zh_index_spot_sina_df = ak.stock_zh_index_spot_sina()
@@ -2414,6 +2440,7 @@ class StockDataProvider:
                 result[name] = name_code_dict[name]
         
         return result
+
     def fetch_historical_index_data(self,symbols: List[str], days: int = 120) -> Dict[str, pd.DataFrame]:
         result = {}
         end_date = datetime.now().strftime("%Y%m%d")
@@ -2430,6 +2457,7 @@ class StockDataProvider:
                 print(f"Error fetching data for symbol {symbol}: {str(e)}")
         
         return result
+
     def calculate_industry_correlations(self, names: List[str], days: int = 120) -> pd.DataFrame:
         """
         计算给定行业指数的相关性矩阵。
@@ -2467,6 +2495,7 @@ class StockDataProvider:
         correlation_matrix = close_prices.corr()
         
         return correlation_matrix
+
     def get_stock_news(self, symbols: List[str]) -> Dict[str, List[Dict]]:
         """
         获取个股新闻。参数symbols: List[str] 返回值Dict[symbol,str]
@@ -2623,6 +2652,29 @@ class StockDataProvider:
         stock_info_str = "\n".join([f"{row['item']}: {row['value']}" for _, row in stock_info_df.iterrows()])
         
         return stock_info_str
+    
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
+    def get_stock_info_dict(self, symbol: str) -> Dict[str, Any]:
+        """
+        查询指定股票代码的个股信息，参数symbol: str  返回Dict[str, Any]。
+
+        参数:
+        symbol (str): 股票代码，例如 "603777"。
+
+        返回:
+        Dict[str, Any]: 个股信息的字典，包括总市值、流通市值、行业、上市时间、股票代码、股票简称、总股本和流通股本。
+        """
+
+        # 获取个股信息数据框
+        stock_info_df = ak.stock_individual_info_em(symbol=symbol)
+
+        # 将数据转换为字典格式
+        stock_info_dict = {row['item']: row['value'] for _, row in stock_info_df.iterrows()}
+        
+        # 添加股票代码到字典中
+        stock_info_dict['股票代码'] = symbol
+
+        return stock_info_dict
 
     def get_realtime_stock_data(self, symbol: str) -> str:
         """
@@ -2782,6 +2834,71 @@ class StockDataProvider:
         """
         return ak.stock_info_global_em()
 
+    def summarize_historical_data_dict(self, symbols: List[str], days: int = 180) -> Dict[str, Dict[str, Any]]:
+        summary_dict = {}
+        end_date = datetime.now().strftime("%Y%m%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y%m%d")
+
+        for symbol in symbols:
+            if symbol in self.historical_data_cache:
+                df = self.historical_data_cache[symbol]
+            else:
+                df = self.get_historical_daily_data(symbol, start_date, end_date)
+                self.historical_data_cache[symbol] = df
+            
+            if df.empty:
+                summary_dict[symbol] = {"error": "未找到数据"}
+                continue
+
+            if len(df) < 14:
+                summary_dict[symbol] = {"error": f"数据点不足，仅有 {len(df)} 个数据点，无法计算所有技术指标"}
+                continue
+
+            # 计算技术指标
+            df['MA20'] = ta.trend.sma_indicator(df['收盘'], window=min(20, len(df)))
+            df['MA50'] = ta.trend.sma_indicator(df['收盘'], window=min(50, len(df)))
+            df['RSI'] = ta.momentum.rsi(df['收盘'], window=min(14, len(df)))
+            macd = ta.trend.MACD(df['收盘'])
+            df['MACD'] = macd.macd()
+            df['MACD_signal'] = macd.macd_signal()
+            bb = ta.volatility.BollingerBands(df['收盘'], window=min(20, len(df)), window_dev=2)
+            df['BB_upper'] = bb.bollinger_hband()
+            df['BB_lower'] = bb.bollinger_lband()
+
+            if len(df) >= 14:
+                df['ATR'] = ta.volatility.average_true_range(df['最高'], df['最低'], df['收盘'], window=14)
+                stoch = ta.momentum.StochasticOscillator(df['最高'], df['最低'], df['收盘'])
+                df['Stoch_K'] = stoch.stoch()
+                df['Stoch_D'] = stoch.stoch_signal()
+                df['RSI_9'] = ta.momentum.rsi(df['收盘'], window=9)
+                df['OBV'] = ta.volume.on_balance_volume(df['收盘'], df['成交量'])
+                df['Momentum'] = ta.momentum.roc(df['收盘'], window=min(10, len(df)))
+                df['ADL'] = ta.volume.acc_dist_index(df['最高'], df['最低'], df['收盘'], df['成交量'])
+                df['Williams_R'] = ta.momentum.williams_r(high=df['最高'], low=df['最低'], close=df['收盘'], lbp=min(14, len(df)))
+
+            # 构建结构化的摘要字典
+            summary = {
+                "股票代码": symbol,
+                "当前价格": df['收盘'].iloc[-1],
+                "最高收盘价": df['收盘'].max(),
+                "最低收盘价": df['收盘'].min(),
+                "平均成交量": df['成交量'].mean(),
+                "平均成交额": df['成交额'].mean(),
+                "技术指标": {}
+            }
+
+            # 添加技术指标
+            indicators = ['RSI', 'MACD', 'MACD_signal', 'BB_upper', 'BB_lower', 'MA20', 'MA50', 
+                          'ATR', 'Stoch_K', 'Stoch_D', 'RSI_9', 'OBV', 'Momentum', 'ADL', 'Williams_R']
+            
+            for indicator in indicators:
+                if indicator in df.columns:
+                    summary["技术指标"][indicator] = df[indicator].iloc[-1]
+
+            summary_dict[symbol] = summary
+
+        return summary_dict
+
     def summarize_historical_data(self, symbols: List[str],days: int = 180) -> dict:
         summary_dict = {}
         end_date = datetime.now().strftime("%Y%m%d")
@@ -2854,10 +2971,10 @@ class StockDataProvider:
             # 生成描述性的字符串
             description = (
                 f"股票代码: {symbol}\n"
-                f"最新收盘价: {latest_close:.2f}\n"
-                f"最近半年内最高收盘价: {highest_close:.2f}\n"
-                f"最近半年内最低收盘价: {lowest_close:.2f}\n"
-                f"最近半年平均成交量: {avg_volume:.0f}\n"
+                f"当前价格: {latest_close:.2f}\n"
+                f"最高收盘价: {highest_close:.2f}\n"
+                f"最低收盘价: {lowest_close:.2f}\n"
+                f"平均成交量: {avg_volume:.0f}\n"
             )
 
             if latest_rsi is not None:
