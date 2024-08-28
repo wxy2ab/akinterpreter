@@ -1,4004 +1,806 @@
-import logging
-import pickle
-import re
-from typing import Any, Callable, List, Dict, Tuple, Optional, Union ,Literal
-import numpy as np
-import pandas as pd
-from datetime import datetime, timedelta
-import pytz
-import os
-import json
-import akshare as ak
-from core.llms._llm_api_client import LLMApiClient
-from core.interpreter.data_summarizer import DataSummarizer
-from core.interpreter.ast_code_runner import ASTCodeRunner
-from .baidu_news import BaiduFinanceAPI
-from .index_finder import index_finder
-from .stock_symbol_provider import StockSymbolProvider
-import ta
-from tenacity import retry,retry_if_exception,stop_after_attempt,wait_fixed,wait_exponential
-
-
-
-class StockDataProvider:
-    def __init__(self,llm_client:LLMApiClient):
-        self.llm_client = llm_client
-        self.data_summarizer = DataSummarizer()
-        self.code_runner = ASTCodeRunner()
-        self.baidu_news_api = BaiduFinanceAPI()
-        self.index_finder = index_finder
-        self.stock_finder = StockSymbolProvider()
-        
-        self.code_name_list = {}
-        self.previous_trading_date_cache = None
-        self.previous_trading_date_cache_time = None
-        self.latest_trading_date_cache = None
-        self.latest_trading_date_cache_time = None
-        self.cash_flow_cache = {}
-        self.profit_cache = {}
-        self.balance_sheet_cache = {}
-        self.forecast_cache = {}
-        self.report_cache = {}
-        self.comment_cache = {}
-        self.historical_data_cache = {}
-        self.rebound_stock_pool_cache = {}  
-        self.new_stock_pool_cache = {} 
-        self.strong_stock_pool_cache = {}  
-        self.previous_day_stock_pool_cache = {}
-        self.institutional_holdings_cache = {}
-        self.big_deal_cache = {}
-        self.sector_cache = {}
-        self.stock_lg_code_cache = {}
-        self.stock_sector_update_time = None
-        self.sector_cache_file_path = './json/sector.pickle'
-        self.logger = logging.getLogger(__name__)
-
-    def search_index_code(self,name:str)->str:
-        """
-        通过名称模糊查询指数代码。参数name:str,返回值str
-        参数：
-            name:str  用于搜索的名字
-        返回值
-            指数代码
-        """
-        return self.index_finder[name]
-
-    def search_stock_code(self,name:str)->str:
-        """
-        通过名称模糊查询股票代码.参数name:str 返回值str
-        参数
-            name:str    用于搜索的名字
-        返回值
-            股票代码
-        """
-        return self.stock_finder[name]
-
-    def get_stock_sector(self, symbol: str) -> str:
-        """
-        查询指定股票(symbol)的所属行业。
-        """
-        # 如果缓存为空，尝试从文件加载
-        if not self.sector_cache:
-            self._load_sector_cache()
-
-        # 检查缓存中是否已存在该symbol的行业信息
-        if symbol in self.sector_cache:
-            return self.sector_cache[symbol]
-
-        # 如果缓存中没有，更新整个缓存
-        self._update_sector_cache()
-
-        # 再次检查缓存
-        return self.sector_cache.get(symbol, "未找到所属行业")
-
-    def _load_sector_cache(self):
-        """从文件加载缓存"""
-        try:
-            if os.path.exists(self.sector_cache_file_path):
-                with open(self.sector_cache_file_path, 'rb') as f:
-                    self.sector_cache = pickle.load(f)
-                self.logger.info(f"Loaded {len(self.sector_cache)} items from sector cache.")
-            else:
-                self.logger.info("Sector cache file does not exist. Will create a new one.")
-        except Exception as e:
-            self.logger.error(f"Error loading sector cache: {str(e)}")
-            self.sector_cache = {}
-
-    def _update_sector_cache(self):
-        """更新整个行业缓存"""
-        if self.stock_sector_update_time and datetime.now() - self.stock_sector_update_time < timedelta(days=1):
-            self.logger.info("Sector cache is up to date. Skipping update.")
-            return
-        try:
-            # 获取所有行业板块数据
-            industry_df = ak.stock_board_industry_name_em()
-            
-            new_cache = {}
-            for _, industry in industry_df.iterrows():
-                industry_code = industry['板块代码']
-                industry_name = industry['板块名称']
-
-                try:
-                    cons_df = ak.stock_board_industry_cons_em(symbol=industry_name)
-                    for code in cons_df['代码'].values:
-                        code_str = str(code)
-                        if code_str in new_cache:
-                            new_cache[code_str] += f", {industry_name}"
-                        else:
-                            new_cache[code_str] = industry_name
-                except Exception as e:
-                    self.logger.warning(f"Error fetching constituents for industry {industry_name}: {str(e)}")
-
-            # 更新缓存
-            self.sector_cache = new_cache
-            self._save_sector_cache()
-            self.stock_sector_update_time = datetime.now()
-            self.logger.info(f"Updated sector cache with {len(self.sector_cache)} items.")
-        except Exception as e:
-            self.logger.error(f"Error updating sector cache: {str(e)}")
-
-    def _save_sector_cache(self):
-        """保存缓存到文件"""
-        try:
-            with open(self.sector_cache_file_path, 'wb') as f:
-                pickle.dump(self.sector_cache, f)
-            self.logger.info(f"Saved {len(self.sector_cache)} items to sector cache file.")
-        except Exception as e:
-            self.logger.error(f"Error saving sector cache: {str(e)}")
-
-    def get_macro_economic_indicators(self) -> str:
-
-        if hasattr(self, 'macro_economic_indicators'):
-            return self.macro_economic_indicators
-
-        result = []
-        
-        # 中国宏观杠杆率
-        try:
-            df = ak.macro_cnbs()
-            latest = df.iloc[-1]
-            result.append(f"中国宏观杠杆率 (截至 {latest['年份']}):\n"
-                        f"居民部门: {latest['居民部门']}%, 非金融企业部门: {latest['非金融企业部门']}%, "
-                        f"政府部门: {latest['政府部门']}%, 实体经济部门: {latest['实体经济部门']}%")
-        except Exception as e:
-            result.append(f"获取中国宏观杠杆率数据失败: {str(e)}")
-
-        # 企业商品价格指数
-        try:
-            df = ak.macro_china_qyspjg()
-            latest = df.iloc[-1]
-            result.append(f"企业商品价格指数 ({latest['月份']}):\n"
-                        f"总指数: {latest['总指数-指数值']}, 同比增长: {latest['总指数-同比增长']}%, "
-                        f"环比增长: {latest['总指数-环比增长']}%")
-        except Exception as e:
-            result.append(f"获取企业商品价格指数数据失败: {str(e)}")
-
-        # 外商直接投资数据
-        try:
-            df = ak.macro_china_fdi()
-            latest = df.iloc[-1]
-            result.append(f"外商直接投资 ({latest['月份']}):\n"
-                        f"当月: {latest['当月']}美元, 同比增长: {latest['当月-同比增长']}%, "
-                        f"累计: {latest['累计']}美元, 同比增长: {latest['累计-同比增长']}%")
-        except Exception as e:
-            result.append(f"获取外商直接投资数据失败: {str(e)}")
-
-        # LPR数据
-        try:
-            df = ak.macro_china_lpr()
-            latest = df.iloc[-1]
-            result.append(f"LPR利率 ({latest['TRADE_DATE']}):\n"
-                        f"1年期: {latest['LPR1Y']}%, 5年期: {latest['LPR5Y']}%")
-        except Exception as e:
-            result.append(f"获取LPR数据失败: {str(e)}")
-
-        # 城镇调查失业率
-        try:
-            df = ak.macro_china_urban_unemployment()
-            latest_month = df['date'].max()
-            latest = df[df['date'] == latest_month]
-            result.append(f"城镇调查失业率 ({latest_month}):")
-            for _, row in latest.iterrows():
-                result.append(f"{row['item']}: {row['value']}%")
-        except Exception as e:
-            result.append(f"获取城镇调查失业率数据失败: {str(e)}")
-
-        # 社会融资规模增量统计
-        try:
-            df = ak.macro_china_shrzgm()
-            latest = df.iloc[0]
-            result.append(f"社会融资规模增量 ({latest['月份']}):\n"
-                        f"当月: {latest['社会融资规模增量']}亿元, "
-                        f"人民币贷款: {latest['其中-人民币贷款']}亿元")
-        except Exception as e:
-            result.append(f"获取社会融资规模增量数据失败: {str(e)}")
-
-        # GDP年率
-        try:
-            df = ak.macro_china_gdp_yearly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"GDP年率 ({latest['日期']}):\n"
-                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取GDP年率数据失败: {str(e)}")
-
-        # CPI年率
-        try:
-            df = ak.macro_china_cpi_yearly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"CPI年率 ({latest['日期']}):\n"
-                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取CPI年率数据失败: {str(e)}")
-
-        # CPI月率
-        try:
-            df = ak.macro_china_cpi_monthly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"CPI月率 ({latest['日期']}):\n"
-                        f"环比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取CPI月率数据失败: {str(e)}")
-
-        # PPI年率
-        try:
-            df = ak.macro_china_ppi_yearly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"PPI年率 ({latest['日期']}):\n"
-                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取PPI年率数据失败: {str(e)}")
-
-        # 进出口年率
-        try:
-            exports_df = ak.macro_china_exports_yoy()
-            imports_df = ak.macro_china_imports_yoy()
-            latest_exports = exports_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            latest_imports = imports_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"进出口年率:\n"
-                        f"出口 ({latest_exports['日期']}): {latest_exports['今值']}%, "
-                        f"进口 ({latest_imports['日期']}): {latest_imports['今值']}%")
-        except Exception as e:
-            result.append(f"获取进出口年率数据失败: {str(e)}")
-
-        # 贸易帐
-        try:
-            df = ak.macro_china_trade_balance()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"贸易帐 ({latest['日期']}):\n"
-                        f"{latest['今值']}亿美元, 预期: {latest['预测值']}亿美元")
-        except Exception as e:
-            result.append(f"获取贸易帐数据失败: {str(e)}")
-
-        # 工业增加值增长
-        try:
-            df = ak.macro_china_industrial_production_yoy()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"工业增加值增长 ({latest['日期']}):\n"
-                        f"同比增长: {latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取工业增加值增长数据失败: {str(e)}")
-
-        # PMI数据
-        try:
-            pmi_df = ak.macro_china_pmi_yearly()
-            cx_pmi_df = ak.macro_china_cx_pmi_yearly()
-            cx_services_pmi_df = ak.macro_china_cx_services_pmi_yearly()
-            
-            latest_pmi = pmi_df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            latest_cx_pmi = cx_pmi_df.iloc[-2]
-            latest_cx_services_pmi = cx_services_pmi_df.iloc[-2]
-            
-            result.append(f"PMI数据:\n"
-                        f"官方制造业PMI ({latest_pmi['日期']}): {latest_pmi['今值']}\n"
-                        f"财新制造业PMI ({latest_cx_pmi['日期']}): {latest_cx_pmi['今值']}\n"
-                        f"财新服务业PMI ({latest_cx_services_pmi['日期']}): {latest_cx_services_pmi['今值']}")
-        except Exception as e:
-            result.append(f"获取PMI数据失败: {str(e)}")
-
-        # 外汇储备
-        try:
-            df = ak.macro_china_fx_reserves_yearly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"外汇储备 ({latest['日期']}):\n"
-                        f"{latest['今值']}亿美元, 预期: {latest['预测值']}亿美元")
-        except Exception as e:
-            result.append(f"获取外汇储备数据失败: {str(e)}")
-
-        # M2货币供应年率
-        try:
-            df = ak.macro_china_m2_yearly()
-            latest = df.iloc[-2]  # 使用倒数第二行，因为最后一行可能是NaN
-            result.append(f"M2货币供应年率 ({latest['日期']}):\n"
-                        f"{latest['今值']}%, 预期: {latest['预测值']}%")
-        except Exception as e:
-            result.append(f"获取M2货币供应年率数据失败: {str(e)}")
-
-        self.macro_economic_indicators = "\n\n".join(result)
-        return self.macro_economic_indicators
-
-    def get_main_competitors(self, symbol: str) -> str:
-        """
-        获取主要竞争对手的股票代码和相关信息。
-
-        参数：
-            symbol: str  股票代码
-
-        返回值：
-            str: 格式化的竞争对手信息字符串，如果没有找到竞争对手则返回相应消息
-        """
-        competitors = self.baidu_news_api.get_stock_recommendations(symbol)
-        
-        if not competitors:
-            return "未找到该股票的主要竞争对手信息。"
-        
-        formatted_output = "主要竞争对手信息：\n"
-        for comp in competitors:
-            price_status = "↑" if comp['price']['status'] == 'up' else "↓"
-            ratio_status = "↑" if comp['ratio']['status'] == 'up' else "↓"
-            
-            formatted_output += (
-                f"代码: {comp['code']} | 名称: {comp['name']} | 市场: {comp['market']} | "
-                f"交易所: {comp['exchange']}\n"
-                f"价格: {comp['price']['value']} {price_status} | "
-                f"涨跌幅: {comp['ratio']['value']} {ratio_status}\n"
-                f"------------------------\n"
-            )
-        
-        return formatted_output.strip()
-
-    def get_global_economic_indicators(self) -> str:
-        if hasattr(self, 'global_economic_indicators'):
-            return self.global_economic_indicators
-
-        result = []
-        
-        # 美国 GDP 月率
-        df = ak.macro_usa_gdp_monthly()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"美国GDP月率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
-        
-        # 美国失业率
-        df = ak.macro_usa_unemployment_rate()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"美国失业率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
-        
-        # 美国CPI月率
-        df = ak.macro_usa_cpi_monthly()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"美国CPI月率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
-        
-        # 欧元区GDP季率
-        df = ak.macro_euro_gdp_yoy()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"欧元区GDP季率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
-        
-        # 欧元区失业率
-        df = ak.macro_euro_unemployment_rate_mom()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"欧元区失业率: {latest['今值']}% (日期: {latest['日期']}, 前值: {latest['前值']}%)")
-        
-        # 英国GDP年率
-        df = ak.macro_uk_gdp_yearly()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"英国GDP年率: {latest['现值']}% (时间: {latest['时间']}, 前值: {latest['前值']}%)")
-        
-        # 英国失业率
-        df = ak.macro_uk_unemployment_rate()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"英国失业率: {latest['现值']}% (时间: {latest['时间']}, 前值: {latest['前值']}%)")
-        
-        # 中国GDP年率
-        df = ak.macro_china_gdp_yearly()
-        if not df.empty:
-            latest = df.iloc[-1]
-            result.append(f"中国GDP年率: {latest['今值']}% (日期: {latest['统计时间']}, 前值: {latest['前值']}%)")
-        
-        # 中国失业率
-        df = ak.macro_china_urban_unemployment()
-        if not df.empty:
-            # 筛选出全国城镇调查失业率的最新数据
-            latest = df[df['item'] == '全国城镇调查失业率'].iloc[0]
-            result.append(f"中国城镇调查失业率: {latest['value']}% (日期: {latest['date']})")
-    
-        
-        self.global_economic_indicators =  "\n".join(result)
-        return self.global_economic_indicators
-
-    def get_esg_score(self, symbol: str) -> str:
-        # 检查缓存是否存在
-        if hasattr(self, 'esg_rate_cache'):
-            if symbol in self.esg_rate_cache:
-                return self.esg_rate_cache[symbol]
-            else:
-                return f"No ESG data found for {symbol}"
-        
-        # 如果缓存不存在或symbol不在缓存中，则重新获取数据
-        df = ak.stock_esg_rate_sina()
-        
-        # 筛选最新季度
-        df['评级季度'] = pd.to_datetime(df['评级季度'], format='%YQ%q')
-        latest_quarter = df['评级季度'].max()
-        df = df[df['评级季度'] == latest_quarter]
-        
-        # 筛选交易市场为cn
-        df = df[df['交易市场'] == 'cn']
-        
-        # 处理成分股代码
-        df['symbol'] = df['成分股代码'].str.replace(r'^[A-Z]+', '', regex=True)
-        
-        # 创建结果字典
-        result_dict = {}
-        
-        for sym in df['symbol'].unique():
-            sym_data = df[df['symbol'] == sym]
-            ratings = []
-            for _, row in sym_data.iterrows():
-                rating = f"{row['评级机构']}: {row['评级']}"
-                if pd.notna(row['标识']):
-                    rating += f" ({row['标识']})"
-                ratings.append(rating)
-            
-            result_str = f"ESG Ratings for {sym} (as of {latest_quarter.strftime('%Y Q%q')}):\n"
-            result_str += "\n".join(ratings)
-            result_dict[sym] = result_str
-        
-        # 保存缓存
-        self.esg_rate_cache = result_dict
-        
-        # 返回请求的symbol的数据
-        return result_dict.get(symbol, f"No ESG data found for {symbol}")
-
-    def get_cctv_news(self, days=30) -> List[dict]:
-        """
-        获取最近指定天数的CCTV新闻联播内容，参数需要获取的天数 days=30 ，返回列表，包含date、title、content
-
-        参数:
-        days (int): 要获取的天数，默认为30天
-
-        返回:
-        List[dict]: 包含新闻数据的字典列表，每个字典包含date（日期）、title（标题）和content（内容）
-        """
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=days)
-        
-        news_list = []
-        current_date = end_date
-        
-        while current_date >= start_date:
-            date_str = current_date.strftime("%Y%m%d")
-            try:
-                news_df = ak.news_cctv(date=date_str)
-                if not news_df.empty:
-                    for _, row in news_df.iterrows():
-                        news_item = {
-                            "date": row['date'],
-                            "title": row['title'],
-                            "content": row['content']
-                        }
-                        news_list.append(news_item)
-                else:
-                    print(f"No news data available for {date_str}")
-            except Exception as e:
-                print(f"Error fetching news for {date_str}: {str(e)}")
-            
-            current_date -= timedelta(days=1)
-        
-        return news_list
-
-    def _fetch_trading_dates(self):
-        # 获取当前时间
-        now = datetime.now()
-
-        # 定义今天的日期
-        today_str = now.strftime("%Y%m%d")
-        start_date_str = (now - timedelta(days=10)).strftime("%Y%m%d")
-
-        # 获取最近10天的交易数据，假设使用上证指数（000001.SH）
-        stock_data = ak.stock_zh_a_hist(symbol="000001", period="daily", start_date=start_date_str, end_date=today_str, adjust="")
-
-        # 提取交易日期
-        trading_dates = stock_data['日期'].apply(lambda x: datetime.strptime(x, "%Y-%m-%d")).tolist()
-        trading_dates.sort()
-        return trading_dates
-
-    def get_previous_trading_date(self) -> str:
-        """
-        获取最近一个交易日，不包含今天的日期,返回str 格式：YYYYMMDD
-        """
-        now = datetime.now()
-        
-        # 检查缓存是否有效
-        if self.previous_trading_date_cache and self.previous_trading_date_cache_time.date() == now.date():
-            return self.previous_trading_date_cache
-
-        trading_dates = self._fetch_trading_dates()
-
-        # 如果最近交易日期是今天，则返回上一个交易日期
-        if trading_dates[-1].strftime("%Y%m%d") == now.strftime("%Y%m%d"):
-            previous_trading_date = trading_dates[-2]
-        else:
-            previous_trading_date = trading_dates[-1]
-
-        self.previous_trading_date_cache = previous_trading_date.strftime("%Y%m%d")
-        self.previous_trading_date_cache_time = now
-        return self.previous_trading_date_cache
-    
-    def get_latest_trading_date(self) -> str:
-        """
-        获取最近一个交易日。返回str 格式：YYYYMMDD
-        如果当前时间是9:30之后，则，最近包含今天，否则不包含
-        """
-        now = datetime.now()
-        cache_valid = False
-
-        # 检查缓存是否有效
-        if self.latest_trading_date_cache and self.latest_trading_date_cache_time.date() == now.date():
-            if now.time() < datetime.strptime('09:30', '%H:%M').time():
-                if self.latest_trading_date_cache_time.time() < datetime.strptime('09:30', '%H:%M').time():
-                    cache_valid = True
-            else:
-                cache_valid = True
-
-        if cache_valid:
-            return self.latest_trading_date_cache
-
-        trading_dates = self._fetch_trading_dates()
-        include_today = now.time() >= datetime.strptime('09:30', '%H:%M').time()
-
-        if include_today and trading_dates[-1].strftime("%Y%m%d") == now.strftime("%Y%m%d"):
-            latest_trading_date = trading_dates[-1]
-        else:
-            latest_trading_date = trading_dates[-2] if trading_dates[-1].strftime("%Y%m%d") == now.strftime("%Y%m%d") else trading_dates[-1]
-
-        self.latest_trading_date_cache = latest_trading_date.strftime("%Y%m%d")
-        self.latest_trading_date_cache_time = now
-        return self.latest_trading_date_cache
-
-    def get_stock_big_deal(self, symbol: str) -> str:
-        """
-        获取指定股票的大单追踪数据，并根据交易时间决定是否缓存结果。
-
-        在交易时间内（9:30 - 15:00），直接获取数据并返回，不进行缓存。
-        在非交易时间，如果缓存中有该股票的数据，则返回缓存数据；
-        如果缓存中没有，则获取数据后进行缓存，并返回格式化的结果。
-
-        Args:
-            symbol (str): 要查询的股票代码（symbol）。
-
-        Returns:
-            str: 查询结果。如果找到对应的symbol，返回格式化为可读字符串的行数据；
-                 如果找不到对应的symbol，返回“暂时没有数据”。
-                 如果数据获取失败，返回错误信息。
-        """
-        # 检查并初始化big_deal_cache
-        if not hasattr(self, "big_deal_cache"):
-            self.big_deal_cache = {}
-
-        now = datetime.now()
-        market_open_time = now.replace(hour=9, minute=30, second=0, microsecond=0)
-        market_close_time = now.replace(hour=15, minute=0, second=0, microsecond=0)
-
-        # 判断是否在交易时间内
-        if market_open_time <= now <= market_close_time:
-            # 交易时间内，不进行缓存，直接获取数据
-            try:
-                stock_fund_flow_big_deal_df = ak.stock_fund_flow_big_deal()
-            except Exception as e:
-                return f"获取数据失败: {str(e)}"
-
-            # 查找并返回symbol对应的数据
-            result_row = stock_fund_flow_big_deal_df[stock_fund_flow_big_deal_df['股票代码'] == int(symbol)]
-            if not result_row.empty:
-                row = result_row.iloc[0]
-                formatted_row = (
-                    f"成交时间: {row['成交时间']}, 股票代码: {row['股票代码']}, 股票简称: {row['股票简称']}, "
-                    f"成交价格: {row['成交价格']}, 成交量: {row['成交量']}股, 成交额: {row['成交额']}万元, "
-                    f"大单性质: {row['大单性质']}, 涨跌幅: {row['涨跌幅']}, 涨跌额: {row['涨跌额']}"
-                )
-                return formatted_row
-            else:
-                return "暂时没有数据"
-        else:
-            # 非交易时间，从缓存中获取数据
-            if symbol in self.big_deal_cache:
-                return self.big_deal_cache[symbol]
-            else:
-                # 如果缓存中没有，则获取数据并缓存
-                try:
-                    stock_fund_flow_big_deal_df = ak.stock_fund_flow_big_deal()
-                except Exception as e:
-                    return f"获取数据失败: {str(e)}"
-
-                # 缓存数据
-                for index, row in stock_fund_flow_big_deal_df.iterrows():
-                    code = str(row['股票代码'])
-                    formatted_row = (
-                        f"成交时间: {row['成交时间']}, 股票代码: {row['股票代码']}, 股票简称: {row['股票简称']}, "
-                        f"成交价格: {row['成交价格']}, 成交量: {row['成交量']}股, 成交额: {row['成交额']}万元, "
-                        f"大单性质: {row['大单性质']}, 涨跌幅: {row['涨跌幅']}, 涨跌额: {row['涨跌额']}"
-                    )
-                    self.big_deal_cache[code] = formatted_row
-
-                if symbol in self.big_deal_cache:
-                    return self.big_deal_cache[symbol]
-                else:
-                    return "暂时没有数据"
-
-    def get_rebound_stock_pool(self, date: str = None) -> dict:
-        """
-        获取炸板股池数据并返回格式化结果。返回dict[symbol,str]
-        
-        参数:
-            date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
-        
-        返回:
-            dict: 键为股票代码，值为该股票的相关信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-        
-        # 检查缓存
-        if date in self.rebound_stock_pool_cache:
-            return self.rebound_stock_pool_cache[date]
-
-        # 获取数据
-        stock_pool_df = ak.stock_zt_pool_zbgc_em(date=date)
-
-        # 处理数据
-        result = {}
-        for _, row in stock_pool_df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"最新价: {row['最新价']}, "
-                f"涨停价: {row['涨停价']}, "
-                f"成交额: {row['成交额']}元, "
-                f"流通市值: {row['流通市值']}亿, "
-                f"总市值: {row['总市值']}亿, "
-                f"换手率: {row['换手率']}%, "
-                f"涨速: {row['涨速']}, "
-                f"首次封板时间: {row['首次封板时间']}, "
-                f"炸板次数: {row['炸板次数']}, "
-                f"涨停统计: {row['涨停统计']}, "
-                f"振幅: {row['振幅']}, "
-                f"所属行业: {row['所属行业']}"
-            )
-            result[row['代码']] = stock_info
-
-        # 缓存结果
-        self.rebound_stock_pool_cache[date] = result
-
-        return result
-
-    def get_new_stock_pool(self, date: str = None) -> dict:
-        """
-        获取次新股池数据并返回格式化结果。返回dict[symbol,str]
-        
-        参数:
-            date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
-        
-        返回:
-            dict: 键为股票代码，值为该股票的相关信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-        
-        # 检查缓存
-        if date in self.new_stock_pool_cache:
-            return self.new_stock_pool_cache[date]
-
-        # 获取数据
-        new_stock_pool_df = ak.stock_zt_pool_sub_new_em(date=date)
-
-        # 处理数据
-        result = {}
-        for _, row in new_stock_pool_df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"最新价: {row['最新价']}, "
-                f"涨停价: {row['涨停价']}, "
-                f"成交额: {row['成交额']}元, "
-                f"流通市值: {row['流通市值']}亿, "
-                f"总市值: {row['总市值']}亿, "
-                f"转手率: {row['转手率']}%, "
-                f"开板几日: {row['开板几日']}, "
-                f"开板日期: {row['开板日期']}, "
-                f"上市日期: {row['上市日期']}, "
-                f"是否新高: {row['是否新高']}, "
-                f"涨停统计: {row['涨停统计']}, "
-                f"所属行业: {row['所属行业']}"
-            )
-            result[row['代码']] = stock_info
-
-        # 缓存结果
-        self.new_stock_pool_cache[date] = result
-
-        return result
-
-    def get_strong_stock_pool(self, date: str = None) -> dict:
-        """
-        获取强势股池数据并返回格式化结果。返回dict[symbol,str]
-        
-        参数:
-            date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
-        
-        返回:
-            dict: 键为股票代码，值为该股票的相关信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-        
-        # 检查缓存
-        if date in self.strong_stock_pool_cache:
-            return self.strong_stock_pool_cache[date]
-
-        # 获取数据
-        strong_stock_pool_df = ak.stock_zt_pool_strong_em(date=date)
-
-        # 处理数据
-        result = {}
-        for _, row in strong_stock_pool_df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"最新价: {row['最新价']}, "
-                f"涨停价: {row['涨停价']}, "
-                f"成交额: {row['成交额']}元, "
-                f"流通市值: {row['流通市值']}亿, "
-                f"总市值: {row['总市值']}亿, "
-                f"换手率: {row['换手率']}%, "
-                f"涨速: {row['涨速']}%, "
-                f"是否新高: {row['是否新高']}, "
-                f"量比: {row['量比']}, "
-                f"涨停统计: {row['涨停统计']}, "
-                f"入选理由: {row['入选理由']}, "
-                f"所属行业: {row['所属行业']}"
-            )
-            result[row['代码']] = stock_info
-
-        # 缓存结果
-        self.strong_stock_pool_cache[date] = result
-
-        return result
-
-    def get_previous_day_stock_pool(self, date: str = None) -> dict:
-        """
-        获取昨日涨停股池数据并返回格式化结果。返回dict[symbol,str]
-        
-        参数:
-            date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
-        
-        返回:
-            dict: 键为股票代码，值为该股票的相关信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-        
-        # 检查缓存
-        if date in self.previous_day_stock_pool_cache:
-            return self.previous_day_stock_pool_cache[date]
-
-        # 获取数据
-        previous_day_stock_pool_df = ak.stock_zt_pool_previous_em(date)
-
-        # 处理数据
-        result = {}
-        for _, row in previous_day_stock_pool_df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"最新价: {row['最新价']}, "
-                f"涨停价: {row['涨停价']}, "
-                f"成交额: {row['成交额']}元, "
-                f"流通市值: {row['流通市值']}亿, "
-                f"总市值: {row['总市值']}亿, "
-                f"换手率: {row['换手率']}%, "
-                f"涨速: {row['涨速']}%, "
-                f"振幅: {row['振幅']}%, "
-                f"昨日封板时间: {row['昨日封板时间']}, "
-                f"昨日连板数: {row['昨日连板数']}, "
-                f"涨停统计: {row['涨停统计']}, "
-                f"所属行业: {row['所属行业']}"
-            )
-            result[row['代码']] = stock_info
-
-        # 缓存结果
-        self.previous_day_stock_pool_cache[date] = result
-
-        return result
-
-    def get_market_anomaly(self, indicator: Literal['火箭发射', '快速反弹', '大笔买入', '封涨停板', '打开跌停板', '有大买盘', '竞价上涨', '高开5日线', '向上缺口', '60日新高', '60日大幅上涨', '加速下跌', '高台跳水', '大笔卖出', '封跌停板', '打开涨停板', '有大卖盘', '竞价下跌', '低开5日线', '向下缺口', '60日新低', '60日大幅下跌'] = '大笔买入') -> dict:
-        """
-        获取指定类型的盘口异动信息，并返回格式化结果。indicator:str="大笔买入" 返回dict[symbol,str]
-        
-        参数:
-            indicator (str): 盘口异动的类型，可以从以下选项中选择:
-                - '火箭发射', '快速反弹', '大笔买入', '封涨停板', '打开跌停板', '有大买盘', 
-                - '竞价上涨', '高开5日线', '向上缺口', '60日新高', '60日大幅上涨', 
-                - '加速下跌', '高台跳水', '大笔卖出', '封跌停板', '打开涨停板', 
-                - '有大卖盘', '竞价下跌', '低开5日线', '向下缺口', '60日新低', '60日大幅下跌'
-        
-        返回:
-            dict: 键为股票代码，值为该股票的相关异动信息，格式化为易于读取的字符串。
-        """
-        # 获取数据
-        market_anomaly_df = ak.stock_changes_em(symbol=indicator)
-
-        # 处理数据
-        result = {}
-        for _, row in market_anomaly_df.iterrows():
-            anomaly_info = (
-                f"时间: {row['时间']}, "
-                f"名称: {row['名称']}, "
-                f"板块: {row['板块']}, "
-                f"相关信息: {row['相关信息']}"
-            )
-            result[row['代码']] = anomaly_info
-
-        return result
-
-    def get_active_a_stock_stats(self, indicator: Literal['近一月', '近三月', '近六月', '近一年'] = "近一月") -> dict:
-        """
-        获取活跃 A 股统计数据，并返回格式化结果。参数indicator:str="近一月" 返回dict[symbol,str]
-        
-        参数:
-            indicator (str): 统计时间范围，可以选择以下选项:
-                - '近一月', '近三月', '近六月', '近一年'
-        
-        返回:
-            dict: 键为股票代码，值为该股票的统计信息，格式化为易于读取的字符串。
-        """
-        # 获取数据
-        active_stock_stats_df = ak.stock_dzjy_hygtj(symbol=indicator)
-
-        # 处理数据
-        result = {}
-        for _, row in active_stock_stats_df.iterrows():
-            stats_info = (
-                f"证券简称: {row['证券简称']}, "
-                f"最新价: {row['最新价']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"最近上榜日: {row['最近上榜日']}, "
-                f"上榜次数-总计: {row['上榜次数-总计']}, "
-                f"上榜次数-溢价: {row['上榜次数-溢价']}, "
-                f"上榜次数-折价: {row['上榜次数-折价']}, "
-                f"总成交额: {row['总成交额']}万元, "
-                f"折溢率: {row['折溢率']}%, "
-                f"成交总额/流通市值: {row['成交总额/流通市值']}%, "
-                f"上榜日后平均涨跌幅-1日: {row['上榜日后平均涨跌幅-1日']}%, "
-                f"上榜日后平均涨跌幅-5日: {row['上榜日后平均涨跌幅-5日']}%, "
-                f"上榜日后平均涨跌幅-10日: {row['上榜日后平均涨跌幅-10日']}%, "
-                f"上榜日后平均涨跌幅-20日: {row['上榜日后平均涨跌幅-20日']}%"
-            )
-            result[row['证券代码']] = stats_info
-
-        return result
-
-    def get_daily_lhb_details(self,date:str=None) -> dict:
-        """
-        获取龙虎榜每日详情数据，并返回格式化结果。返回dict[symbol,str]
-        
-        返回:
-            dict: 键为股票代码，值为该股票的龙虎榜详情信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_latest_trading_date()
-        
-        # 获取数据
-        lhb_details_df = ak.stock_lhb_detail_daily_sina(date=date)
-
-        # 处理数据
-        result = {}
-        for _, row in lhb_details_df.iterrows():
-            lhb_info = (
-                f"股票名称: {row['股票名称']}, "
-                f"收盘价: {row['收盘价']}元, "
-                f"对应值: {row['对应值']}%, "
-                f"成交量: {row['成交量']}万股, "
-                f"成交额: {row['成交额']}万元, "
-                f"指标: {row['指标']}"
-            )
-            result[row['股票代码']] = lhb_info
-
-        return result
-
-    def get_stock_report_fund_hold(self, indicator: Literal["基金持仓", "QFII持仓", "社保持仓", "券商持仓", "保险持仓", "信托持仓"] = "基金持仓") -> Dict[str, str]:
-        """
-        获取东方财富网的机构持股报告数据。indicator="基金持仓" 返回dict[symbol,str]
-
-        参数:
-        indicator (str): 持股类型，可选值为 "基金持仓", "QFII持仓", "社保持仓", "券商持仓", "保险持仓", "信托持仓"，默认为 "基金持仓"
-
-        返回:
-        Dict[str, str]: 键为股票代码，值为格式化的持股信息字符串
-        """
-        try:
-            # 获取最近的财报发布日期
-            current_date = datetime.now()
-            if current_date.month <= 4:
-                report_date = f"{current_date.year - 1}-12-31"
-            elif current_date.month <= 8:
-                report_date = f"{current_date.year}-03-31"
-            elif current_date.month <= 10:
-                report_date = f"{current_date.year}-06-30"
-            else:
-                report_date = f"{current_date.year}-09-30"
-
-            # 获取持股数据
-            df = ak.stock_report_fund_hold(symbol=indicator, date=report_date)
-            
-            # 格式化数据为字典
-            result = {}
-            for _, row in df.iterrows():
-                stock_info = (
-                    f"股票简称: {row['股票简称']}, "
-                    f"持有{indicator[:2]}家数: {row['持有基金家数']}家, "
-                    f"持股总数: {row['持股总数']}股, "
-                    f"持股市值: {row['持股市值']}元, "
-                    f"持股变化: {row['持股变化']}, "
-                    f"持股变动数值: {row['持股变动数值']}股, "
-                    f"持股变动比例: {row['持股变动比例']}%"
-                )
-                result[row['股票代码']] = stock_info
-            
-            return result
-
-        except Exception as e:
-            return {"error": f"获取{indicator}数据时发生错误: {str(e)}"}
-    
-    def get_next_financial_report_date(self):
-        """
-        获取下一个财报发布日期(即将发生的). 返回值：str 格式：yyyymmdd
-
-        """
-        # 当前日期
-        today = datetime.today()
-        year = today.year
-        month = today.month
-
-        # 定义财报发行日期
-        report_dates = [
-            datetime(year, 3, 31),
-            datetime(year, 6, 30),
-            datetime(year, 9, 30),
-            datetime(year, 12, 31)
-        ]
-
-        # 查找下一个财报发行日期
-        for report_date in report_dates:
-            if today < report_date:
-                return report_date.strftime("%Y%m%d")
-
-        # 如果当前日期在10月1日至12月31日之间，返回下一年的3月31日
-        return datetime(year + 1, 3, 31).strftime("%Y%m%d")
-
-    def get_latest_financial_report_date(self):
-        """
-        获取最近的财报发布日期(已经发生的)。 返回值：str 格式：yyyymmdd
-
-        """
-        # 当前日期
-        today = datetime.today()
-        year = today.year
-        month = today.month
-
-        # 定义财报发行日期
-        report_dates = [
-            datetime(year, 3, 31),
-            datetime(year, 6, 30),
-            datetime(year, 9, 30),
-            datetime(year, 12, 31)
-        ]
-
-        # 查找最近的财报发行日期
-        for report_date in reversed(report_dates):
-            if today >= report_date:
-                return report_date.strftime("%Y%m%d")
-
-        # 如果当前日期在1月1日至3月30日之间，返回上一年的12月31日
-        return datetime(year - 1, 12, 31).strftime("%Y%m%d")
-
-    def stock_market_desc(self)->str:
-        """
-        获取市场总体描述信息，每个市场的市盈率，指数等信息。返回值str。
-        """
-        market_descriptions = []
-        markets = ["上证", "深证", "创业板", "科创版"]
-        for market in markets:
-            try:
-                df = ak.stock_market_pe_lg(symbol=market)
-                if not df.empty:
-                    latest_data = df.iloc[-1]
-                    if market == "科创版":
-                        description = f"{market}最新市值: {latest_data['总市值']:.2f}亿元，市盈率: {latest_data['市盈率']:.2f}"
-                    else:
-                        description = f"{market}最新指数: {latest_data['指数']:.2f}，平均市盈率: {latest_data['平均市盈率']:.2f}"
-                    market_descriptions.append(description)
-                else:
-                    market_descriptions.append(f"{market}无数据")
-            except Exception as e:
-                market_descriptions.append(f"{market}数据获取失败: {e}")
-
-        return "当前市场整体概况: " + "; ".join(market_descriptions)
-
-    def get_a_stock_pb_stats(self) -> str:
-        """
-        获取A股等权重与中位数市净率数据。返回值str
-        
-        返回:
-            str: A股市净率统计信息，包含日期、上证指数、市净率中位数、等权平均等信息。
-        """
-        # 获取数据
-        pb_stats_df = ak.stock_a_all_pb()
-
-        # 处理数据并生成易于理解的字符串
-        result = []
-        for _, row in pb_stats_df.iterrows():
-            stats_info = (
-                f"日期: {row['date']}, "
-                f"全部A股市净率中位数: {row['middlePB']}, "
-                f"全部A股市净率等权平均: {row['equalWeightAveragePB']}, "
-                f"上证指数: {row['close']}, "
-                f"当前市净率中位数在历史数据上的分位数: {row['quantileInAllHistoryMiddlePB']}, "
-                f"当前市净率中位数在最近10年数据上的分位数: {row['quantileInRecent10YearsMiddlePB']}, "
-                f"当前市净率等权平均在历史数据上的分位数: {row['quantileInAllHistoryEqualWeightAveragePB']}, "
-                f"当前市净率等权平均在最近10年数据上的分位数: {row['quantileInRecent10YearsEqualWeightAveragePB']}"
-            )
-            result.append(stats_info)
-
-        return "\n".join(result)
-
-    def get_a_stock_pe_ratios(self) -> str:
-        """
-        获取A股等权重与中位数市盈率数据。返回值str
-        
-        返回:
-            str: A股市盈率统计信息，包含日期、沪深300指数、市盈率中位数、等权平均等信息。
-        """
-        # 获取数据
-        pe_ratios_df = ak.stock_a_ttm_lyr()
-
-        # 处理数据并生成易于理解的字符串
-        result = []
-        for _, row in pe_ratios_df.iterrows():
-            ratios_info = (
-                f"日期: {row['date']}, "
-                f"全A股滚动市盈率(TTM)中位数: {row['middlePETTM']}, "
-                f"全A股滚动市盈率(TTM)等权平均: {row['averagePETTM']}, "
-                f"全A股静态市盈率(LYR)中位数: {row['middlePELYR']}, "
-                f"全A股静态市盈率(LYR)等权平均: {row['averagePELYR']}, "
-                f"当前TTM(滚动市盈率)中位数在历史数据上的分位数: {row['quantileInAllHistoryMiddlePeTtm']}, "
-                f"当前TTM(滚动市盈率)中位数在最近10年数据上的分位数: {row['quantileInRecent10YearsMiddlePeTtm']}, "
-                f"当前TTM(滚动市盈率)等权平均在历史数据上的分位数: {row['quantileInAllHistoryAveragePeTtm']}, "
-                f"当前TTM(滚动市盈率)等权平均在最近10年数据上的分位数: {row['quantileInRecent10YearsAveragePeTtm']}, "
-                f"当前LYR(静态市盈率)中位数在历史数据上的分位数: {row['quantileInAllHistoryMiddlePeLyr']}, "
-                f"当前LYR(静态市盈率)中位数在最近10年数据上的分位数: {row['quantileInRecent10YearsMiddlePeLyr']}, "
-                f"当前LYR(静态市盈率)等权平均在历史数据上的分位数: {row['quantileInAllHistoryAveragePeLyr']}, "
-                f"当前LYR(静态市盈率)等权平均在最近10年数据上的分位数: {row['quantileInRecent10YearsAveragePeLyr']}, "
-                f"沪深300指数: {row['close']}"
-            )
-            result.append(ratios_info)
-
-        return "\n".join(result)
-
-    def get_current_buffett_index(self)->str:
-        """
-        获取当前巴菲特指数的最新数据.返回值str
-        
-        返回值:
-            一个字符串，包含以下信息：
-            - 收盘价
-            - 总市值
-            - GDP
-            - 近十年分位数
-            - 总历史分位数
-        """
-        # 获取数据
-        data = ak.stock_buffett_index_lg()
-        
-        # 获取最后一行数据
-        latest_data = data.iloc[-1]
-        
-        # 将最后一行数据转换为字符串
-        buffett_index_info = (
-            f"当前巴菲特指数: "
-            f"收盘价: {latest_data['收盘价']}, "
-            f"总市值: {latest_data['总市值']}, "
-            f"GDP: {latest_data['GDP']}, "
-            f"近十年分位数: {latest_data['近十年分位数']}, "
-            f"总历史分位数: {latest_data['总历史分位数']}"
-        )
-        
-        return buffett_index_info
-
-    @retry(retry=retry_if_exception(Exception),stop=stop_after_attempt(3),wait=wait_fixed(3))
-    def get_stock_a_indicators(self, symbol: str) -> str:
-        """
-        获取指定股票的A股个股指标的最新数据.参数symbol:str 返回值str
-        
-        输入参数:
-            symbol (str): 股票代码
-            
-        返回值 字符串类型:
-            一个字符串，包含以下信息的描述：
-            - 市盈率
-            - 市盈率TTM
-            - 市净率
-            - 市销率
-            - 市销率TTM
-            - 股息率
-            - 股息率TTM
-            - 总市值
-        """
-        if len(self.stock_lg_code_cache) == 0:
-            df = ak.stock_a_indicator_lg(symbol="all")
-            for _, row in df.iterrows():
-                self.stock_lg_code_cache[row['code']] = row['stock_name']
-        if symbol not in self.stock_lg_code_cache:
-            return f"股票代码{symbol}暂无数据"
-        # 获取数据
-        data = ak.stock_a_indicator_lg(symbol=symbol)
-        
-        # 获取最后一行数据
-        latest_data = data.iloc[-1]
-        
-        # 将最后一行数据转换为字符串
-        stock_indicators_info = (
-            f"A股个股指标"
-            f"股票代码: {symbol} 的最新A股个股指标: "
-            f"市盈率: {latest_data['pe']}, "
-            f"市盈率TTM: {latest_data['pe_ttm']}, "
-            f"市净率: {latest_data['pb']}, "
-            f"市销率: {latest_data['ps']}, "
-            f"市销率TTM: {latest_data['ps_ttm']}, "
-            f"股息率: {latest_data['dv_ratio']}, "
-            f"股息率TTM: {latest_data['dv_ttm']}, "
-            f"总市值: {latest_data['total_mv']}"
-        )
-        
-        return stock_indicators_info
-
-    def get_industry_pe_ratio(self, symbol: str, date: str = None) -> str:
-        """
-        获取指定日期和行业分类的行业市盈率数据。参数symbol:str 返回值str
-        
-        输入参数:
-            symbol (str): 行业分类，选择 {"证监会行业分类", "国证行业分类"}
-            date (str): 交易日，格式为 "YYYYMMDD"。如果未提供，则使用最近的一个交易日。
-            
-        返回值:
-            一个字符串，包含所有行业的以下信息：
-            - 行业分类
-            - 行业层级
-            - 行业编码
-            - 行业名称
-            - 公司数量
-            - 纳入计算公司数量
-            - 总市值-静态
-            - 净利润-静态
-            - 静态市盈率-加权平均
-            - 静态市盈率-中位数
-            - 静态市盈率-算术平均
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-        
-        # 获取数据
-        data = ak.stock_industry_pe_ratio_cninfo(symbol=symbol, date=date)
-        
-        # 初始化结果字符串
-        result = []
-        
-        # 遍历所有行，生成字符串
-        for _, row in data.iterrows():
-            industry_pe_ratio_info = (
-                f"行业分类: {row['行业分类']}, "
-                f"行业层级: {row['行业层级']}, "
-                f"行业编码: {row['行业编码']}, "
-                f"行业名称: {row['行业名称']}, "
-                f"公司数量: {row['公司数量']}, "
-                f"纳入计算公司数量: {row['纳入计算公司数量']}, "
-                f"总市值-静态: {row['总市值-静态']}亿元, "
-                f"净利润-静态: {row['净利润-静态']}亿元, "
-                f"静态市盈率-加权平均: {row['静态市盈率-加权平均']}, "
-                f"静态市盈率-中位数: {row['静态市盈率-中位数']}, "
-                f"静态市盈率-算术平均: {row['静态市盈率-算术平均']}"
-            )
-            result.append(industry_pe_ratio_info)
-        
-        # 将所有行的信息连接成一个字符串，每行之间用换行符分隔
-        return "\n".join(result)
-
-    def get_institute_recommendations(self, indicator: Literal['最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'] = "投资评级选股") -> dict:
-        """
-        获取机构推荐池数据，并返回格式化结果。 参数indicator:str="投资评级选股" 返回值Dict[symbol,str]
-        
-        参数:
-            indicator (str): 选择的机构推荐类型，可以选择以下选项:
-                - '最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', 
-                - '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'
-        
-        返回:
-            dict: 键为股票代码，值为该股票的推荐信息，格式化为易于读取的字符串。
-        """
-        # 获取数据
-        recommendations_df = ak.stock_institute_recommend(symbol=indicator)
-
-        # 寻找股票代码列
-        code_columns = ['股票代码', 'symbol', 'code']
-        code_column = next((col for col in code_columns if col in recommendations_df.columns), None)
-
-        if not code_column:
-            raise ValueError("无法找到股票代码的列。")
-
-        # 处理数据
-        result = {}
-        for _, row in recommendations_df.iterrows():
-            recommendation_info = ", ".join([f"{col}: {row[col]}" for col in recommendations_df.columns if col != code_column])
-            result[row[code_column]] = recommendation_info
-
-        return result
-
-    def get_recent_recommendations_summary(self, symbol: str) -> str:
-        """
-        获取指定股票的最近半年的评级记录统计.参数symbol:str 返回值str
-        
-        输入参数:
-            symbol (str): 股票代码
-            
-        返回值:
-            一个描述性的字符串，包含以下信息的统计：
-            - 股票名称
-            - 最近半年内的评级次数
-            - 各种评级的次数统计（例如：买入、增持等）
-            - 涉及的分析师数量
-            - 涉及的评级机构数量
-            - 目标价的最高值、最低值、平均值
-            - 目标价的分布情况（最多的目标价区间）
-        """
-        # 获取数据
-        data = ak.stock_institute_recommend_detail(symbol=symbol)
-        
-        # 计算最近半年的日期
-        six_months_ago = datetime.now() - timedelta(days=180)
-        
-        # 过滤最近半年的数据
-        recent_data = data[data['评级日期'] >= six_months_ago.strftime('%Y-%m-%d')]
-        
-        # 统计股票名称
-        stock_name = recent_data['股票名称'].iloc[0] if not recent_data.empty else "未知"
-        
-        # 统计评级次数
-        total_recommendations = recent_data.shape[0]
-        
-        # 统计各种评级的次数
-        rating_counts = recent_data['最新评级'].value_counts().to_dict()
-        
-        # 统计涉及的分析师数量
-        analysts = recent_data['分析师'].str.split(',').explode().unique()
-        num_analysts = len(analysts)
-        
-        # 统计涉及的评级机构数量
-        institutions = recent_data['评级机构'].unique()
-        num_institutions = len(institutions)
-        
-        # 统计目标价
-        target_prices = recent_data['目标价'].replace('NaN', np.nan).dropna().astype(float)
-        if not target_prices.empty:
-            max_target_price = target_prices.max()
-            min_target_price = target_prices.min()
-            avg_target_price = target_prices.mean()
-            
-            # 计算目标价的分布情况
-            bins = [0, 10, 20, 30, 40, 50, 100, 200, 300, 400, 500]
-            target_price_distribution = np.histogram(target_prices, bins=bins)
-            most_common_range_index = np.argmax(target_price_distribution[0])
-            most_common_range = f"{bins[most_common_range_index]}-{bins[most_common_range_index + 1]}"
-        else:
-            max_target_price = min_target_price = avg_target_price = most_common_range = "无数据"
-        
-        # 生成描述性的字符串
-        recommendation_summary = (
-            f"股票代码: {symbol}, 股票名称: {stock_name}\n"
-            f"最近半年内的评级次数: {total_recommendations}\n"
-            f"评级统计:\n"
-        )
-        
-        for rating, count in rating_counts.items():
-            recommendation_summary += f" - {rating}: {count}次\n"
-        
-        recommendation_summary += (
-            f"涉及的分析师数量: {num_analysts}\n"
-            f"涉及的评级机构数量: {num_institutions}\n"
-            f"目标价统计:\n"
-            f" - 最高目标价: {max_target_price}\n"
-            f" - 最低目标价: {min_target_price}\n"
-            f" - 平均目标价: {avg_target_price:.2f}\n"
-            f" - 最多的目标价区间: {most_common_range}\n"
-        )
-        
-        return recommendation_summary
-
-    def get_investment_ratings(self, date: str = None) -> dict:
-        """
-        获取投资评级数据，并返回格式化结果。返回值Dict[symbol,str]
-        
-        参数:
-            date (str): 交易日期，格式为 'yyyymmdd'。如果未提供，则获取最近一个交易日的数据。
-        
-        返回:
-            dict: 键为证券代码，值为该证券的投资评级信息，格式化为易于读取的字符串。
-        """
-        if not date:
-            date = self.get_previous_trading_date()
-
-        # 获取数据
-        ratings_df = ak.stock_rank_forecast_cninfo(date=date)
-
-        # 确定证券代码列
-        code_columns = ['证券代码', 'symbol', 'code']
-        code_column = next((col for col in code_columns if col in ratings_df.columns), None)
-
-        if not code_column:
-            raise ValueError("无法找到证券代码的列。")
-
-        # 处理数据
-        result = {}
-        for _, row in ratings_df.iterrows():
-            rating_info = ", ".join([f"{col}: {row[col]}" for col in ratings_df.columns if col != code_column])
-            result[row[code_column]] = rating_info
-
-        return result
-    
-    def get_financial_analysis_summary(self, symbol: str, start_year: str = "2024") -> str:
-        """
-        获取指定股票的财务分析指标，并返回易于理解的字符串形式的结果。参数symbol:str 返回值str
-
-        参数:
-            symbol (str): 股票代码。
-            start_year (str): 查询的起始年份，默认为 "2024"。
-
-        返回:
-            str: 股票的最新财务分析指标，格式化为易于理解的字符串。
-        """
-        # 获取数据
-        df = ak.stock_financial_analysis_indicator(symbol, start_year)
-        
-        # 取最后一行数据（最新数据）
-        latest_data = df.tail(1).squeeze()
-
-        # 生成易于理解的字符串
-        result = "\n".join([f"{index}: {value}" for index, value in latest_data.items()])
-
-        return result
- 
-    def get_key_financial_indicators(self, symbol: str, indicator: Literal["按报告期", "按年度", "按单季度"] = "按报告期") -> str:
-        """
-        获取指定股票的关键财务指标摘要，并返回易于理解的字符串形式的结果。参数symbol:str,indicator:str="按报告期" 返回值str
-
-        参数:
-            symbol (str): 股票代码。
-            indicator (str): 财务指标的时间范围，可选值为 "按报告期", "按年度", "按单季度"。默认值为 "按报告期"。
-
-        返回:
-            str: 股票的关键财务指标摘要，格式化为易于理解的字符串。
-        """
-        # 获取数据
-        df = ak.stock_financial_abstract_ths(symbol, indicator)
-
-        # 取最新一行数据
-        latest_data = df.tail(1).squeeze()
-
-        # 生成易于理解的字符串
-        result = "\n".join([f"{index}: {value}" for index, value in latest_data.items()])
-
-        return result
-
-    def get_stock_balance_sheet_by_report_em(self, symbol: str) -> str:
-        """
-        获取指定股票的最新资产负债表，并将所有列的数据拼接成一个字符串返回。参数symbol:str 返回值str
-
-        参数:
-        symbol (str): 股票代码。
-
-        返回:
-        str: 资产负债表的格式化字符串，包括所有319项数据。
-        """
-        df = ak.stock_balance_sheet_by_report_em(symbol)
-        
-        # 选择最新的一行数据
-        latest_row = df.tail(1).iloc[0]
-        
-        # 将所有列的数据拼接成一个字符串
-        balance_sheet_str = "\n".join([f"{col}: {latest_row[col]}" for col in df.columns])
-        
-        return balance_sheet_str
-
-    def get_individual_stock_fund_flow_rank(self, indicator: str = "今日") -> dict:
-        """
-        获取个股资金流排名，并返回格式化结果。参数indicator:str="今日" 返回值Dict[symbol,str]
-
-        参数:
-            indicator (str): 资金流动的时间范围，可选值为 "今日", "3日", "5日", "10日"。默认值为 "今日"。
-
-        返回:
-            dict: 键为股票代码，值为该股票的资金流动信息，格式化为易于读取的字符串。
-        """
-        # 获取数据
-        fund_flow_df = ak.stock_individual_fund_flow_rank(indicator=indicator)
-
-        # 确定股票代码列
-        code_columns = ['代码', 'symbol', 'code']
-        code_column = next((col for col in code_columns if col in fund_flow_df.columns), None)
-
-        if not code_column:
-            raise ValueError("无法找到股票代码的列。")
-
-        # 处理数据
-        result = {}
-        for _, row in fund_flow_df.iterrows():
-            fund_flow_info = ", ".join([f"{col}: {row[col]}" for col in fund_flow_df.columns if col != code_column])
-            result[row[code_column]] = fund_flow_info
-
-        return result
-
-    def get_individual_stock_fund_flow(self, symbol: str, market: str = "sh") -> dict:
-        """
-        获取指定股票的资金流动信息，并返回格式化结果。参数symbol:str market:str="sh" 返回值Dict[symbol,str]
-
-        参数:
-            symbol (str): 股票代码。
-            market (str): 证券市场代码，可选值为 "sh"（上海证券交易所）、"sz"（深证证券交易所）、"bj"（北京证券交易所）。默认值为 "sh"。
-
-        返回:
-            dict: 键为股票代码，值为该股票的资金流动信息，格式化为易于读取的字符串。
-        """
-        # 获取数据
-        fund_flow_df = ak.stock_individual_fund_flow(symbol=symbol, market=market)
-
-        # 确定股票代码列
-        code_columns = ['股票代码', 'symbol', 'code']
-        code_column = next((col for col in code_columns if col in fund_flow_df.columns), None)
-
-        if not code_column:
-            raise ValueError("无法找到股票代码的列。")
-
-        # 处理数据
-        result = {}
-        for _, row in fund_flow_df.iterrows():
-            fund_flow_info = ", ".join([f"{col}: {row[col]}" for col in fund_flow_df.columns if col != code_column])
-            result[row[code_column]] = fund_flow_info
-
-        return result
-
-    def get_cash_flow_statement_summary(self) -> dict:
-        """
-        获取最近一个财报发行日期的现金流量表数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 股票简称
-            - 净现金流
-            - 净现金流同比增长
-            - 经营性现金流净额
-            - 经营性现金流净额占比
-            - 投资性现金流净额
-            - 投资性现金流净额占比
-            - 融资性现金流净额
-            - 融资性现金流净额占比
-            - 公告日期
-        """
-        # 获取最近的财报发行日期
-        date = self.get_latest_financial_report_date()
-
-        # 检查缓存是否存在
-        if date in self.cash_flow_cache:
-            return self.cash_flow_cache[date]
-        
-        # 获取数据
-        data = ak.stock_xjll_em(date=date)
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"股票简称: {row['股票简称']}, "
-                f"净现金流: {row['净现金流-净现金流']}元, "
-                f"净现金流同比增长: {row['净现金流-同比增长']}%, "
-                f"经营性现金流净额: {row['经营性现金流-现金流量净额']}元, "
-                f"经营性现金流净额占比: {row['经营性现金流-净现金流占比']}%, "
-                f"投资性现金流净额: {row['投资性现金流-现金流量净额']}元, "
-                f"投资性现金流净额占比: {row['投资性现金流-净现金流占比']}%, "
-                f"融资性现金流净额: {row['融资性现金流-现金流量净额']}元, "
-                f"融资性现金流净额占比: {row['融资性现金流-净现金流占比']}%, "
-            )
-            summary_dict[row['股票代码']] = description
-        
-        # 缓存结果
-        self.cash_flow_cache[date] = summary_dict
-        
-        return summary_dict
-
-    def get_profit_statement_summary(self) -> dict:
-        """
-        获取最近一个财报发行日期的利润表数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 股票简称
-            - 净利润
-            - 净利润同比
-            - 营业总收入
-            - 营业总收入同比
-            - 营业总支出-营业支出
-            - 营业总支出-销售费用
-            - 营业总支出-管理费用
-            - 营业总支出-财务费用
-            - 营业总支出-营业总支出
-            - 营业利润
-            - 利润总额
-            - 公告日期
-        """
-        date = self.get_latest_financial_report_date()
-
-        # 检查缓存是否存在
-        if date in self.profit_cache:
-            return self.profit_cache[date]
-        
-        # 获取数据
-        data = ak.stock_lrb_em(date=date)
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"股票简称: {row['股票简称']}, "
-                f"净利润: {row['净利润']}元, "
-                f"净利润同比: {row['净利润同比']}%, "
-                f"营业总收入: {row['营业总收入']}元, "
-                f"营业总收入同比: {row['营业总收入同比']}%, "
-                f"营业总支出-营业支出: {row['营业总支出-营业支出']}元, "
-                f"营业总支出-销售费用: {row['营业总支出-销售费用']}元, "
-                f"营业总支出-管理费用: {row['营业总支出-管理费用']}元, "
-                f"营业总支出-财务费用: {row['营业总支出-财务费用']}元, "
-                f"营业总支出-营业总支出: {row['营业总支出-营业总支出']}元, "
-                f"营业利润: {row['营业利润']}元, "
-                f"利润总额: {row['利润总额']}元, "
-            )
-            summary_dict[row['股票代码']] = description
-        
-        # 缓存结果
-        self.profit_cache[date] = summary_dict
-        
-        return summary_dict
-
-    def get_balance_sheet_summary(self) -> dict:
-        """
-        获取最近一个财报发行日期的资产负债表数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 股票简称
-            - 资产-货币资金
-            - 资产-应收账款
-            - 资产-存货
-            - 资产-总资产
-            - 资产-总资产同比
-            - 负债-应付账款
-            - 负债-总负债
-            - 负债-预收账款
-            - 负债-总负债同比
-            - 资产负债率
-            - 股东权益合计
-            - 公告日期
-        """
-        date = self.get_latest_financial_report_date()
-
-        # 检查缓存是否存在
-        if date in self.balance_sheet_cache:
-            return self.balance_sheet_cache[date]
-        
-        # 获取数据
-        data = ak.stock_zcfz_em(date=date)
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"股票简称: {row['股票简称']}, "
-                f"资产-货币资金: {row['资产-货币资金']}元, "
-                f"资产-应收账款: {row['资产-应收账款']}元, "
-                f"资产-存货: {row['资产-存货']}元, "
-                f"资产-总资产: {row['资产-总资产']}元, "
-                f"资产-总资产同比: {row['资产-总资产同比']}%, "
-                f"负债-应付账款: {row['负债-应付账款']}元, "
-                f"负债-总负债: {row['负债-总负债']}元, "
-                f"负债-预收账款: {row['负债-预收账款']}元, "
-                f"负债-总负债同比: {row['负债-总负债同比']}%, "
-                f"资产负债率: {row['资产负债率']}%, "
-                f"股东权益合计: {row['股东权益合计']}元, "
-                f"公告日期: {row['公告日期']}"
-            )
-            summary_dict[row['股票代码']] = description
-        
-        # 缓存结果
-        self.balance_sheet_cache[date] = summary_dict
-        
-        return summary_dict
-
-    def get_stock_info(self,symbol:str)->pd.DataFrame:
-        """
-        公司概况
-        输入参数:symbol	str	股票代码
-        返回值:
-            名称	类型	描述
-            公司名称	object	-
-            英文名称	object	-
-            曾用简称	object	-
-            A股代码	object	-
-            A股简称	object	-
-            B股代码	object	-
-            B股简称	object	-
-            H股代码	object	-
-            H股简称	object	-
-            入选指数	object	-
-            所属市场	object	-
-            所属行业	object	-
-            法人代表	object	-
-            注册资金	object	-
-            成立日期	object	-
-            上市日期	object	-
-            官方网站	object	-
-            电子邮箱	object	-
-            联系电话	object	-
-            传真	object	-
-            注册地址	object	-
-            办公地址	object	-
-            邮政编码	object	-
-            主营业务	object	-
-            经营范围	object	-
-            机构简介	object	-
-        """
-        return ak.stock_profile_cninfo(symbol=symbol)
-
-    def get_stock_report(self, symbol: str) -> str:
-        """
-        获取指定股票的个股研报数据，过滤超过180天的数据，并进行统计分析（仅包含2024年数据）。返回值str
-
-        参数:
-            symbol (str): 股票代码。
-
-        返回:
-            str: 经过过滤和统计的个股研报数据，格式化为易于阅读的字符串。
-        """
-        # 获取数据
-        reports_df = ak.stock_research_report_em(symbol)
-
-        # 过滤超过180天的数据
-        cutoff_date = datetime.now() - timedelta(days=180)
-        reports_df['日期'] = pd.to_datetime(reports_df['日期'], errors='coerce')
-        filtered_df = reports_df[reports_df['日期'] >= cutoff_date]
-
-        if filtered_df.empty:
-            return "没有找到最近180天内的研报数据。"
-
-        # 统计分析，仅针对2024年数据
-        stats = {
-            "2024-盈利预测-收益": {
-                "max": filtered_df["2024-盈利预测-收益"].max(),
-                "min": filtered_df["2024-盈利预测-收益"].min(),
-                "mean": filtered_df["2024-盈利预测-收益"].mean(),
-            },
-            "2024-盈利预测-市盈率": {
-                "max": filtered_df["2024-盈利预测-市盈率"].max(),
-                "min": filtered_df["2024-盈利预测-市盈率"].min(),
-                "mean": filtered_df["2024-盈利预测-市盈率"].mean(),
-            }
-        }
-
-        # 返回易于阅读的字符串
-        result = [
-            f"2024年盈利预测-收益: 最高值: {stats['2024-盈利预测-收益']['max']}, 最低值: {stats['2024-盈利预测-收益']['min']}, 平均值: {stats['2024-盈利预测-收益']['mean']}",
-            f"2024年盈利预测-市盈率: 最高值: {stats['2024-盈利预测-市盈率']['max']}, 最低值: {stats['2024-盈利预测-市盈率']['min']}, 平均值: {stats['2024-盈利预测-市盈率']['mean']}"
-        ]
-
-        return "\n".join(result)
-
-    def get_financial_forecast_summary(self) -> dict:
-        """
-        获取最近一个财报发行日期的业绩预告数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 股票简称
-            - 预测指标
-            - 业绩变动
-            - 预测数值
-            - 业绩变动幅度
-            - 业绩变动原因
-            - 预告类型
-            - 上年同期值
-            - 公告日期
-        """
-        date = self.get_latest_financial_report_date()
-
-        # 检查缓存是否存在
-        if date in self.forecast_cache:
-            return self.forecast_cache[date]
-        
-        # 获取数据
-        data = ak.stock_yjyg_em(date=date)
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"股票简称: {row['股票简称']}, "
-                f"预测指标: {row['预测指标']}, "
-                f"业绩变动: {row['业绩变动']}, "
-                f"预测数值: {row['预测数值']}元, "
-                f"业绩变动幅度: {row['业绩变动幅度']}%, "
-                f"业绩变动原因: {row['业绩变动原因']}, "
-                f"预告类型: {row['预告类型']}, "
-                f"上年同期值: {row['上年同期值']}元, "
-                f"公告日期: {row['公告日期']}"
-            )
-            summary_dict[row['股票代码']] = description
-        
-        # 缓存结果
-        self.forecast_cache[date] = summary_dict
-        
-        return summary_dict
-
-    def get_financial_report_summary(self) -> dict:
-        """
-        获取最近一个财报发行日期的业绩报表数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 股票简称
-            - 每股收益
-            - 营业收入
-            - 营业收入同比增长
-            - 营业收入季度环比增长
-            - 净利润
-            - 净利润同比增长
-            - 净利润季度环比增长
-            - 每股净资产
-            - 净资产收益率
-            - 每股经营现金流量
-            - 销售毛利率
-            - 所处行业
-            - 最新公告日期
-        """
-        date = self.get_latest_financial_report_date()
-
-        # 检查缓存是否存在
-        if date in self.report_cache:
-            return self.report_cache[date]
-        
-        # 获取数据
-        data = ak.stock_yjbb_em(date=date)
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"股票简称: {row['股票简称']}, "
-                f"每股收益: {row['每股收益']}元, "
-                f"营业收入: {row['营业收入-营业收入']}元, "
-                f"营业收入同比增长: {row['营业收入-同比增长']}%, "
-                f"营业收入季度环比增长: {row['营业收入-季度环比增长']}%, "
-                f"净利润: {row['净利润-净利润']}元, "
-                f"净利润同比增长: {row['净利润-同比增长']}%, "
-                f"净利润季度环比增长: {row['净利润-季度环比增长']}%, "
-                f"每股净资产: {row['每股净资产']}元, "
-                f"净资产收益率: {row['净资产收益率']}%, "
-                f"每股经营现金流量: {row['每股经营现金流量']}元, "
-                f"销售毛利率: {row['销售毛利率']}%, "
-                f"所处行业: {row['所处行业']}, "
-                f"最新公告日期: {row['最新公告日期']}"
-            )
-            summary_dict[row['股票代码']] = description
-        
-        # 缓存结果
-        self.report_cache[date] = summary_dict
-        
-        return summary_dict
-
-    def get_top_holdings_by_market(self, market: Literal["北向", "沪股通", "深股通"] = "北向", indicator: Literal["今日排行", "3日排行", "5日排行", "10日排行", "月排行", "季排行", "年排行"] = "月排行") -> dict:
-        """
-        获取指定市场的持股个股排行，并返回格式化后的结果。参数： market:str="北向" indicator="月排行"  返回值Dict[symbol,str]
-
-        参数:
-            market (str): 市场类型，选择 "北向", "沪股通", "深股通" 之一。默认值为 "北向"。
-            indicator (str): 排行时间范围，选择 "今日排行", "3日排行", "5日排行", "10日排行", "月排行", "季排行", "年排行" 之一。默认值为 "月排行"。
-
-        返回:
-            dict: 键为股票代码，值为该股票的详细信息，格式化为易于阅读的字符串。
-
-        示例:
-        >>> get_top_holdings_by_market(market="沪股通", indicator="月排行")
-        {'000001': '名称: 平安银行, 今日收盘价: 10.5, 今日涨跌幅: 1.2%, ...', ...}
-        """
-        # 获取数据
-        df = ak.stock_hsgt_hold_stock_em(indicator=indicator, market=market)
-
-        # 处理数据，将每行数据转换为易于阅读的字符串
-        result = {}
-        for _, row in df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"今日收盘价: {row['今日收盘价']}, "
-                f"今日涨跌幅: {row['今日涨跌幅']}%, "
-                f"今日持股-股数: {row['今日持股-股数']}万, "
-                f"今日持股-市值: {row['今日持股-市值']}万, "
-                f"今日持股-占流通股比: {row['今日持股-占流通股比']}%, "
-                f"今日持股-占总股本比: {row['今日持股-占总股本比']}%, "
-                f"增持估计-股数: {row['增持估计-股数']}万, "
-                f"增持估计-市值: {row['增持估计-市值']}万, "
-                f"增持估计-市值增幅: {row['增持估计-市值增幅']}%, "
-                f"增持估计-占流通股比: {row['增持估计-占流通股比']}‰, "
-                f"增持估计-占总股本比: {row['增持估计-占总股本比']}‰, "
-                f"所属板块: {row['所属板块']}, "
-                f"日期: {row['日期']}"
-            )
-            result[row['代码']] = stock_info
-
-        return result
-
-    def get_stock_comments_summary(self) -> dict:
-        """
-        获取东方财富网-数据中心-特色数据-千股千评数据摘要.返回值Dict[symbol,str]
-        
-        返回值:
-            一个字典，键是股票代码，值是描述性的字符串，包含以下信息的统计：
-            - 名称
-            - 最新价
-            - 涨跌幅
-            - 换手率
-            - 市盈率
-            - 主力成本
-            - 机构参与度
-            - 综合得分
-            - 上升
-            - 目前排名
-            - 关注指数
-            - 交易日
-        """
-        # 检查缓存是否存在
-        if "stock_comments" in self.comment_cache:
-            return self.comment_cache["stock_comments"]
-        
-        # 获取数据
-        data = ak.stock_comment_em()
-        
-        # 生成描述性字符串的字典
-        summary_dict = {}
-        for index, row in data.iterrows():
-            description = (
-                f"名称: {row['名称']}, "
-                f"最新价: {row['最新价']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"换手率: {row['换手率']}%, "
-                f"市盈率: {row['市盈率']}, "
-                f"主力成本: {row['主力成本']}, "
-                f"机构参与度: {row['机构参与度']}%, "
-                f"综合得分: {row['综合得分']}, "
-                f"上升: {row['上升']}, "
-                f"目前排名: {row['目前排名']}, "
-                f"关注指数: {row['关注指数']}, "
-                f"交易日: {row['交易日']}"
-            )
-            summary_dict[row['代码']] = description
-        
-        # 缓存结果
-        self.comment_cache["stock_comments"] = summary_dict
-        
-        return summary_dict
-
-    def get_stock_profit_forecast(self, symbol: str) -> str:
-        """
-        获取指定股票的盈利预测数据。symbol: str ,返回str 盈利预测字符串
-
-        参数:
-        symbol (str): 股票代码，例如 "600519"
-
-        返回:
-        str: 格式化的盈利预测信息字符串
-        """
-        if not hasattr(self, 'profit_forecast_cache'):
-            self.profit_forecast_cache = {}
-
-        if not self.profit_forecast_cache:
-            try:
-                df = ak.stock_profit_forecast_em()
-                for _, row in df.iterrows():
-                    code = row['代码']
-                    forecast_info = (
-                        f"名称: {row['名称']}, "
-                        f"研报数: {row['研报数']}, "
-                        f"机构投资评级(近六个月): 买入 {row['机构投资评级(近六个月)-买入']}%, "
-                        f"增持 {row['机构投资评级(近六个月)-增持']}%, "
-                        f"中性 {row['机构投资评级(近六个月)-中性']}%, "
-                        f"减持 {row['机构投资评级(近六个月)-减持']}%, "
-                        f"卖出 {row['机构投资评级(近六个月)-卖出']}%, "
-                        f"2022预测每股收益: {row['2022预测每股收益']:.4f}, "
-                        f"2023预测每股收益: {row['2023预测每股收益']:.4f}, "
-                        f"2024预测每股收益: {row['2024预测每股收益']:.4f}, "
-                        f"2025预测每股收益: {row['2025预测每股收益']:.4f}"
-                    )
-                    self.profit_forecast_cache[code] = forecast_info
-
-            except Exception as e:
-                return f"获取盈利预测数据时发生错误: {str(e)}"
-
-        return self.profit_forecast_cache.get(symbol, f"未找到股票代码 {symbol} 的盈利预测数据")
-
-    def get_stock_comments_dataframe(self)->pd.DataFrame:
-        """
-        千股千评。返回DataFrame
-        返回值：
-            名称	类型	描述
-            序号	int64	-
-            代码	object	-
-            名称	object	-
-            最新价	float64	-
-            涨跌幅	float64	-
-            换手率	float64	注意单位: %
-            市盈率	float64	-
-            主力成本	float64	-
-            机构参与度	float64	-
-            综合得分	float64	-
-            上升	int64	注意: 正负号
-            目前排名	int64	-
-            关注指数	float64	-
-            交易日	float64	-
-        """
-        return ak.stock_comment_em()
-
-    def get_main_business_description(self, symbol: str) -> str:
-        """
-        获取同花顺-主营介绍的数据，并返str
-        
-        输入参数:
-            symbol (str): 股票代码
-            
-        返回值:
-            一个描述性的字符串，包含以下信息的统计：
-            - 股票代码
-            - 主营业务
-            - 产品类型
-            - 产品名称
-            - 经营范围
-        """
-        # 获取数据
-        data = ak.stock_zyjs_ths(symbol=symbol)
-        
-        if data.empty:
-            return f"未找到股票代码 {symbol} 的主营介绍数据。"
-        
-        row = data.iloc[0]
-        description = (
-            f"股票代码: {row['股票代码']}\n"
-            f"主营业务: {row['主营业务']}\n"
-            f"产品类型: {row['产品类型']}\n"
-            f"产品名称: {row['产品名称']}\n"
-            f"经营范围: {row['经营范围']}"
-        )
-        
-        return description
-
-    def get_mainbussiness_more(self,symbol)->pd.DataFrame:
-        """
-        主营构成 返回DataFrame
-        输入参数:
-            symbol:str  股票代码
-        返回值:
-            名称	类型	描述
-            股票代码	object	-
-            报告日期	object	-
-            分类类型	object	-
-            主营构成	int64	-
-            主营收入	float64	注意单位: 元
-            收入比例	float64	-
-            主营成本	float64	注意单位: 元
-            成本比例	float64	-
-            主营利润	float64	注意单位: 元
-            利润比例	float64	-
-            毛利率	float64	-
-        """
-        return ak.stock_zygc_em(symbol=symbol)
-
-    def get_mainbussiness_mid(self,symbol:str)->pd.DataFrame:
-        """
-        主营构成.返回DataFrame
-        输入参数:
-            symbol:str  股票代码
-        返回值:
-            名称	类型	描述
-            报告期	object	-
-            内容	object	-
-        """
-        return ak.stock_zygc_ym(symbol=symbol)
-
-    def get_manager_talk(self,symbol:str)->pd.DataFrame:
-        """
-        管理层讨论与分析.返回DataFrame
-        输入参数:
-            symbol:str  股票代码
-        返回值:
-            名称	类型	描述
-            报告期	object	-
-            内容	object	-
-        """
-        return ak.stock_mda_ym(symbol)
-
-    def get_historical_daily_data(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """
-        日线数据 参数symbol: str, start_date: str, end_date: st  返回DataFrame
-        返回值：Dict[symbol,list]
-        list=名称	类型	描述
-            日期	object	交易日
-            股票代码	object	不带市场标识的股票代码
-            开盘	float64	开盘价
-            收盘	float64	收盘价
-            最高	float64	最高价
-            最低	float64	最低价
-            成交量	int64	注意单位: 手
-            成交额	float64	注意单位: 元
-            振幅	float64	注意单位: %
-            涨跌幅	float64	注意单位: %
-            涨跌额	float64	注意单位: 元
-            换手率	float64	注意单位: %
-        """
-        return ak.stock_zh_a_hist(symbol=symbol,period="daily", start_date=start_date, end_date=end_date)
-
-    def get_code_name(self) -> Dict[str, str]:
-        """
-        名称和代码的字典，用代码查名称。返回值: Dict[代码,名称]
-        
-        如果根据代码获取股票名称可以这样：
-        name = stock_data_provider.get_code_name()[symbol]
-        """
-        if self.code_name_list and len(self.code_name_list)>0:
-            return self.code_name_list  
-
-        spot = ak.stock_info_a_code_name()
-        for index, row in spot.iterrows():
-            self.code_name_list[row["code"]] = row["name"]
-        return self.code_name_list 
-
-    def is_stock(self,symbol:str)->bool:
-        """
-        判断是否是股票
-        """
-        return symbol in self.get_code_name()
-
-    def get_news_updates(self, symbols: List[str],since_time: datetime) -> Dict[str, List[Dict]]:
-        """
-        个股新闻更新.返回值Dict[symbol,str]
-        返回值: Dict[symbol,list]
-        list=名称	类型	描述
-            关键词	object	-
-            新闻标题	object	-
-            新闻内容	object	-
-            发布时间	object	-
-            文章来源	object	-
-            新闻链接	object	-
-        """
-        result = {}
-        for symbol in symbols:
-            news = ak.stock_news_em(symbol=symbol)
-            news = news[news["发布时间"] > since_time]
-            result[symbol] = news.to_dict(orient="list")
-
-    def get_market_news_300(self) -> List[str]:
-        """
-        获取财联社最新300条新闻，并将其格式化为字符串列表。
-        备注：这个函数一次获取的信息很多，无法让LLM一次处理，需要调用 summarizer_news(news,query) 来蒸馏提取内容
-
-        返回值:
-            List[str]: 每个元素是一个格式化的字符串，包含新闻的标题、内容、发布日期和发布时间。
-
-        字符串格式:
-            "标题: {标题}, 内容: {内容}, 发布日期: {发布日期}, 发布时间: {发布时间}"
-        """
-        # 获取新闻数据并转换为字典
-        news_data = ak.stock_info_global_cls().to_dict(orient="list")
-        
-        # 提取新闻数据，并将其格式化为字符串列表
-        formatted_news_list = [
-            f"标题: {title}, 内容: {content}, 发布日期: {publish_date}, 发布时间: {publish_time}"
-            for title, content, publish_date, publish_time in zip(
-                news_data.get("标题", []),
-                news_data.get("内容", []),
-                news_data.get("发布日期", []),
-                news_data.get("发布时间", [])
-            )
-        ]
-        
-        return formatted_news_list
-
-    def get_market_news_300_update(self, since: Optional[datetime] = None) -> Tuple[List[str], Optional[datetime]]:
-        """
-        获取 get_market_news_300 的新闻更新,返回值Tuple[List[str], Optional[datetime]]
-        """
-        news_data = ak.stock_info_global_cls()
-        
-        if news_data.empty:
-            return [], None
-        
-        data = news_data if since is None else news_data[news_data["发布时间"] > since.time()]
-        
-        if data.empty:
-            return [], since  # 如果没有新数据，返回空列表和原始的since时间
-
-        dict_data = data.to_dict(orient="list")
-        formatted_news_list = [
-            f"标题: {title}, 内容: {content}, 发布日期: {publish_date}, 发布时间: {publish_time}"
-            for title, content, publish_date, publish_time in zip(
-                dict_data.get("标题", []),
-                dict_data.get("内容", []),
-                dict_data.get("发布日期", []),
-                dict_data.get("发布时间", [])
-            )
-        ]
-        
-        # 将最后一条新闻的日期和时间转换为datetime对象
-        try:
-            last_date = data.iloc[-1]["发布日期"]
-            last_time = data.iloc[-1]["发布时间"]
-            
-            # 确保 last_date 是 date 对象，last_time 是 time 对象
-            if isinstance(last_date, str):
-                last_date = datetime.strptime(last_date, "%Y-%m-%d").date()
-            if isinstance(last_time, str):
-                last_time = datetime.strptime(last_time, "%H:%M:%S").time()
-            
-            last_datetime = datetime.combine(last_date, last_time)
-        except (IndexError, KeyError, ValueError) as e:
-            last_datetime = datetime.now()
-
-        return formatted_news_list, last_datetime
-
-    def get_sector_fund_flow_rank(self, indicator: str = "今日", sector_type: str = "行业资金流", top_n: int = 10) -> str:
-        """
-        获取板块资金流排名数据,indicator: str = "今日", sector_type: str = "行业资金流", top_n: int = 10 ，返回流向字符串
-
-        参数:
-        indicator (str): 时间范围，可选 "今日", "5日", "10日"
-        sector_type (str): 板块类型，可选 "行业资金流", "概念资金流", "地域资金流"
-        top_n (int): 返回前n行数据，-1 表示返回所有数据
-
-        返回:
-        str: 格式化的板块资金流排名数据
-        """
-        try:
-            # 获取数据
-            df = ak.stock_sector_fund_flow_rank(indicator=indicator, sector_type=sector_type)
-
-            # 找到包含“涨跌幅”关键词的列名，并按照此列排序
-            change_column = next((col for col in df.columns if '涨跌幅' in col), None)
-            if change_column:
-                df = df.sort_values(by=change_column, ascending=False)
-
-            # 选择前 top_n 行，如果 top_n 为 -1，则选择所有行
-            if top_n != -1:
-                df = df.head(top_n)
-
-            # 格式化输出
-            result = f"板块资金流排名 ({sector_type} - {indicator}, Top {top_n if top_n != -1 else 'All'}):\n\n"
-            for _, row in df.iterrows():
-                result += f"{row['序号']}. {row['名称']} ({change_column}: {row[change_column]}%)\n"
-                for col in df.columns:
-                    if col not in ['序号', '名称', change_column]:
-                        value = row[col]
-                        # 判断数据类型来格式化输出
-                        if isinstance(value, (float, int)):
-                            result += f"   {col}: {value:.2f}\n"
-                        else:
-                            result += f"   {col}: {value}\n"
-                result += "\n"
-
-            return result
-        except Exception as e:
-            return f"获取板块资金流排名数据时出错: {str(e)}"
-
-    def get_stock_main_fund_flow(self, symbol: str = "全部股票", top_n: int = 10) -> str:
-        """
-        获取主力资金流向排名数据
-
-        参数:
-        symbol (str): 股票类型，可选 "全部股票", "沪深A股", "沪市A股", "科创板", "深市A股", "创业板", "沪市B股", "深市B股"
-        top_n (int): 返回前n行数据，-1 表示返回所有数据
-
-        返回:
-        str: 格式化的主力资金流向排名数据
-        """
-        try:
-            # 获取数据
-            df = ak.stock_main_fund_flow(symbol=symbol)
-
-            # 根据今日主力净占比排序
-            df = df.sort_values(by='今日排行榜-主力净占比', ascending=False)
-
-            # 选择前 top_n 行，如果 top_n 为 -1，则选择所有行
-            if top_n != -1:
-                df = df.head(top_n)
-
-            # 格式化输出
-            result = f"主力资金流向排名 ({symbol}, Top {top_n if top_n != -1 else 'All'}):\n\n"
-            for _, row in df.iterrows():
-                result += f"{row['序号']}. {row['名称']} ({row['代码']}) - {row['所属板块']}\n"
-                result += f"   最新价: {row['最新价']:.2f}\n"
-                result += f"   今日排行榜: 主力净占比 {row['今日排行榜-主力净占比']:.2f}%, 排名 {row['今日排行榜-今日排名']}, 涨跌幅 {row['今日排行榜-今日涨跌']:.2f}%\n"
-                result += f"   5日排行榜: 主力净占比 {row['5日排行榜-主力净占比']:.2f}%, 排名 {row['5日排行榜-5日排名']}, 涨跌幅 {row['5日排行榜-5日涨跌']:.2f}%\n"
-                result += f"   10日排行榜: 主力净占比 {row['10日排行榜-主力净占比']:.2f}%, 排名 {row['10日排行榜-10日排名']}, 涨跌幅 {row['10日排行榜-10日涨跌']:.2f}%\n\n"
-
-            return result
-        except Exception as e:
-            return f"获取主力资金流向排名数据时出错: {str(e)}"
-
-    def get_stock_minute(self,symbol:str, period='1'):
-        """
-        个股分钟数据 参数symbol:str  返回值DataFrame
-        输入参数：
-            symbol:str 股票代码
-            period:str 周期，默认为1，可选值：1,5,15,30,60
-        返回值:
-            名称	类型	描述
-            day	object	-
-            open	float64	-
-            high	float64	-
-            low	float64	-
-            close	float64	-
-            volume	float64	-
-        """
-        return ak.stock_zh_a_minute(symbol=symbol, period=period)
-
-    def get_index_data(self, index_symbols: List[str],start_date:str,end_date:str) -> Dict[str, pd.DataFrame]:
-        """
-        获取指数数据,参数index_symbols: List[str]  返回值Dict[symbol,DataFrame]
-        """
-        result = {}
-        for index in index_symbols:
-            data = ak.index_zh_a_hist(symbol=index,period="daily",start_date=start_date,end_date=end_date)
-            result[index] = data
-        return result
-    
-    def get_stock_news(self, symbols: List[str]) -> Dict[str, List[Dict]]:
-        """
-        获取个股新闻。参数symbols: List[str] 返回值Dict[symbol,str]
-        输入参数:
-            symbols: List[str]  股票代码列表
-        返回值:
-            名称	类型	描述
-            关键词	object	-
-            新闻标题	object	-
-            新闻内容	object	-
-            发布时间	object	-
-            文章来源	object	-
-            新闻链接	object	-
-        """
-        result = {}
-        for symbol in symbols:
-            news = ak.stock_news_em(symbol=symbol)
-            
-            result[symbol] = news.to_dict(orient="list")
-
-    def get_one_stock_news(self, symbol: str, num: int = 5, days: int = 7) -> List[Dict[str, str]]:
-        """
-        获取指定股票的最新新闻。
-
-        参数:
-        symbol (str): 股票代码，例如 "000001" 代表平安银行
-        num (int): 需要获取的新闻数量，默认为5条
-        days (int): 获取最近几天的新闻，默认为7天
-
-        返回:
-        List[Dict[str, str]]: 包含新闻信息的字典列表，每个字典包含以下键：
-            - 'title': 新闻标题
-            - 'content': 新闻内容摘要
-            - 'datetime': 新闻发布时间
-            - 'url': 新闻链接（如果有）
-
-        异常:
-        ValueError: 如果无法获取股票新闻
-        """
-        if "." in symbol:
-            symbol = symbol.split(".")[0]
-        try:
-            # 计算起始日期
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=days)
-
-            # 使用 akshare 获取股票新闻
-            # 注意：这里假设 ak.stock_news_em 是获取新闻的正确函数，您可能需要根据实际情况调整
-            df = ak.stock_news_em(symbol=symbol)
-
-            # 过滤日期范围内的新闻
-            df['datetime'] = pd.to_datetime(df['发布时间'])
-            df = df[(df['datetime'] >= start_date) & (df['datetime'] <= end_date)]
-
-            # 选择最新的 num 条新闻
-            df = df.sort_values('datetime', ascending=False).head(num)
-
-            # 构建结果列表
-            news_list = []
-            for _, row in df.iterrows():
-                news_item = {
-                    'title': row['新闻标题'],
-                    'content': row['新闻内容'][:200] + '...',  # 取前200个字符作为摘要
-                    'datetime': row['datetime'].strftime('%Y-%m-%d %H:%M:%S'),
-                    'url': row['新闻链接'] if '新闻链接' in row else ''
-                }
-                news_list.append(news_item)
-
-            return news_list
-
-        except Exception as e:
-            raise ValueError(f"无法获取股票 {symbol} 的新闻: {str(e)}")
-
-    def get_latest_stock_data(self, symbol: str) -> Dict[str, Any]:
-        """
-        获取指定股票的最新综合数据。
-
-        参数:
-        symbol (str): 股票代码，例如 "000001" 代表平安银行
-
-        返回:
-        Dict[str, Any]: 包含股票最新数据的字典，包括以下键：
-            - 'symbol': 股票代码
-            - 'name': 股票名称
-            - 'price': 最新价格
-            - 'change': 涨跌额
-            - 'change_percent': 涨跌幅（百分比）
-            - 'open': 开盘价
-            - 'high': 最高价
-            - 'low': 最低价
-            - 'volume': 成交量
-            - 'amount': 成交金额
-            - 'bid_price': 买一价
-            - 'ask_price': 卖一价
-            - 'bid_volume': 买一量
-            - 'ask_volume': 卖一量
-            - 'timestamp': 数据时间戳
-
-        异常:
-        ValueError: 如果无法获取股票数据
-        """
-        if "." in symbol:
-            symbol = symbol.split(".")[0]
-        try:
-            # 使用 akshare 的 stock_bid_ask_em 函数获取最新行情数据
-            df = ak.stock_bid_ask_em(symbol=symbol)
-            
-            # 提取需要的数据
-            data = {
-                'symbol': symbol,
-                'name': self._get_stock_name(symbol),  # 这个方法需要另外实现
-                'price': float(df.loc[df['item'] == '最新', 'value'].values[0]),
-                'change': float(df.loc[df['item'] == '涨跌', 'value'].values[0]),
-                'change_percent': float(df.loc[df['item'] == '涨幅', 'value'].values[0]),
-                'open': float(df.loc[df['item'] == '今开', 'value'].values[0]),
-                'high': float(df.loc[df['item'] == '最高', 'value'].values[0]),
-                'low': float(df.loc[df['item'] == '最低', 'value'].values[0]),
-                'volume': float(df.loc[df['item'] == '总手', 'value'].values[0]),
-                'amount': float(df.loc[df['item'] == '金额', 'value'].values[0]),
-                'bid_price': float(df.loc[df['item'] == 'buy_1', 'value'].values[0]),
-                'ask_price': float(df.loc[df['item'] == 'sell_1', 'value'].values[0]),
-                'bid_volume': float(df.loc[df['item'] == 'buy_1_vol', 'value'].values[0]),
-                'ask_volume': float(df.loc[df['item'] == 'sell_1_vol', 'value'].values[0]),
-                'timestamp': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
-            }
-            
-            return data
-
-        except Exception as e:
-            raise ValueError(f"无法获取股票 {symbol} 的最新数据: {str(e)}")
-
-    def _get_stock_name(self, symbol: str) -> str:
-        """
-        根据股票代码获取股票名称的辅助方法。
-        """
-        return self.get_code_name()[symbol]
-
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=10))
-    def get_stock_info(self,symbol: str) -> str:
-        """
-        查询指定股票代码的个股信息，参数symbol: str  返回str。
-
-        参数:
-        symbol (str): 股票代码，例如 "603777"。
-
-        返回:
-        str: 个股信息的格式化字符串，包括总市值、流通市值、行业、上市时间、股票代码、股票简称、总股本和流通股本。
-        """
-
-        # 获取个股信息数据框
-        stock_info_df = ak.stock_individual_info_em(symbol=symbol)
-
-        # 将数据转换为可读的字符串格式
-        stock_info_str = "\n".join([f"{row['item']}: {row['value']}" for _, row in stock_info_df.iterrows()])
-        
-        return stock_info_str
-
-    def get_realtime_stock_data(self,symbol: str) -> str:
-        """
-        查询指定证券代码的最新行情数据，参数symbol:str 返回str。
-
-        参数:
-        symbol (str): 证券代码，可以是 A 股个股代码，A 股场内基金代码，A 股指数，美股代码, 美股指数，例如 "SH600000"。
-
-        返回:
-        str: 最新行情数据的格式化字符串，包括代码、现价、涨幅、最高价、最低价、市盈率、成交量等信息。
-        """
-
-        # 获取实时行情数据
-        stock_spot_df = ak.stock_individual_spot_xq(symbol=symbol)
-
-        # 将数据转换为可读的字符串格式
-        stock_spot_str = "\n".join([f"{row['item']}: {row['value']}" for _, row in stock_spot_df.iterrows()])
-        
-        return stock_spot_str
-
-    def get_full_realtime_data(self) -> dict[str, str]:
-        """
-        获取并格式化当前证券代码列表的实时行情数据。返回值Dict[symbol,str]
-
-        函数将获取证券代码的最新行情数据，并将其结果转换为格式化的字符串，存储在字典中。
-
-        返回:
-        dict[str, str]: 每个证券代码及其对应的最新行情数据的格式化字符串，包含代码、现价、涨幅、最高价、最低价、市盈率、成交量等信息。
-        """
-
-        # 获取实时行情数据
-        stock_spot_df = ak.stock_individual_spot_xq()
-
-        # 初始化一个字典来存储结果
-        formatted_data = {}
-
-        # 遍历实时数据的每一行
-        for _, row in stock_spot_df.iterrows():
-            symbol = row['symbol']
-            
-            # 将数据转换为可读的字符串格式
-            stock_spot_str = "\n".join([f"{item}: {value}" for item, value in row.items() if item != 'symbol'])
-
-            # 存储在字典中
-            formatted_data[symbol] = stock_spot_str
-
-        return formatted_data
-
-    def get_stock_announcements(self,symbols: List[str], date: str = None) -> Dict[str, List[str]]:
-        """
-        获取指定日期内指定股票代码的公告信息。参数symbols: List[str] 返回值Dict[symbol,List[str]]
-
-        参数:
-        symbols (List[str]): 股票代码列表。
-        date (str, 可选): 查询的日期，格式为 "YYYY-MM-DD"。如果未指定，则使用最近的交易日期。
-
-        返回:
-        Dict[str, List[str]]: 一个字典，其中键是股票代码，值是该股票在指定日期内发布的公告列表。
-        """
-        result = {}
-        if not date:
-            date = self.get_latest_trading_date()
-        df = ak.stock_gsrl_gsdt_em(date=date)
-        for symbol in symbols:
-            result[symbol] = []
-            filtered_df = df[df['股票代码'] == symbol]
-            for row in filtered_df.itertuples():
-                result[symbol].append(row["具体事项"])
-        return result
-
-    def stock_info_global_ths(self):
-        """
-        同花顺财经 20条,返回DataFrame
-        返回值：
-            名称	类型	描述
-            标题	object	-
-            内容	object	-
-            发布时间	object	-
-            链接	object	-
-        """
-        return ak.stock_info_global_ths()
-
-    def stock_info_global_futu(self):
-        """
-        富途财经 50条 ,返回DataFrame
-        返回值：
-            名称	类型	描述
-            标题	object	-
-            内容	object	-
-            发布时间	object	-
-            链接	object	-
-        """
-        return ak.stock_info_global_futu()
-
-    def stock_info_global_sina(self):
-        """
-        新浪财经 20条 ,返回DataFrame
-        返回值：
-        名称	类型	描述
-        时间	object	-
-        内容	object	-
-        """
-        return ak.stock_info_global_sina()
-
-    def stock_info_global_em(self):
-        """
-        东方财富 200条 ,返回DataFrame
-        返回值：
-            名称	类型	描述
-            标题	object	-
-            摘要	object	-
-            发布时间	object	-
-            链接	object	-
-        """
-        return ak.stock_info_global_em()
-
-    def summarize_historical_data(self, symbols: List[str]) -> dict:
-        summary_dict = {}
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
-
-        for symbol in symbols:
-            if symbol in self.historical_data_cache:
-                df = self.historical_data_cache[symbol]
-            else:
-                df = self.get_historical_daily_data(symbol, start_date, end_date)
-                self.historical_data_cache[symbol] = df
-            
-            if df.empty:
-                summary_dict[symbol] = "未找到数据"
-                continue
-
-            # 检查数据点是否足够
-            if len(df) < 14:
-                summary_dict[symbol] = f"数据点不足，仅有 {len(df)} 个数据点，无法计算所有技术指标"
-                continue
-
-            # 保留原有的指标计算
-            df['MA20'] = ta.trend.sma_indicator(df['收盘'], window=min(20, len(df)))
-            df['MA50'] = ta.trend.sma_indicator(df['收盘'], window=min(50, len(df)))
-            df['RSI'] = ta.momentum.rsi(df['收盘'], window=min(14, len(df)))
-            macd = ta.trend.MACD(df['收盘'])
-            df['MACD'] = macd.macd()
-            df['MACD_signal'] = macd.macd_signal()
-            bb = ta.volatility.BollingerBands(df['收盘'], window=min(20, len(df)), window_dev=2)
-            df['BB_upper'] = bb.bollinger_hband()
-            df['BB_lower'] = bb.bollinger_lband()
-
-            # 新增指标，确保数据点足够
-            if len(df) >= 14:
-                df['ATR'] = ta.volatility.average_true_range(df['最高'], df['最低'], df['收盘'], window=14)
-                
-                stoch = ta.momentum.StochasticOscillator(df['最高'], df['最低'], df['收盘'])
-                df['Stoch_K'] = stoch.stoch()
-                df['Stoch_D'] = stoch.stoch_signal()
-                
-                df['RSI_9'] = ta.momentum.rsi(df['收盘'], window=9)
-                
-                df['OBV'] = ta.volume.on_balance_volume(df['收盘'], df['成交量'])
-                
-                df['Momentum'] = ta.momentum.roc(df['收盘'], window=min(10, len(df)))
-                
-                df['ADL'] = ta.volume.acc_dist_index(df['最高'], df['最低'], df['收盘'], df['成交量'])
-                
-                df['Williams_R'] = ta.momentum.williams_r(high=df['最高'], low=df['最低'], close=df['收盘'], lbp=min(14, len(df)))
-
-            # 获取数据统计（包括新增指标）
-            latest_close = df['收盘'].iloc[-1]
-            highest_close = df['收盘'].max()
-            lowest_close = df['收盘'].min()
-            avg_volume = df['成交量'].mean()
-            latest_rsi = df['RSI'].iloc[-1] if 'RSI' in df else None
-            latest_macd = df['MACD'].iloc[-1] if 'MACD' in df else None
-            latest_macd_signal = df['MACD_signal'].iloc[-1] if 'MACD_signal' in df else None
-            bb_upper = df['BB_upper'].iloc[-1] if 'BB_upper' in df else None
-            bb_lower = df['BB_lower'].iloc[-1] if 'BB_lower' in df else None
-            latest_atr = df['ATR'].iloc[-1] if 'ATR' in df else None
-            latest_stoch_k = df['Stoch_K'].iloc[-1] if 'Stoch_K' in df else None
-            latest_stoch_d = df['Stoch_D'].iloc[-1] if 'Stoch_D' in df else None
-            latest_rsi_9 = df['RSI_9'].iloc[-1] if 'RSI_9' in df else None
-            latest_obv = df['OBV'].iloc[-1] if 'OBV' in df else None
-            latest_momentum = df['Momentum'].iloc[-1] if 'Momentum' in df else None
-            latest_adl = df['ADL'].iloc[-1] if 'ADL' in df else None
-            latest_williams_r = df['Williams_R'].iloc[-1] if 'Williams_R' in df else None
-
-            # 生成描述性的字符串
-            description = (
-                f"股票代码: {symbol}\n"
-                f"最新收盘价: {latest_close:.2f}\n"
-                f"最近半年内最高收盘价: {highest_close:.2f}\n"
-                f"最近半年内最低收盘价: {lowest_close:.2f}\n"
-                f"最近半年平均成交量: {avg_volume:.0f}\n"
-            )
-
-            if latest_rsi is not None:
-                description += f"最新RSI(14): {latest_rsi:.2f}\n"
-            if latest_macd is not None and latest_macd_signal is not None:
-                description += f"最新MACD: {latest_macd:.2f}\n"
-                description += f"最新MACD信号线: {latest_macd_signal:.2f}\n"
-            if bb_upper is not None and bb_lower is not None:
-                description += f"布林带上轨: {bb_upper:.2f}\n"
-                description += f"布林带下轨: {bb_lower:.2f}\n"
-            if 'MA20' in df and 'MA50' in df:
-                description += f"MA20: {df['MA20'].iloc[-1]:.2f}\n"
-                description += f"MA50: {df['MA50'].iloc[-1]:.2f}\n"
-            if latest_atr is not None:
-                description += f"ATR(14): {latest_atr:.2f}\n"
-            if latest_stoch_k is not None and latest_stoch_d is not None:
-                description += f"随机振荡器K(14): {latest_stoch_k:.2f}\n"
-                description += f"随机振荡器D(14): {latest_stoch_d:.2f}\n"
-            if latest_rsi_9 is not None:
-                description += f"RSI(9): {latest_rsi_9:.2f}\n"
-            if latest_obv is not None:
-                description += f"OBV: {latest_obv:.0f}\n"
-            if latest_momentum is not None:
-                description += f"价格动量(10): {latest_momentum:.2f}%\n"
-            if latest_adl is not None:
-                description += f"ADL: {latest_adl:.0f}\n"
-            if latest_williams_r is not None:
-                description += f"威廉指标(14): {latest_williams_r:.2f}"
-            
-            summary_dict[symbol] = description
-        
-        return summary_dict
-
-    def summarize_historical_index_data(self, index_symbols: List[str]) -> dict:
-        """
-        汇总多个指数的历史数据， 参数symbols: List[str] 返回Dict[symbol,str]
-        备注：上证指数：000001;上证50:000016;上证300：000300；中证1000：000852；中证500：000905
-
-        输入参数:
-            index_symbols: List[str] 指数代码列表
-
-        返回值:
-            一个字典，键是指数代码，值是描述性的字符串。
-        """
-        summary_dict = {}
-        end_date = datetime.now().strftime("%Y%m%d")
-        start_date = (datetime.now() - timedelta(days=180)).strftime("%Y%m%d")
-
-        for symbol in index_symbols:
-            # 检查缓存
-            if symbol in self.historical_data_cache:
-                df = self.historical_data_cache[symbol]
-            else:
-                df = self.get_index_data([symbol], start_date, end_date)[symbol]
-                self.historical_data_cache[symbol] = df
-            
-            if df.empty:
-                summary_dict[symbol] = "未找到数据"
-                continue
-
-            # 获取数据统计
-            latest_close = df['收盘'].iloc[-1]
-            highest_close = df['收盘'].max()
-            lowest_close = df['收盘'].min()
-            avg_volume = df['成交量'].mean()
-            std_dev = df['收盘'].std()
-            median_close = df['收盘'].median()
-            avg_close = df['收盘'].mean()
-            return_rate = (df['收盘'].iloc[-1] - df['收盘'].iloc[0]) / df['收盘'].iloc[0] * 100
-
-            # 生成描述性的字符串
-            description = (
-                f"指数代码: {symbol}\n"
-                f"最新收盘价: {latest_close}\n"
-                f"最近半年内最高收盘价: {highest_close}\n"
-                f"最近半年内最低收盘价: {lowest_close}\n"
-                f"最近半年平均成交量: {avg_volume}\n"
-                f"收盘价标准差: {std_dev}\n"
-                f"收盘价中位数: {median_close}\n"
-                f"最近半年平均收盘价: {avg_close}\n"
-                f"半年累计回报率: {return_rate:.2f}%"
-            )
-            
-            summary_dict[symbol] = description
-        
-        return summary_dict
-
-    def get_index_components(self, index_symbol: str) -> list:
-        """
-        获取指定指数的最新成分股代码列表。参数 index_symbol: str 返回 list
-
-        参数:
-            index_symbol (str): 指数代码，例如 "000300" 表示沪深300指数。
-
-        返回:
-            list: 包含指定指数所有成分股代码的列表。
-        """
-        try:
-            df = ak.index_stock_cons(index_symbol)
-            stock_codes = df["品种代码"].to_list()
-            return stock_codes
-        except Exception as e:
-            print(f"获取成分股数据时出错: {e}")
-            return []
-        
-    def get_function_docstring(self, function_name: str) -> str:
-        """
-        获取指定函数的__docstring__。
-
-        参数:
-            function_name (str): 函数名称（字符串形式）。
-
-        返回:
-            str: 该函数的__docstring__，如果函数不存在或没有__docstring__，返回提示信息。
-        """
-        function = getattr(self, function_name, None)
-        if function is None:
-            return f"函数 '{function_name}' 不存在。"
-        
-        docstring = function.__doc__
-        if docstring:
-            return docstring.strip()
-        else:
-            return f"函数 '{function_name}' 没有 __docstring__。"
-
-    def get_institutional_holdings(self, symbol: str) -> str:
-        # 计算当前年份和季度
-        now = datetime.now()
-        year = str(now.year)
-        quarter = (now.month - 1) // 3 + 1  # 计算当前季度
-        report_symbol = f"{year}{quarter}"
-
-        # 获取数据
-        try:
-            stock_institute_hold_df = ak.stock_institute_hold(symbol=report_symbol)
-        except Exception as e:
-            return f"获取数据失败: {str(e)}"
-
-        # 遍历数据，将其保存到缓存中
-        for index, row in stock_institute_hold_df.iterrows():
-            code = row['证券代码']
-            formatted_row = (
-                f"证券代码: {row['证券代码']}, 证券简称: {row['证券简称']}, "
-                f"机构数: {row['机构数']}, 机构数变化: {row['机构数变化']}, "
-                f"持股比例: {row['持股比例']}%, 持股比例增幅: {row['持股比例增幅']}%, "
-                f"占流通股比例: {row['占流通股比例']}%, 占流通股比例增幅: {row['占流通股比例增幅']}%"
-            )
-            self.institutional_holdings_cache[code] = formatted_row
-
-        # 从缓存中获取数据
-        if symbol in self.institutional_holdings_cache:
-            return self.institutional_holdings_cache[symbol]
-        else:
-            return "上个季报暂无数据"
-
-    def select_stock_by_query(self, query: str):
-        """
-        根据用户的自然语言查询来筛选股票数据。
-
-        参数:
-        query (str): 用户的自然语言查询，描述了股票筛选的条件。
-
-        返回:
-        dict: 一个字典，其中键是股票代码，值是该股票的其他信息字符串。
-
-        抛出:
-        ValueError: 如果无法从LLM响应中提取Python代码。
-        Exception: 如果代码执行失败或结果格式不正确。
-
-        示例:
-        >>> select_stock_by_query("5分钟涨跌幅大于1%的股票")
-        {'000001': '名称: 平安银行, 现价: 10.5, 涨跌幅: 1.2%, ...', ...}
-        """
-        df = ak.stock_zh_a_spot_em()
-        df_summary = self.data_summarizer.get_data_summary(df)
-        global_vars={}
-        global_vars["df"]=df
-        prompt = f"""
-            需要处理的请求：
-            {query}
-
-            需要处理的变量名：
-            df
-
-            df的摘要如下：
-            {df_summary}
-
-            生成一段python代码，完成query的筛选要求
-            要求：
-            1. 代码用```python   ```包裹
-            2. 请求应该跟df的数据过滤相关，如果不相关，返回 
-            ```python
-            result={{}}
-            ```
-            3. 对df过滤后，需要把过滤的行处理为Dict[str,str]，赋值给result
-            4. 根据query的内容对df进行过滤，例如：
-                - 查询："5分钟涨跌幅大于1%的股票"
-                - 代码
-                ```python
-                df_filtered = df[df['5分钟涨跌']>1]
-                result = {{}}
-                for _, row in df_filtered.iterrows():
-                    result[row['代码']] = ", ".join([f"{{col}}: {{row[col]}}" for col in df_filtered.columns if col != '代码'])
-                ```
-            5. 确保 result 是一个字典，键为股票代码，值为该股票的其他信息字符串
-            6. 不要使用任何不在 df 中的列名
-            7. 使用名字查询的时候，注意使用模糊查询的方法，避免名字不精确查询不到数据
-        """
-        new_prompt = prompt
-        while True:
-            response = self.llm_client.one_chat(new_prompt)
-            try:
-                code = self._extract_code(response)
-                if not code:
-                    raise ValueError("No Python code found in the response, 请提供python代码，并包裹在```python  ```之中")
-                
-                execute_result = self.code_runner.run(code,global_vars=global_vars)
-                if execute_result["error"]:
-                    raise execute_result["error"]
-                if "result" not in execute_result["updated_vars"]:
-                    raise Exception("代码执行完以后，没有检测到result变量，必须把结果保存在result变量之中")
-                if not isinstance(execute_result["updated_vars"]["result"], dict):
-                    raise Exception("result必须是字典格式，请修改代码，把结果保存于字典格式的dict")
-                
-                return execute_result["updated_vars"]["result"]
-            except Exception as e:
-                fix_prompt = f"""
-                刚刚用下面的提示词
-                {prompt}
-
-                生成了下面的代码
-                {code}
-
-                发生了下面的错误：
-                {str(e)}
-
-                请帮我修正代码，代码要求不变，输出的代码包裹在```python  ```之中
-                修正代码不用加任何解释
-                """
-                new_prompt = fix_prompt
-
-    def _extract_code(self, response):
-        """
-        从LLM的响应中提取Python代码。
-
-        参数:
-        response (str): LLM的完整响应文本
-
-        返回:
-        str: 提取出的Python代码。如果没有找到代码，返回空字符串。
-        """
-        # 使用正则表达式查找被 ```python 和 ``` 包围的代码块
-        code_pattern = r'```python\s*(.*?)\s*```'
-        matches = re.findall(code_pattern, response, re.DOTALL)
-
-        if matches:
-            # 返回找到的第一个代码块
-            return matches[0].strip()
-        else:
-            # 如果没有找到代码块，可以选择抛出异常或返回空字符串
-            # 这里选择返回空字符串
-            return ""
-
-    def get_stock_volatility(self, symbol: str, period: int = 30, annualize: bool = True) -> float:
-        """
-        计算指定股票的波动率。
-
-        参数:
-        symbol (str): 股票代码
-        period (int): 计算波动率的天数，默认为30天
-        annualize (bool): 是否年化波动率，默认为True
-
-        返回:
-        float: 计算得到的波动率
-        """
-        if "." in symbol:
-            symbol = symbol.split(".")[0]
-        # 获取历史收盘价数据
-        end_date = datetime.now().strftime('%Y%m%d')
-        start_date = (datetime.now() - timedelta(days=period)).strftime('%Y%m%d')
-        historical_data = self.get_historical_daily_data(symbol, start_date, end_date)
-
-        # 计算日收益率
-        returns = historical_data['收盘'].pct_change().dropna()
-
-        # 计算波动率（标准差）
-        volatility = returns.std()
-
-        # 如果需要年化，假设一年有250个交易日
-        if annualize:
-            volatility *= (250 ** 0.5)
-
-        return volatility
-
-    def get_latest_price(self, symbol: str) -> float:
-        """
-        获取指定股票的最新价格。
-
-        参数:
-        symbol (str): 股票代码，例如 "000001" 代表平安银行
-
-        返回:
-        float: 股票的最新价格
-
-        异常:
-        ValueError: 如果无法获取股票价格
-        """
-        try:
-            # 使用 akshare 的 stock_bid_ask_em 函数获取行情数据
-            if "." in symbol:
-                symbol= symbol.split(".")[0]
-            df = ak.stock_bid_ask_em(symbol=symbol)
-            
-            # 从返回的数据中提取最新价格
-            # 根据数据示例，"最新" 对应的是索引为 20 的行
-            latest_price = df.loc[df['item'] == '最新', 'value'].values[0]
-            
-            return float(latest_price)
-        except Exception as e:
-            raise ValueError(f"无法获取股票 {symbol} 的最新价格: {str(e)}")
-
-    def get_concept_board_components(self, symbol: str = '车联网') -> dict:
-        """
-        获取指定概念板块的成分股。参数symbol: str = '车联网' 返回值 dict[symbol,str]
-
-        参数:
-            symbol (str): 概念板块名称，例如 "车联网"。可以通过调用 ak.stock_board_concept_name_em() 查看东方财富-概念板块的所有行业名称。
-
-        返回:
-            dict: 键为成分股代码，值为该成分股的详细信息，格式化为易于阅读的字符串。
-        """
-        df = ak.stock_board_concept_cons_em(symbol)
-
-        # 处理数据，将每行数据转换为易于阅读的字符串
-        result = {}
-        for _, row in df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"最新价: {row['最新价']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"涨跌额: {row['涨跌额']}, "
-                f"成交量: {row['成交量']}手, "
-                f"成交额: {row['成交额']}, "
-                f"振幅: {row['振幅']}%, "
-                f"最高: {row['最高']}, "
-                f"最低: {row['最低']}, "
-                f"今开: {row['今开']}, "
-                f"昨收: {row['昨收']}, "
-                f"换手率: {row['换手率']}%, "
-                f"市盈率-动态: {row['市盈率-动态']}, "
-                f"市净率: {row['市净率']}"
-            )
-            result[row['代码']] = stock_info
-
-        return result
-
-    def select_stocks_by_concept_board_query(self, query: str) -> dict:
-        """
-        根据用户的自然语言查询来筛选概念板块中的股票数据。参数 query:str 返回dict[symbol,str]
-
-        参数:
-        query (str): 用户的自然语言查询，描述了概念板块筛选的条件。
-
-        返回:
-        dict: 一个字典，其中键是股票代码，值是该股票的其他信息字符串。
-
-        抛出:
-        ValueError: 如果无法从LLM响应中提取Python代码。
-        Exception: 如果代码执行失败或结果格式不正确。
-
-        示例:
-        >>> select_stocks_by_concept_board_query("涨幅超过2%的板块")
-        {'000001': '名称: 平安银行, 现价: 10.5, 涨跌幅: 1.2%, ...', ...}
-        """
-        # 获取所有概念板块数据
-        df_concepts = ak.stock_board_concept_name_em()
-        df_summary = self.data_summarizer.get_data_summary(df_concepts)
-        global_vars ={"df_concepts":df_concepts}
-        prompt = f"""
-            需要处理的请求：
-            {query}
-
-            需要处理的变量名：
-            df_concepts
-
-            df_concepts的摘要如下：
-            {df_summary}
-
-            生成一段python代码，完成query的筛选要求
-            要求：
-            1. 代码用```python   ```包裹
-            2. 请求应该跟df_concepts的数据过滤相关，如果不相关，返回 
-            ```python
-            result = []
-            ```
-            3. 对df_concepts过滤后，需要把符合条件的板块名提取出来，赋值给result
-            4. 根据query的内容对df_concepts进行过滤，例如：
-                - 查询："涨幅超过2%的板块"
-                - 代码
-                ```python
-                df_filtered = df_concepts[df_concepts['涨跌幅']>2]
-                result = df_filtered['板块名称'].tolist()
-                ```
-            5. 确保 result 是一个列表，其中包含符合条件的板块名称
-            6. 不要使用任何不在 df_concepts 中的列名
-            7. 示例代码（根据实际情况调整）：
-            ```python
-            import re
-            keywords = ['科技', '电子', '信息', '通信', '互联网', '软件','人工智能','芯片']
-            pattern = '|'.join(keywords)
-            mask = df_concepts['板块名称'].str.contains(pattern, case=False, na=False)
-            result = df_concepts[mask]['板块名称'].tolist()
-            ```
-            8. 如果没有完全匹配的结果，考虑返回部分匹配或相关的结果
-            9. 添加注释解释你的匹配逻辑
-        """
-        new_prompt = prompt
-        while True:
-            response = self.llm_client.one_chat(new_prompt)
-            try:
-                code = self._extract_code(response)
-                if not code:
-                    raise ValueError("No Python code found in the response, 请提供python代码，并包裹在```python  ```之中")
-                
-                execute_result = self.code_runner.run(code,global_vars=global_vars)
-                if execute_result["error"]:
-                    raise execute_result["error"]
-                if "result" not in execute_result["updated_vars"]:
-                    raise Exception("代码执行完以后，没有检测到result变量，必须把结果保存在result变量之中")
-                if not isinstance(execute_result["updated_vars"]["result"], list):
-                    raise Exception("result必须是列表格式，请修改代码，确保返回的是板块名称的列表")
-                
-                # 获取成分股
-                selected_boards = execute_result["updated_vars"]["result"]
-                all_stocks = {}
-                for board_name in selected_boards:
-                    stocks = self.get_concept_board_components(board_name)
-                    all_stocks.update(stocks)
-                
-                return all_stocks
-            except Exception as e:
-                fix_prompt = f"""
-                刚刚用下面的提示词
-                {prompt}
-
-                生成了下面的代码
-                {code}
-
-                发生了下面的错误：
-                {str(e)}
-
-                请帮我修正代码，代码要求不变，输出的代码包裹在```python  ```之中
-                修正代码不用加任何解释
-                """
-                new_prompt = fix_prompt
-
-    def get_board_industry_components(self, symbol: str) -> dict:
-        """
-        获取指定行业板块的成分股。参数 symbol: str 返回 Dict[symbol,str]
-
-        参数:
-            symbol (str): 行业板块名称，例如 "小金属"。可以通过调用 ak.stock_board_industry_name_em() 查看东方财富-行业板块的所有行业名称。
-
-        返回:
-            dict: 键为成分股代码，值为该成分股的详细信息，格式化为易于阅读的字符串。
-        """
-        df = ak.stock_board_industry_cons_em(symbol)
-
-        # 处理数据，将每行数据转换为易于阅读的字符串
-        result = {}
-        for _, row in df.iterrows():
-            stock_info = (
-                f"名称: {row['名称']}, "
-                f"最新价: {row['最新价']}, "
-                f"涨跌幅: {row['涨跌幅']}%, "
-                f"涨跌额: {row['涨跌额']}, "
-                f"成交量: {row['成交量']}手, "
-                f"成交额: {row['成交额']}, "
-                f"振幅: {row['振幅']}%, "
-                f"最高: {row['最高']}, "
-                f"最低: {row['最低']}, "
-                f"今开: {row['今开']}, "
-                f"昨收: {row['昨收']}, "
-                f"换手率: {row['换手率']}%, "
-                f"市盈率-动态: {row['市盈率-动态']}, "
-                f"市净率: {row['市净率']}"
-            )
-            result[row['代码']] = stock_info
-
-        return result
-
-    def select_stocks_by_industry_board_query(self, query: str) -> dict:
-        """
-        根据用户的自然语言查询来筛选行业板块中的股票数据。参数 query: str 返回 Dict[symbol,str]
-
-        参数:
-        query (str): 用户的自然语言查询，描述了行业板块筛选的条件。
-
-        返回:
-        dict: 一个字典，其中键是股票代码，值是该股票的其他信息字符串。
-
-        抛出:
-        ValueError: 如果无法从LLM响应中提取Python代码。
-        Exception: 如果代码执行失败或结果格式不正确。
-
-        示例:
-        >>> select_stocks_by_industry_board_query("涨幅超过2%的板块")
-        {'000001': '名称: 平安银行, 现价: 10.5, 涨跌幅: 1.2%, ...', ...}
-        """
-        # 获取所有行业板块数据
-        df_industries = ak.stock_board_industry_name_em()
-        df_summary = self.data_summarizer.get_data_summary(df_industries)
-        global_vars={"df_industries":df_industries}
-        prompt = f"""
-            需要处理的请求：
-            {query}
-
-            需要处理的变量名：
-            df_industries
-
-            df_industries的摘要如下：
-            {df_summary}
-
-            生成一段python代码，完成query的筛选要求
-            要求：
-            1. 代码用```python   ```包裹
-            2. 请求应该跟df_industries的数据过滤相关，如果不相关，返回 
-            ```python
-            result = []
-            ```
-            3. 对df_industries过滤后，需要把符合条件的板块名提取出来，赋值给result
-            4. 根据query的内容对df_industries进行过滤，考虑以下几点：
-            - 使用更灵活的匹配方式，如模糊匹配或相关词匹配
-            - 考虑同义词或相关词，例如"科技"可能与"电子"、"信息"、"通信"等相关
-            - 可以使用正则表达式进行更复杂的匹配
-            5. 确保 result 是一个列表，其中包含符合条件的板块名称
-            6. 不要使用任何不在 df_industries 中的列名
-            7. 示例代码（根据实际情况调整）：
-            ```python
-            import re
-            keywords = ['科技', '电子', '信息', '通信', '互联网', '软件','人工智能','芯片']
-            pattern = '|'.join(keywords)
-            mask = df_industries['板块名称'].str.contains(pattern, case=False, na=False)
-            result = df_industries[mask]['板块名称'].tolist()
-            ```
-            8. 如果没有完全匹配的结果，考虑返回部分匹配或相关的结果
-            9. 添加注释解释你的匹配逻辑
-        """
-        new_prompt = prompt
-        while True:
-            response = self.llm_client.one_chat(new_prompt)
-            try:
-                code = self._extract_code(response)
-                if not code:
-                    raise ValueError("No Python code found in the response, 请提供python代码，并包裹在```python  ```之中")
-                
-                execute_result = self.code_runner.run(code,global_vars=global_vars)
-                if execute_result["error"]:
-                    raise execute_result["error"]
-                if "result" not in execute_result["updated_vars"]:
-                    raise Exception("代码执行完以后，没有检测到result变量，必须把结果保存在result变量之中")
-                if not isinstance(execute_result["updated_vars"]["result"], list):
-                    raise Exception("result必须是列表格式，请修改代码，确保返回的是板块名称的列表")
-                
-                # 获取成分股
-                selected_boards = execute_result["updated_vars"]["result"]
-                all_stocks = {}
-                for board_name in selected_boards:
-                    stocks = self.get_board_industry_components(board_name)
-                    all_stocks.update(stocks)
-                
-                return all_stocks
-            except Exception as e:
-                fix_prompt = f"""
-                刚刚用下面的提示词
-                {prompt}
-
-                生成了下面的代码
-                {code}
-
-                发生了下面的错误：
-                {str(e)}
-
-                请帮我修正代码，代码要求不变，输出的代码包裹在```python  ```之中
-                修正代码不用加任何解释
-                """
-                new_prompt = fix_prompt
-
-    def select_by_query(self, 
-                        data_source: Union[pd.DataFrame, Callable[[], pd.DataFrame]], 
-                        query: str, 
-                        result_type: str = 'dict', 
-                        key_column: str = None, 
-                        value_columns: List[str] = None) -> Union[Dict[str, str], List[str]]:
-        """
-        根据用户的自然语言查询来筛选数据。
-
-        参数:
-        data_source (Union[pd.DataFrame, Callable[[], pd.DataFrame]]): 
-            数据源，可以是一个DataFrame或者是返回DataFrame的无参数函数。
-        query (str): 用户的自然语言查询，描述了筛选的条件。
-        result_type (str): 结果类型，'dict' 或 'list'。默认为 'dict'。
-        key_column (str): 如果result_type为'dict'，这个参数指定作为字典键的列名。
-        value_columns (List[str]): 如果result_type为'dict'，这个参数指定作为字典值的列名列表。
-
-        返回:
-        Union[Dict[str, str], List[str]]: 
-            如果result_type为'dict'，返回一个字典，其中键是key_column指定的列的值，
-            值是value_columns指定的列的值组成的字符串。
-            如果result_type为'list'，返回一个列表，包含符合条件的行的第一列值。
-
-        抛出:
-        ValueError: 如果无法从LLM响应中提取Python代码。
-        Exception: 如果代码执行失败或结果格式不正确。
-
-        示例:
-        >>> df = pd.DataFrame({'code': ['000001', '000002'], 'name': ['平安银行', '万科A'], 'price': [10.5, 15.2]})
-        >>> select_by_query(df, "价格大于12的股票", 'dict', 'code', ['name', 'price'])
-        {'000002': '名称: 万科A, 价格: 15.2'}
-        >>> select_by_query(df, "价格大于12的股票", 'list')
-        ['000002']
-        """
-        if callable(data_source):
-            df = data_source()
-        else:
-            df = data_source
-
-        df_summary = self.data_summarizer.get_data_summary(df)
-        global_vars={"df":df}
-        prompt = f"""
-            需要处理的请求：
-            {query}
-
-            需要处理的变量名：
-            df
-
-            df的摘要如下：
-            {df_summary}
-
-            生成一段python代码，完成query的筛选要求
-            要求：
-            1. 代码用```python   ```包裹
-            2. 请求应该跟df的数据过滤相关，如果不相关，返回 
-            ```python
-            result = []
-            ```
-            3. 对df过滤后，需要把符合条件的行赋值给result
-            4. 根据query的内容对df进行过滤，例如：
-                - 查询："价格大于12的股票"
-                - 代码
-                ```python
-                result = df[df['price'] > 12]
-                ```
-            5. 确保 result 是一个DataFrame，包含符合条件的所有行
-            6. 不要使用任何不在 df 中的列名
-            7. 使用名字查询的时候，注意使用模糊查询的方法，避免名字不精确查询不到数据
-        """
-        new_prompt = prompt
-        while True:
-            response = self.llm_client.one_chat(new_prompt)
-            try:
-                code = self._extract_code(response)
-                if not code:
-                    raise ValueError("No Python code found in the response, 请提供python代码，并包裹在```python  ```之中")
-                
-                execute_result = self.code_runner.run(code,global_vars=global_vars)
-                if execute_result["error"]:
-                    raise execute_result["error"]
-                if "result" not in execute_result["updated_vars"]:
-                    raise Exception("代码执行完以后，没有检测到result变量，必须把结果保存在result变量之中")
-                if not isinstance(execute_result["updated_vars"]["result"], pd.DataFrame):
-                    raise Exception("result必须是DataFrame格式，请修改代码，确保返回的是筛选后的DataFrame")
-                
-                filtered_df = execute_result["updated_vars"]["result"]
-                
-                if result_type == 'dict':
-                    if not key_column or not value_columns:
-                        raise ValueError("For dict result type, key_column and value_columns must be specified")
-                    return {
-                        row[key_column]: ", ".join([f"{col}: {row[col]}" for col in value_columns])
-                        for _, row in filtered_df.iterrows()
-                    }
-                elif result_type == 'list':
-                    return filtered_df.iloc[:, 0].tolist()
-                else:
-                    raise ValueError("Invalid result_type. Must be 'dict' or 'list'")
-            
-            except Exception as e:
-                fix_prompt = f"""
-                刚刚用下面的提示词
-                {prompt}
-
-                生成了下面的代码
-                {code}
-
-                发生了下面的错误：
-                {str(e)}
-
-                请帮我修正代码，代码要求不变，输出的代码包裹在```python  ```之中
-                修正代码不用加任何解释
-                """
-                new_prompt = fix_prompt
-
-    def select_by_stock_comments(self, query: str) -> dict:
-        """
-        根据用户的查询条件筛选千股千评数据。参数query:str 返回Dict[symbol,str]
-
-        此函数使用 akshare 的 stock_comment_em 函数获取千股千评数据，
-        然后使用 select_by_query 方法根据用户的查询条件进行筛选。
-
-        参数:
-        query (str): 用户的自然语言查询，描述了筛选千股千评数据的条件。
-
-        返回:
-        dict: 一个字典，其中键是股票代码，值是该股票的其他信息字符串。
-              返回的信息包括：名称、最新价、涨跌幅、换手率、市盈率、主力成本、
-              机构参与度、综合得分、排名变化、当前排名、关注指数和交易日。
-
-        示例:
-        >>> select_by_stock_comments("综合得分大于80的股票")
-        {'000001': '名称: 平安银行, 最新价: 10.5, 涨跌幅: 1.2%, ...', ...}
-        """
-        # 获取千股千评数据
-        df = ak.stock_comment_em()
-        
-        # 定义要包含在结果中的列
-        value_columns = [
-            "名称", "最新价", "涨跌幅", "换手率", "市盈率", "主力成本", 
-            "机构参与度", "综合得分", "上升", "目前排名", "关注指数", "交易日"
-        ]
-        
-        # 使用 select_by_query 方法进行筛选
-        result = self.select_by_query(
-            df, 
-            query, 
-            result_type='dict', 
-            key_column="代码", 
-            value_columns=value_columns
-        )
-        
-        return result
-
-    def remove_prefix(self,code: str) -> str:
-        """移除股票代码的前缀"""
-        return code.lstrip('SH').lstrip('SZ').lstrip('BJ')
-
-    def get_xueqiu_hot_follow(self, num: int = 100) -> dict:
-        """获取雪球关注排行榜,参数num: int = 100，返回值Dict[symbol,str]"""
-        df = ak.stock_hot_follow_xq(symbol="最热门")
-        result = {}
-        for _, row in df.head(num).iterrows():
-            code = self.remove_prefix(row['股票代码'])
-            info = f"股票简称: {row['股票简称']}, 关注: {row['关注']:.0f}, 最新价: {row['最新价']:.2f}"
-            result[code] = info
-        return result
-
-    def get_xueqiu_hot_tweet(self, num: int = 100) -> dict:
-        """获取雪球讨论排行榜,参数num: int = 100，返回值Dict[symbol,str]"""
-        df = ak.stock_hot_tweet_xq(symbol="最热门")
-        result = {}
-        for _, row in df.head(num).iterrows():
-            code = self.remove_prefix(row['股票代码'])
-            info = f"股票简称: {row['股票简称']}, 讨论: {row['关注']:.0f}, 最新价: {row['最新价']:.2f}"
-            result[code] = info
-        return result
-
-    def get_xueqiu_hot_deal(self, num: int = 100) -> dict:
-        """获取雪球交易排行榜,参数num: int = 100，返回值Dict[symbol,str]"""
-        df = ak.stock_hot_deal_xq(symbol="最热门")
-        result = {}
-        for _, row in df.head(num).iterrows():
-            code = self.remove_prefix(row['股票代码'])
-            info = f"股票简称: {row['股票简称']}, 交易: {row['关注']:.0f}, 最新价: {row['最新价']:.2f}"
-            result[code] = info
-        return result
-
-    def get_wencai_hot_rank(self, num: int = 100) -> dict:
-        """获取问财热门股票排名,参数num: int = 100，返回值Dict[symbol,str]"""
-        date = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d")  # 获取昨天的日期
-        df = ak.stock_hot_rank_wc(date=date)
-        result = {}
-        for _, row in df.head(num).iterrows():
-            code = row['股票代码']
-            info = f"股票简称: {row['股票简称']}, 现价: {row['现价']:.2f}, 涨跌幅: {row['涨跌幅']:.2f}%, 热度: {row['个股热度']:.0f}, 排名: {row['个股热度排名']}"
-            result[code] = info
-        return result
-
-    def get_eastmoney_hot_rank(self, num: int = 100) -> dict:
-        """获取东方财富人气榜-A股,参数num: int = 100，返回值Dict[symbol,str]"""
-        df = ak.stock_hot_rank_em()
-        result = {}
-        for _, row in df.head(num).iterrows():
-            code = self.remove_prefix(row['代码'])
-            info = f"股票名称: {row['股票名称']}, 最新价: {row['最新价']:.2f}, 涨跌额: {row['涨跌额']:.2f}, 涨跌幅: {row['涨跌幅']:.2f}%"
-            result[code] = info
-        return result
-    
-    def rremove_prefix(self, code: str) -> str:
-        """
-        使用正则表达式移除股票代码的前缀（如 'SH'、'SZ'、'BJ'），不区分大小写。
-
-        参数:
-        code (str): 原始股票代码
-
-        返回:
-        str: 移除前缀后的股票代码
-        """
-        # 正则表达式模式：匹配开头的 SH, SZ, 或 BJ，不区分大小写
-        pattern = r'^(sh|sz|bj)'
-        
-        # 使用 re.sub 来替换匹配的前缀为空字符串
-        return re.sub(pattern, '', code, flags=re.IGNORECASE)
-
-    def get_baidu_hotrank(self, hour=7, num=20) -> dict:
-        """
-        获取百度热门股票排行榜。参数  hour=7, num=20 返回 Dict[symbol,str]
-
-        参数:
-        hour (int): 获取最近多少小时的数据，默认为7小时。
-        num (int): 需要获取的热门股票数量，默认为20。
-
-        返回:
-        dict: 键为股票代码，值为格式化的字符串，包含热门股票的详细信息，包括排名。
-        """
-        # 获取当前日期
-        date = datetime.now().strftime("%Y%m%d")
-        
-        # 获取热门股票列表
-        hotlist = self.baidu_news_api.fetch_hotrank(day=date, hour=hour, rn=num)
-        
-        # 格式化结果
-        result = {}
-        for rank, item in enumerate(hotlist, 1):  # enumerate从1开始，给每个项目一个排名
-            stock_info = (
-                f"排名: {rank}\n"  # 添加排名信息
-                f"股票名称: {item['name']}\n"
-                f"当前价格: {item['price']}\n"
-                f"涨跌幅: {item['change']}\n"
-                f"所属板块: {item['sector']}\n"
-                f"排名变化: {item['rank_change']}\n"
-                f"地区: {item['region']}\n"
-                f"热度: {item['heat']}\n"
-                f"----------------------"
-            )
-            result[item['code']] = stock_info
-        
-        return result
-
-    def get_combined_hot_stocks(self, num: int = 100) -> List[str]:
-        """
-        获取综合的热门股票列表，包括雪球讨论、雪球交易、问财热门、东方财富人气榜和百度热榜。
-
-        参数:
-        num (int): 从每个来源获取的股票数量，默认为100。
-
-        返回:
-        List[str]: 交叉合并后的去重股票代码列表。
-        """
-        symbol_dict = self.get_code_name()
-
-        wencai = []
-
-        # 获取各个来源的热门股票
-        xueqiu_tweet = list(self.get_xueqiu_hot_tweet(num).keys())
-        xueqiu_deal = list(self.get_xueqiu_hot_deal(num).keys())
-        eastmoney = list(self.get_eastmoney_hot_rank(num).keys())
-        baidu = list(self.get_baidu_hotrank(num=num).keys())
-        try:
-            wencai = list(self.get_wencai_hot_rank(num).keys())
-        except Exception as e:
-            pass
-        
-        # 将所有列表合并到一个列表中
-        all_lists = [xueqiu_tweet, xueqiu_deal, eastmoney, baidu]
-        if len(wencai)>0:
-            all_lists.append(wencai)
-
-        # 创建一个集合来存储已经添加的股票代码，用于去重
-        seen = set()
-        result = []
-
-        # 交叉合并列表
-        max_length = max(len(lst) for lst in all_lists)
-        for i in range(max_length):
-            for lst in all_lists:
-                if i < len(lst):
-                    stock = lst[i]
-                    if stock not in seen and stock in symbol_dict:
-                        seen.add(stock)
-                        result.append(stock)
-
-        return result
-
-    def get_baidu_recommendation(self, hour=7, num=20) -> dict:
-        """
-        获取百度股票推荐列表。参数  hour=7, num=20 返回 Dict[symbol,str]
-
-        参数:
-        hour (int): 获取最近多少小时的数据，默认为7小时。
-        num (int): 需要获取的推荐股票数量，默认为20。
-
-        返回:
-        dict: 键为股票代码，值为格式化的字符串，包含推荐股票的详细信息。
-        """
-        # 获取当前日期
-        date = datetime.now().strftime("%Y%m%d")
-        
-        # 获取推荐股票列表
-        rlist = self.baidu_news_api.fetch_recommendation_list(day=date, hour=hour, rn=num)
-        
-        # 格式化结果
-        result = {}
-        for rank, item in enumerate(rlist, 1):  # enumerate从1开始，给每个项目一个排名
-            stock_info = (
-                f"排名: {rank}\n"
-                f"股票名称: {item['name']}\n"
-                f"涨跌幅: {item['change']}\n"
-                f"综合热度: {item['heat']}\n"
-                f"所属板块: {item['sector_name']}\n"
-                f"排名变化: {item['rank_change']}\n"
-                f"是否连续上榜: {item['continued_ranking']}\n"
-                f"----------------------"
-            )
-            result[item['code']] = stock_info
-        
-        return result
-
-    def get_vote_baidu(self, symbol: str) -> str:
-        """
-        获取百度股市通的股票投票数据。参数 symbol:str 返回str
-
-        参数:
-        symbol (str): A股股票代码，例如 "000001"
-
-        返回:
-        str: 格式化的投票数据字符串
-        """
-        try:
-            # 获取投票数据
-            df = ak.stock_zh_vote_baidu(symbol=symbol, indicator="股票")
-            
-            # 格式化DataFrame为字符串
-            result = f"股票代码 {symbol} 的投票数据：\n"
-            for _, row in df.iterrows():
-                result += (f"{row['周期']}：看涨 {row['看涨']}，看跌 {row['看跌']}，"
-                        f"看涨比例 {row['看涨比例']}，看跌比例 {row['看跌比例']}\n")
-            
-            return result.strip()  # 移除末尾的换行符
-        
-        except Exception as e:
-            return f"获取股票 {symbol} 的投票数据时发生错误: {str(e)}"
-
-    def get_baidu_sentiment_rank(self, num=20) -> dict:
-        """
-        获取百度股票情绪排名。参数 num=20 返回 Dict[symbol,str]
-
-        参数:
-        num (int): 需要获取的股票数量，默认为20。
-
-        返回:
-        dict: 键为股票代码，值为格式化的字符串，包含股票的情绪排名信息。
-        """
-        # 获取情绪排名数据
-        sentiment_list = self.baidu_news_api.fetch_sentiment_rank(rn=num)
-        
-        # 格式化结果
-        result = {}
-        for rank, item in enumerate(sentiment_list, 1):
-            stock_info = (
-                f"排名: {rank}\n"
-                f"股票名称: {item['name']}\n"
-                f"股票代码: {item['code']}\n"
-                f"交易所: {item['exchange']}\n"
-                f"市场: {item['market']}\n"
-                f"所属板块: {item['plate']} ({item['plateCode']})\n"
-                f"排名变化: {item['rankDiff']}\n"
-                f"比率: {item['ratio']}\n"
-                f"热度: {item['heat']}\n"
-                f"利好新闻占比: {item['goodNewsPercent']}\n"
-                f"中性新闻占比: {item['middleNewsPercent']}\n"
-                f"利空新闻占比: {item['badNewsPercent']}\n"
-                f"----------------------"
-            )
-            result[item['code']] = stock_info
-        
-        return result
-
-    def get_baidu_analysis_rank(self, num=20) -> dict:
-        """
-        获取百度股票分析排名。参数 num=20 返回 Dict[symbol,str]
-
-        参数:
-        num (int): 需要获取的股票数量，默认为20。
-
-        返回:
-        dict: 键为股票代码，值为格式化的字符串，包含股票的分析排名信息。
-        """
-        # 获取分析排名数据
-        analysis_list = self.baidu_news_api.fetch_analysis_rank(rn=num)
-        
-        # 格式化结果
-        result = {}
-        for rank, item in enumerate(analysis_list, 1):
-            stock_info = (
-                f"排名: {rank}\n"
-                f"股票名称: {item['name']}\n"
-                f"股票代码: {item['code']}\n"
-                f"市场: {item['market']}\n"
-                f"排名变化: {item['rank_change']}\n"
-                f"综合得分: {item['synthesis_score']}\n"
-                f"技术得分: {item['technology_score']}\n"
-                f"资金得分: {item['capital_score']}\n"
-                f"市场得分: {item['market_score']}\n"
-                f"财务得分: {item['finance_score']}\n"
-                f"所属板块: {item['sector']} ({item['sector_code']})\n"
-                f"市场类型: {item['market_type']}\n"
-                f"----------------------"
-            )
-            result[item['code']] = stock_info
-        
-        return result
-
-    def get_baidu_analysis_summary(self, symbol: str) -> str:
-        """
-        获取百度股票分析摘要。参数 symbol: str 返回 Dict[symbol,str]
-
-        参数:
-        symbol (str): 股票代码，例如 '000725'。
-
-        返回:
-        str: 格式化的字符串，包含股票的详细分析信息。
-        """
-        # 确定市场类型
-        if symbol.startswith('HK'):
-            market = 'hk'
-        elif symbol.isalpha() or (symbol.isalnum() and not symbol.isdigit()):
-            market = 'us'
-        else:
-            market = 'ab'  # 所有 A 股
-
-        # 获取分析数据
-        analysis_data = self.baidu_news_api.fetch_analysis(code=symbol, market=market)
-
-        if analysis_data == "数据不可用":
-            return "数据不可用"
-        
-        # 格式化结果
-        formatted_analysis = (
-            f"股票代码: {symbol}\n"
-            f"市场: {'A股' if market == 'ab' else '港股' if market == 'hk' else '美股'}\n\n"
-            f"{analysis_data}"
-        )
-        
-        return formatted_analysis
-
-    def get_baidu_stock_news(self, symbol: str, num: int = 20) -> List[str]:
-        """
-        获取指定股票的百度快讯新闻。 参数 symbol: str, num: int = 20 返回 Dict[symbol,str]
-
-        参数:
-        symbol (str): 股票代码，例如 '000725'。
-        num (int): 需要获取的新闻数量，默认为20。
-
-        返回:
-        List[str]: 包含格式化新闻信息的字符串列表。
-        """
-        # 获取快讯新闻数据
-        news_list = self.baidu_news_api.fetch_express_news(rn=num, code=symbol)
-        
-        # 格式化结果
-        result = []
-        for news_item in news_list:
-            news_time = news_item['ptime']
-            news_info = (
-                f"发布时间: {news_time}\n"
-                f"标题: {news_item['title']}\n"
-                f"内容: {news_item['content']}\n"
-                f"标签: {news_item['tag']}\n"
-                f"来源: {news_item['provider']}\n"
-                f"----------------------"
-            )
-            result.append(news_info)
-        
-        return result
-
-    def get_baidu_market_news(self, num: int = 40) -> List[str]:
-        """
-        获取百度A股市场快讯新闻。参数 num: int = 40 返回 Dict[symbol,str]
-
-        参数:
-        num (int): 需要获取的新闻数量，默认为40。
-
-        返回:
-        List[str]: 包含格式化新闻信息的字符串列表。
-        """
-        # 获取快讯新闻数据
-        news_list = self.baidu_news_api.fetch_express_news_v2(rn=num, pn=0, tag='A股')
-        
-        # 格式化结果
-        result = []
-        for news_item in news_list:
-            news_time = news_item['ptime']
-            news_info = (
-                f"发布时间: {news_time}\n"
-                f"标题: {news_item['title']}\n"
-                f"内容: {news_item['content']}\n"
-                f"标签: {news_item['tag']}\n"
-                f"来源: {news_item['provider']}\n"
-                f"----------------------"
-            )
-            result.append(news_info)
-        
-        return result
-
-    def get_baidu_important_news(self, num: int = 200) -> List[str]:
-        """
-        获取重要市场新闻。参数 num: int = 200 返回 Dict[symbol,str]
-
-        参数:
-        num (int): 需要获取的新闻数量，默认为40。
-
-        返回:
-        List[str]: 包含格式化新闻信息的字符串列表。
-        """
-        # 获取重要新闻数据
-        news_list = self.baidu_news_api.fetch_express_news_v2(rn=num, pn=0, tag='重要')
-        
-        # 格式化结果
-        result = []
-        for news_item in news_list:
-            news_time = news_item['ptime']
-            news_info = (
-                f"发布时间: {news_time}\n"
-                f"标题: {news_item['title']}\n"
-                f"内容: {news_item['content']}\n"
-                f"标签: {news_item['tag']}\n"
-                f"来源: {news_item['provider']}\n"
-                f"----------------------"
-            )
-            result.append(news_info)
-        
-        return result
-
-    def summarizer_news(self, news_source: list[str], query: str="总结市场热点,市场机会,市场风险", max_word: int = 240) -> str:
-        """
-        对给定的新闻列表进行摘要，根据指定的查询要求生成一个简洁的总结。 参数news_source: list[str], query: str="总结市场热点,市场机会,市场风险", max_word: int = 240 返回值str
-
-        这个函数首先将新闻文本分成较小的块，然后对每个块进行摘要。如果摘要的总长度超过指定的最大字数，
-        它会继续进行迭代摘要，直到得到一个不超过最大字数的最终摘要。
-
-        参数:
-        news_source (list[str]): 包含新闻文本的字符串列表。每个字符串应该是一条完整的新闻。
-        query (str, 可选): 指定摘要的重点或方向。默认为"总结市场热点,市场机会,市场风险"。
-        max_word (int, 可选): 最终摘要的最大字数。默认为240。
-
-        返回:
-        str: 不超过指定最大字数的新闻摘要。
-
-        示例:
-        >>> news = ["今日股市大涨，科技股领涨。", "央行宣布降息，刺激经济增长。", "新能源车企发布新品，股价应声上涨。"]
-        >>> summary = stock_data_provider.summarizer_news(news, "分析今日股市表现", 100)
-        >>> print(summary)
-        """
-        def chunk_text(text_list: list[str], max_chars: int = 10000) -> list[str]:
-            chunks = []
-            current_chunk = ""
-            for text in text_list:
-                if len(current_chunk) + len(text) <= max_chars:
-                    current_chunk += text + " "
-                else:
-                    chunks.append(current_chunk.strip())
-                    current_chunk = text + " "
-            if current_chunk:
-                chunks.append(current_chunk.strip())
-            return chunks
-
-        def summarize_chunk(chunk: str, query: str) -> str:
-            prompt = f"请根据以下查询要求总结这段新闻内容：\n\n查询：{query}\n\n新闻内容：\n{chunk}\n\n总结："
-            return self.llm_client.one_chat(prompt)
-
-        # 将新闻分成不超过10000字符的块
-        news_chunks = chunk_text(news_source)
-        
-        # 对每个块进行摘要
-        summaries = [summarize_chunk(chunk, query) for chunk in news_chunks]
-        
-        # 如果摘要总长度已经小于max_word，直接返回
-        if sum(len(s) for s in summaries) <= max_word:
-            return " ".join(summaries)
-        
-        # 否则，继续进行摘要，直到总长度不超过max_word
-        while sum(len(s) for s in summaries) > max_word:
-            if len(summaries) == 1:
-                # 如果只剩一个摘要但仍然超过max_word，进行最后一次摘要
-                final_prompt = f"请将以下摘要进一步压缩到不超过{max_word}个字：\n\n{summaries[0]}"
-                return self.llm_client.one_chat(final_prompt)[:max_word]
-            
-            # 将现有的摘要分成两两一组进行进一步摘要
-            new_summaries = []
-            for i in range(0, len(summaries), 2):
-                if i + 1 < len(summaries):
-                    combined = summaries[i] + " " + summaries[i+1]
-                    new_summary = summarize_chunk(combined, query)
-                    new_summaries.append(new_summary)
-                else:
-                    new_summaries.append(summaries[i])
-            
-            summaries = new_summaries
-        
-        # 返回最终的摘要
-        return " ".join(summaries)[:max_word]
-
-    def replace_sensitive_subtitle(self,contents:list[str])->list[str]:
-        sensitive_subtitle_pair=[{"近日":"最近"}]
-        # 替换敏感词
-        for pair in sensitive_subtitle_pair:
-            for key, value in pair.items():
-                contents = [content.replace(key, value) for content in contents]
-        return contents
-
-    def extract_json_from_text(self, text: str, max_attempts: int = 4) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-        """
-        从文本中提取JSON对象并返回字典或字典列表。允许多次尝试修复JSON。
-
-        :param text: 包含JSON数据的字符串。
-        :param max_attempts: 最大修复尝试次数，默认为3。
-        :return: 解析后的JSON对象（字典或字典列表）。
-        :raises JSONDecodeError: 如果在多次尝试后仍未能找到有效的JSON数据。
-        """
-        json_match = re.search(r'```json\s*([\s\S]*?)\s*```', text)
-        if not json_match:
-            json_match = re.search(r'\{[\s\S]*\}', text)
-        if not json_match:
-            json_match = re.search(r'\[[\s\S]*\]', text)
-        
-        if json_match:
-            json_str = json_match.group(1) if '```json' in json_match.group() else json_match.group()
-            json_str = json_str.replace("'", "\"")
-            
-            for attempt in range(max_attempts):
-                try:
-                    return json.loads(json_str, strict=False)
-                except Exception as err:
-                    if attempt == max_attempts - 1:
-                        raise err
-                    
-                    fix_prompt = f"""
-                    以下JSON字符串解析时发生错误：
-
-                    ```json
-                    {json_str}
-                    ```
-
-                    错误信息：{str(err)}
-
-                    请帮我修复这个JSON。要求：
-
-                    尽可能保持原始数据不变。
-                    只修复导致解析错误的问题，不要改变有效的数据结构和值。
-                    特别注意检查并修复以下常见问题：
-                    缺少逗号
-                    多余的逗号
-                    未闭合的引号
-                    未闭合的括号
-                    双斜杠注释
-                    内部嵌套的引号冲突（请将内层引号改为不同符号或使用转义字符）
-                    如果有多个错误，请尝试一次性修复所有错误。
-                    返回修复后的完整JSON，用```json  ```包裹。
-                    不要添加任何解释，只返回修复后的JSON。
-                    """
-                    
-                    response = self.llm_client.one_chat(fix_prompt)
-                    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', response)
-                    if json_match:
-                        json_str = json_match.group(1)
-                    else:
-                        json_str = response  # 如果没有找到```json```包裹，就使用整个响应
-                    json_str = json_str.replace("'", "\"")
-        
-        raise json.JSONDecodeError("No valid JSON found in the text", text, 0)
-    
-    def get_self_description(self)->str:
-        prompt="""
-        适合用于选择股票范围的函数(只有get_code_name函数只返回名字和代码，其余函数均会返回数据，方便进行下一次筛选)：
-            - select_stock_by_query                     使用最新行情数据，用自然语言进行筛选，返回值包含股票当前的数据信息
-            - get_index_components                      输入指数代码，获得成分列表，返回值只有名字和代码
-            - get_code_name                             全部股票代码的字典，返回值只有名字和代码
-            - get_full_realtime_data                    获取全部股票目前的行情，返回Dict[Symnol,行情描述字符串]
-            - get_concept_board_components              用自然语言进行概念板块选股，query只能针对板块的名字和板块的数据，返回值包含股票当前的数据信息
-            - select_stocks_by_industry_board_query     用自然语言进行行业板块选股,query只能针对板块的名字和板块的数据，返回值包含股票当前的数据信息
-            - get_rebound_stock_pool                    炸板股票池，返回值包含股票数据.返回Dict[Symbol,行情描述字符串]
-            - get_new_stock_pool                        新股股票池，返回值包含股票数据.返回Dict[Symbol,行情描述字符串]
-            - get_strong_stock_pool                     强势股票池，返回值包含股票数据.返回Dict[Symbol,行情描述字符串]
-            - get_stock_comments_summary                千股千评数据.返回Dict[Symbol,行情描述字符串]。包括最新价、涨跌幅、换手率、市盈率、主力成本、机构参与度、综合得分、上升、目前排名、关注指数等数据
-            - get_market_anomaly                        盘口异动，包括:'火箭发射', '快速反弹', '大笔买入', '封涨停板', '打开跌停板', '有大买盘', '竞价上涨', '高开5日线', '向上缺口', '60日新高', '60日大幅上涨', '加速下跌', '高台跳水', '大笔卖出', '封跌停板', '打开涨停板', '有大卖盘', '竞价下跌', '低开5日线', '向下缺口', '60日新低', '60日大幅下跌'
-            - get_active_a_stock_stats                  活跃个股，查询周期：'近一月', '近三月', '近六月', '近一年'。，返回值包含股票数据
-            - get_daily_lhb_details                     龙虎榜，返回值包含股票数据
-            - get_institute_recommendations             机构推荐，包括：'最新投资评级', '上调评级股票', '下调评级股票', '股票综合评级', '首次评级股票', '目标涨幅排名', '机构关注度', '行业关注度', '投资评级选股'
-            - get_investment_ratings                    最新投资评级
-            - get_individual_stock_fund_flow_rank       资金流排名
-            - select_by_stock_comments                  用自然语言查询千股千评论的数据，比如最受关注的10支股票，综合得分最高的10支股票
-            - get_baidu_hotrank                         百度热门股票
-            - get_baidu_recommendation                  百度推荐排名
-            - get_baidu_sentiment_rank                  百度情绪指数排名
-            - get_baidu_analysis_rank                   百度技术分析排名
-            - get_top_holdings_by_market                持仓排名， "北向", "沪股通", "深股通"   "今日排行", "3日排行", "5日排行", "10日排行", "月排行", "季排行", "年排行" 
-            - get_stock_report_fund_hold                获取机构持股报告数据。indicator="基金持仓" 返回dict[symbol,str]    
-            - get_xueqiu_hot_follow                     获取雪球关注排行榜，参数num: int = 100，返回值Dict[symbol,str]
-            - get_xueqiu_hot_tweet                      获取雪球讨论排行榜，参数num: int = 100，返回值Dict[symbol,str]
-            - get_xueqiu_hot_deal                       获取雪球交易排行榜，参数num: int = 100，返回值Dict[symbol,str]
-            - get_wencai_hot_rank                       获取问财热门股票排名，参数num: int = 100，返回值Dict[symbol,str]
-            - get_eastmoney_hot_rank                    获取东方财富人气榜-A股，参数num: int = 100，返回值Dict[symbol,str]
-        宏观经济
-            - get_macro_economic_indicators             获取中国宏观经济数据的文字描述
-            - get_global_economic_indicators            获取全球经济数据的文字描述
-        用于获取市场整体信息的函数：
-            - stock_market_desc                         市场平均市盈率等市场指标
-            - get_current_buffett_index                 市场的巴菲特指数
-            - get_sector_fund_flow_rank                 行业资金流向,返回值str
-            - get_a_stock_pb_stats                      获取市场市净率统计
-            - get_a_stock_pe_ratios                      获取市场市盈率统计
-        用于财报日期的函数
-            - get_latest_financial_report_date           上一个财报日
-            - get_next_financial_report_date             下一个财报日
-        用于交易日期的函数
-            - get_latest_trading_date                    九点半之前，返回今天之前的交易日，九点半之后返回包括今天在内的最近交易日
-            - get_previous_trading_date                  永远返回不包含今天的交易日
-        用于获取个股信息的函数
-            - get_main_business_description              主营业务，返回包含主营业务信息的字符串
-            - get_stock_info                             个股信息，返回个股指标字符串
-            - get_stock_a_indicators                     个股指标,返回包含指标信息的字符串
-            - get_baidu_analysis_summary                  百度个股分析，返回包含分析信息的字符串
-            - get_stock_news                              个股新闻,参数 symbol: str, num: int = 20 返回 List[str]
-            - get_news_updates                            获取某个时间以后的个股新闻
-            - get_vote_baidu                              获取百度股市通的股票投票数据。参数 symbol:str 返回str
-            - get_stock_profit_forecast                   获取指定股票的盈利预测数据。symbol: str ,返回str 盈利预测字符串
-            - get_esg_score                               获取指定股票的ESG评分数据。symbol: str ,返回str ESG评分字符串     
-            - get_main_competitors                        获取主要竞争对手信息。symbol: str ,返回str 竞争对手信息字符串 
-            - get_stock_big_deal                          获取大单数据,参数symbol: str ,返回str 大单数据字符串
-            - get_recent_recommendations_summary          最近半年机构推荐汇总，参数symbol: str ,返回str 机构推荐汇总字符串
-            - get_one_stock_news                         获取指定股票的最近新闻，参数symbol: str ,返回List[str] 新闻列表
-            - get_realtime_stock_data                    获取指定股票的实时数据，参数symbol: str ,返回str 实时数据字符串
-            - get_stock_announcements                    获取指定股票的公告，参数symbols: List[str] ,返回Dict[symbol,List[str]] 公告列表
-        用于代码查询的函数
-            - search_index_code                         通过名称模糊查询指数代码
-            - search_stock_code                         通过名称模糊查询股票代码
-        用于查询财务数据
-            - get_financial_analysis_summary            个股的财务分析指标
-            - get_key_financial_indicators              关键财务指标
-            - get_financial_forecast_summary            个股的财务预测指标.返回全部股票的财务预测dict
-            - get_financial_report_summary              个股的财务报告摘要.一个字典，键是股票代码，值是描述性的字符串
-        用于查询财务数据细节(非必要勿使用)
-            - get_balance_sheet_summary                 资产负债表摘要
-            - get_profit_statement_summary              利润表摘要
-            - get_cash_flow_statement_summary           现金流量表摘要
-            - get_stock_balance_sheet_by_report_em      资产负债表完整数据
-        用于查询行情摘要
-            - summarize_historical_data                 股票历史数据摘要
-            - summarize_historical_index_data           指数历史信息摘要
-        用于查询行情细节(非必要勿使用)
-            - get_historical_daily_data                 行情历史数据
-            - get_index_data                           指数行情数据
-        查询新闻数据
-            - get_baidu_market_news                     百度市场新闻，参数num=40,返回List[str]
-            - get_baidu_stock_news                      百度个股新闻,参数 symbol: str, num: int = 20 返回 List[str]
-            - get_market_news_300                       财联社新闻300条,返回List[str]
-            - get_cctv_news                             新闻联播文字稿，参数天数，返回包含新闻数据的字典列表，每个字典包含date（日期）、title（标题）和content（内容）
-            - get_baidu_important_news                  百度重要新闻，num=200,返回List[str]
-        用于新闻数据处理
-            - summarizer_news                           把新闻数据根据 query 的要求 总结出短摘要
-        用于解析llm_client的json输出
-            - extract_json_from_text                    从text中提取json,返回dict或者list
-        行业数据
-            - get_industry_pe_ratio                      获取行业市盈率，参数，symbol 行业，返回字符串
-        """
-        return prompt
-    
-    
+### 全市场范围筛选股票
+1. 数据获取
+   - 使用 get_full_realtime_data 函数获取市场全部行情数据
+   - 对获取的数据进行初步筛选，去除以 ST 和 *ST 开头的股票
+
+2. 查询解析
+   - 分析用户的查询要求
+   - 确定筛选分类，如价值投资、价值低估、市场活跃、市场热点等
+
+3. 市场信息收集
+   - 使用 get_market_news_300 获取最近的市场新闻
+   - 使用 stock_market_desc 获取市场整体描述
+   - 使用 summarize_historical_index_data 获取指数历史行情（如上证指数）
+
+4. 个股分析
+   - 对筛选后的每只股票进行循环处理：
+     a. 使用"获取个股信息的函数"获取详细信息（如 get_stock_info, get_stock_a_indicators 等）
+     b. 使用 summarize_historical_data 查询该股票的历史行情
+     c. 结合个股数据、市场数据和查询要求，生成用于 LLM 评分的提示词
+     d. 使用 llm_client.one_chat 进行评分和归纳，要求返回 JSON 格式的结果
+     e. 解析 LLM 返回的结果，提取关键信息
+
+5. 结果处理
+   - 收集所有股票的评分结果
+   - 对评分结果按照不同类别进行排序
+   - 对每个类别，选择排名靠前的股票（如前5名）
+
+6. 输出结果
+   - 为每个类别返回筛选出的股票信息，包括：
+     - 股票代码
+     - 股票名称
+     - 分类得分
+     - 得分理由
+
+注意事项：
+- 确保所有步骤都考虑到查询的具体要求
+- 在生成评分提示词时，要充分利用收集到的个股和市场数据
+- LLM 评分结果应该输出为josn格式。便于于解析和后续处理
+- 最终输出应该清晰、结构化，便于用户理解和使用
+
+这些提示添加到所有tip_help之中
+- code_tools.add(name,value)不允许添加重复的内容，在所有步骤中不允许重复，不能在循环内层中使用code_tools.add
+- 对每支股票读取数据，如果需要在后续步骤使用，把这些数据存储于字典Dict[str,Any], 同一种类型只使用一次code_tools.add
+
+### 百度热门股票短线推荐模板
+
+1. 获取热门股票和市场信息
+   - 使用 get_baidu_hotrank 获取百度热门股票列表,获取前50支热门股票
+   - 使用 stock_market_desc 获取市场整体描述
+   - 使用 get_market_news_300 获取市场新闻，然后用 summarizer_news 提取关键信息
+   - 使用 summarize_historical_index_data 获取上证指数的近期走势
+   输出:
+   - hot_stocks: List[str] 热门股票代码列表
+   - market_overview: str 市场整体描述
+   - market_news_summary: str 市场新闻摘要
+   - index_trend: str 上证指数近期走势
+
+2. 分析所有选出股票
+   输入: hot_stocks
+   对每只热门股票进行以下分析：
+   - 使用 get_stock_info 和 get_stock_a_indicators 获取股票详细信息
+   - 使用 summarize_historical_data 获取股票近期历史数据
+   - 使用 get_baidu_analysis_summary 获取百度分析摘要
+   输出:
+   - stock_analysis: Dict[str, Dict] 股票分析结果字典，结构如下：
+     {
+       "stock_code": {
+         "name": str,
+         "info": str,  # 股票详细信息
+         "indicators": str,  # 股票指标
+         "history": str,  # 历史数据摘要
+         "baidu_analysis": str,  # 百度分析摘要
+       },
+       ...
+     }
+
+3. 短线潜力评估
+   输入: stock_analysis, market_overview, market_news_summary, index_trend
+   对每只热门股票进行LLM分析：
+   - 生成评估提示词，包含：
+     - 股票信息（从stock_analysis[stock_code]中获取）
+     - 市场信息（使用market_overview, market_news_summary, index_trend）
+     - 短线投资特定要求，明确指出：
+       *  评估股票对市场情绪的敏感度（高/中/低）
+       *  股票与当前热点事件的相关性（强/中/弱）
+       *  股票的短期技术面走势（上升/震荡/下降）
+       *  股票的流动性（以换手率为参考）
+     - 要求返回JSON格式，包含：
+       - "code": 股票代码
+       - "name": 股票名称
+       - "score": 短线潜力评分（0-100的整数），表示其和当前市场热点，情绪热点，短线潜力的匹配程度
+       - "reason": 50字以内的推荐理由
+       - "risks": 列出关键风险点（字符串列表）
+       - "volume": 从股票信息中提取的成交量（数值）
+       - "attention": 从评论摘要中提取的关注指数（数值）
+   - 使用 llm_client.one_chat(prompt) 进行评估
+   - 解析LLM返回的JSON结果
+   输出:
+   - stock_evaluations: Dict[str, Dict] 股票评估结果字典，结构如下：
+     {
+       "stock_code": {
+         "name": str,
+         "score": int,
+         "reason": str,
+         "risks": List[str],
+         "volume": float,
+         "attention": float
+       },
+       ...
+     }
+   注意：
+
+   确保使用正确的变量名访问股票信息：stock_analysis[stock_code]
+   确保 attention 是数值类型
+   在生成评估提示词时，明确指出短线投资的具体评估标准，明确要求明确返回结构
+   为评分提供明确的解释和范围，使其与短线投资需求紧密相关
+   使用code_tools.add("stock_evaluations", stock_evaluations)存储输出结果
+
+4. 筛选和排序
+   输入: stock_evaluations
+   - 根据短线潜力评分、成交量、市场关注度等因素对股票进行综合排序
+   - 创建一个包含所有必要信息的字典列表，每个字典包含：
+     - "code": 股票代码
+     - "name": 股票名称
+     - "score": 短线潜力评分
+     - "reason": 50个字以内的评分理由
+     - "risks": 风险因素列表
+     - "attention": 市场关注度
+     - "turnover_rate": 换手率（如果可用）
+   - 根据综合因素对这个列表进行排序，排序规则如下：
+      1. 主要依据：短线潜力评分（score）
+      2. 次要依据：市场关注度（attention）
+      3. 辅助参考：换手率（turnover_rate，如果可用）
+   - 如果换手率数据不可用，则仅使用短线潜力评分和市场关注度进行排序
+   - 使用加权平均的方式计算综合得分，建议权重为：
+      1. 短线潜力评分：70%
+      2. 市场关注度：30%   ，注意，市场关注度和短线潜力评分不在同一个数值区间，不可直接乘以30%然后相加
+   - 如果换手率数据可用，可以将其作为额外的参考因素，但不应过度影响排序
+   - 选择排名靠前的股票（如前5只）作为推荐
+   - 输出:
+      recommended_stocks: List[Dict] 推荐股票列表，每个字典包含以下键：
+      - "code", "name", "score", "reason", "risks", "attention", "turnover_rate"（如果可用）, "composite_score"（综合得分）
+   - 注意：attention 来自LLM的输出,可能部分attention并非数值类型，需要去掉里面的描述性文字才能获得attention 的值
+
+5. 生成推荐列表和输出结果
+   输入: recommended_stocks, market_overview, market_news_summary, index_trend
+   - 使用输入数据生成结构化报告
+   - 报告应包含：
+     - 市场整体情况概述（包括热点行业和事件）
+     - 推荐的股票列表，每只股票包含：
+       - 股票代码和名称
+       - 短线潜力评分
+       - 评分理由（50字以内）
+       - 风险因素
+       - 需关注的关键指标或事件（如成交量、市场关注度）
+     - 整体风险提示
+   输出:
+   - output_result: str 最终的推荐报告
+
+注意事项：
+- LLM分析时，确保考虑短线投资特性，如对市场情绪、热点事件的敏感性
+- 评估应特别注意股票的流动性、波动性和与市场热点的相关性
+- 推荐应基于综合因素，包括技术面、消息面和资金面
+- 清晰说明这只是基于当前数据的分析，不构成投资建议
+- 强调短线投资的高风险性，建议用户进行进一步的研究和谨慎决策
+
+
+### 快速股票推荐流程模板
+
+1. 获取股票列表
+   - 使用 "适合用于选择股票范围的函数" 获取一批股票
+   - 如果用户没有指定范围，默认使用 get_baidu_hotrank 获取前30支热门股票
+   输出:
+   - stock_list: List[str] 股票代码列表
+
+2. 快速收集关键信息
+   输入: stock_list
+   - 使用 stock_market_desc 获取市场整体描述
+   - 使用 get_market_news_300 获取市场新闻，然后用 summarizer_news 提取关键信息
+   - 对每只股票：
+     - 使用 get_baidu_analysis_summary 获取百度分析摘要
+     - 使用 summarize_historical_data 获取简要的历史数据摘要
+   输出:
+   - market_summary: str 市场整体描述
+   - market_news_summary: str 市场新闻摘要
+   - stock_info: Dict[str, Dict] 股票信息字典，结构如下：
+     {
+       "stock_code": {
+         "baidu_analysis": str,  # 百度分析摘要
+         "history": str,  # 历史数据摘要
+       },
+       ...
+     }
+
+3. 构建LLM分析提示词
+   输入: stock_list, market_summary, market_news_summary, stock_info
+   - 为每只股票创建一个简洁但信息丰富的提示词，包含：
+     - 股票信息（从stock_info[stock_code]中获取）
+     - 市场信息（使用market_summary, market_news_summary）
+     - 投资特定要求，明确指出：
+       * 评估股票对市场情绪的敏感度（高/中/低）
+       * 股票与当前热点事件的相关性（强/中/弱）
+       * 股票的短期技术面走势（上升/震荡/下降）
+     - 要求返回JSON格式，包含：
+       - "code": 股票代码
+       - "name": 股票名称
+       - "score": 潜力评分（0-100的整数），用于表示和筛选需求的匹配程度
+       - "reason": 50字以内的评分理由
+       - "risks": 列出主要风险点（字符串列表，最多3个）
+       - "attention": 从评论摘要中提取的关注指数（如果可用，数值,确保是数值类型）
+   输出:
+   - prompts: Dict[str, str] 提示词字典，键为股票代码，值为对应的LLM分析提示词
+
+4. LLM 分析步骤
+   输入: prompts
+   - 使用 llm_client.one_chat(prompt) 对每只股票进行分析
+   - 解析LLM返回的JSON结果
+   输出:
+   - analysis_results: Dict[str, Dict] 分析结果字典，结构如下：
+     {
+       "stock_code": {
+         "name": str,
+         "score": int,
+         "reason": str,
+         "risks": List[str],
+         "attention": float (如果可用)
+       },
+       ...
+     }
+
+5. 筛选和排序
+   输入: analysis_results
+   - 根据潜力评分和市场关注度对股票进行排序
+   - 计算综合得分，建议权重为：
+     1. 潜力评分：80%
+     2. 市场关注度：20%（如果可用）
+   - 选择排名靠前的股票（如前5只）作为推荐
+   输出:
+   - recommended_stocks: List[Dict] 推荐股票列表，每个字典包含以下键：
+     "code", "name", "score", "reason", "risks", "attention"（如果可用）, "composite_score"
+
+6. 生成推荐报告
+   输入: recommended_stocks, market_summary, market_news_summary
+   - 创建一个简洁的推荐报告，包含：
+     - 市场整体情况概述（包括热点事件）
+     - 推荐的股票列表，每只股票包含：
+       - 股票代码和名称
+       - 综合得分
+       - 推荐理由（50字以内）
+       - 主要风险因素（最多3个）
+     - 整体风险提示
+   输出:
+   - output_result: str 最终的推荐报告
+
+注意事项：
+- 优化每个步骤的执行效率，保持整体流程的快速性
+- 确保LLM提示词简洁明了，能快速提取和分析关键信息
+- 强调分析基于有限信息，推荐仅供参考，不构成投资建议
+- 清晰说明市场瞬息万变，推荐的时效性有限
+- 建议用户在做出投资决策前进行更深入的研究
+- 使用code_tools.add()存储每个步骤的关键输出
+- 最后一步使用code_tools.add('output_result', final_report)存储最终报告
+
+### 中长线股票推荐模板
+
+1. 初始股票池筛选
+
+- 使用 `get_institute_recommendations` 获取机构推荐股票，选择 "投资评级选股" 选项
+- 使用 `get_top_holdings_by_market` 获取北向资金持仓前30只股票
+- 合并去重，形成初始股票池
+
+输出:
+- `initial_stock_pool`: List[str] 初始股票代码列表
+
+2. 市场概况分析
+
+- 使用 `stock_market_desc` 获取市场整体描述
+- 使用 `get_market_news_300` 获取市场新闻，用 `summarizer_news` 提取关键信息
+
+输出:
+- `market_overview`: str 市场整体描述
+- `market_news_summary`: str 市场新闻摘要
+
+3. 个股数据收集
+
+对每只股票进行以下数据收集：
+- 使用 `get_financial_analysis_summary` 获取财务分析摘要
+- 使用 `get_stock_a_indicators` 获取股票市场指标
+- 使用 `get_main_business_description` 获取主营业务描述
+- 使用 `get_stock_profit_forecast` 获取盈利预测数据
+- 使用 `get_baidu_analysis_summary` 获取百度分析摘要
+
+输出:
+- `stock_data`: Dict[str, Dict] 股票数据字典
+
+4. LLM分析
+
+输入: `stock_data`, `market_overview`, `market_news_summary`
+
+对每只股票进行LLM分析：
+- 生成评估提示词，包含收集的数据
+- 使用 `llm_client.one_chat(prompt)` 进行评估
+- 解析LLM返回的JSON结果
+
+提示词模板：
+作为一位经验丰富的金融分析师，请您基于以下信息对[股票代码]进行中长期投资价值分析：
+
+市场概况：
+[market_overview]
+市场新闻摘要：
+[market_news_summary]
+公司基本信息：
+[stock_data[stock_code]['business_description']]
+财务分析摘要：
+[stock_data[stock_code]['financial_summary']]
+股票市场指标：
+[stock_data[stock_code]['stock_a_indicators']]
+盈利预测：
+[stock_data[stock_code]['profit_forecast']]
+百度分析摘要：
+[stock_data[stock_code]['baidu_analysis']]
+
+请提供以下分析，并以JSON格式返回：
+
+growth_potential: 公司中长期成长潜力评估（1-100分）
+financial_health: 财务健康状况评估（1-100分）
+industry_outlook: 行业前景评估（1-100分）
+competitive_advantage: 竞争优势分析（100字以内）
+risk_factors: 潜在风险因素（列出top3）
+investment_recommendation: 中长线投资推荐理由（200字以内）
+
+在分析时，请特别注意以下几点：
+
+公司的长期成长性和可持续发展能力
+财务状况的稳定性和盈利能力的持续性
+行业的长期发展趋势和公司在行业中的地位
+公司的核心竞争力和创新能力
+潜在的风险因素及其可能对公司长期发展的影响
+
+请确保您的分析全面、客观，并提供有见地的洞察。您的评估将用于中长期投资决策，因此请着重考虑3-5年的发展前景。
+请以JSON格式返回您的分析结果，包含上述6个字段。
+
+输出:
+- `stock_evaluations`: Dict[str, Dict] 股票评估结果字典，包含以下字段：
+  - growth_potential: int (1-100)
+  - financial_health: int (1-100)
+  - industry_outlook: int (1-100)
+  - competitive_advantage: str
+  - risk_factors: List[str]
+  - investment_recommendation: str
+
+5. 筛选和排序
+
+- 计算综合得分：
+  综合得分 = 成长潜力 * 0.5 + 财务健康 * 0.3 + 行业前景 * 0.2
+- 选择综合得分排名前10的股票
+
+输出:
+- `recommended_stocks`: List[Dict] 推荐股票列表
+
+6. 生成推荐报告
+
+输入: `recommended_stocks`, `market_overview`, `market_news_summary`
+
+报告内容：
+1. 市场概况
+2. 推荐股票列表，每只股票包含：
+   - 股票代码和名称
+   - 综合得分
+   - 成长潜力、财务健康、行业前景评分
+   - 竞争优势
+   - 主要风险
+   - 投资建议
+3. 风险提示
+
+输出:
+- `output_result`: str 最终的推荐报告
+
+注意事项
+
+- 关注公司长期成长性、财务稳健性和行业发展前景
+- 考虑公司竞争优势和创新能力
+- 基于综合因素提供推荐，包括基本面和行业趋势
+- 清晰说明这是基于当前数据的分析，不构成投资建议
+- 强调中长线投资需要持续关注公司发展和市场变化
+
+### 个股行情解读模板
+
+1) 数据收集
+
+使用以下函数收集数据：
+
+- `search_stock_code(stock_name)`: 获取股票代码
+- `get_stock_info(stock_code)`: 获取股票基本信息
+- `get_latest_stock_data(stock_code)`: 获取最新行情数据
+- `get_historical_daily_data(stock_code, start_date, end_date)`: 获取最近30个交易日的历史数据
+- `get_stock_a_indicators(stock_code)`: 获取A股个股指标
+- `get_one_stock_news(stock_code, num=5)`: 获取最新的5条相关新闻
+- `get_baidu_analysis_summary(stock_code)`: 获取百度分析摘要
+- `get_stock_comments_summary()`: 获取该股票的千股千评数据
+- `get_industry_pe_ratio("证监会行业分类", date)`: 获取行业市盈率数据
+- `get_financial_analysis_summary(stock_code)`: 获取财务分析摘要
+- `get_main_competitors(stock_code)`: 获取主要竞争对手信息
+- `get_stock_profit_forecast(stock_code)`: 获取盈利预测数据
+
+2) 数据分析
+
+使用LLM分析收集到的数据，生成个股行情解读。提示词如下：
+
+作为一位专业的股票分析师，请根据以下信息对 [股票代码] [股票名称] 的近期行情进行全面解读：
+
+[插入所有收集到的数据]
+
+请提供以下分析：
+
+1. 股价走势分析（200字以内）：分析近期股价走势，包括关键支撑位和压力位，以及可能的突破点。
+2. 成交量分析（150字以内）：解读成交量变化，评估买卖双方力量对比。
+3. 基本面评估（250字以内）：
+   - 基于公司财务数据，评估公司盈利能力、成长性和财务健康状况
+   - 分析公司在行业中的竞争地位
+   - 评估当前估值水平和增长潜力
+4. 技术指标解读（200字以内）：解读主要技术指标（如MACD、KDJ、RSI等）的信号，预判可能的走势。
+5. 消息面影响（150字以内）：分析近期新闻对股价的潜在影响。
+6. 行业对比（200字以内）：
+   - 将该股票与行业平均水平对比，评估其相对优势或劣势
+   - 分析公司在行业中的市场份额和增长潜力
+7. 风险分析（150字以内）：
+   - 指出投资该股票可能面临的公司特有风险
+   - 分析行业风险和宏观经济风险
+8. 盈利预测与目标价（150字以内）：
+   - 基于公司盈利预测，给出未来1-2年的业绩预期
+   - 结合估值方法，提供合理目标价区间
+9. 投资建议（200字以内）：
+   - 基于以上分析，给出短期（1-2周）、中期（1-3个月）和长期（6-12个月）的投资建议
+   - 提供具体的操作策略和注意事项
+
+请确保您的分析客观、全面，并提供有见地的洞察。您的解读将帮助投资者理解该股票的近期表现并为投资决策提供参考。
+请以JSON格式返回您的分析结果，包含上述9个字段。
+
+3) 生成报告
+
+基于LLM的分析结果，生成最终的个股行情解读报告。报告结构如下：
+
+1. 股票概况
+   - 基本信息
+   - 最新行情数据
+   - 公司简介
+
+2. 走势分析
+   - 近期股价走势
+   - 成交量分析
+   - 技术指标解读
+
+3. 基本面评估
+   - 财务状况分析
+   - 盈利能力评估
+   - 成长性分析
+   - 行业地位评估
+
+4. 估值分析
+   - 当前估值水平
+   - 与行业平均估值对比
+   - 历史估值区间分析
+
+5. 竞争力分析
+   - 主要竞争对手对比
+   - 市场份额分析
+   - 核心竞争优势
+
+6. 消息面分析
+   - 近期相关新闻摘要
+   - 消息对股价的潜在影响
+
+7. 风险与机会
+   - 公司特有风险因素
+   - 行业风险
+   - 宏观经济风险
+   - 潜在投资机会
+
+8. 盈利预测与目标价
+   - 未来1-2年业绩预期
+   - 目标价区间及依据
+
+9. 投资建议
+   - 短期操作建议
+   - 中期投资策略
+   - 长期投资观点
+   - 风险控制建议
+
+
+
+### 个股行情预测模板
+
+1. 查询目的
+为特定股票提供全面的行情预测，包括短期（1-5个交易日）、中期（1-3个月）和长期（6个月-1年）的价格走势、关键支撑位和压力位，以及潜在的投资机会和风险。
+
+2. 数据收集
+
+2.1 基础信息
+- 股票选择：`search_stock_code(stock_name)` 获取股票代码 `stock_code`
+- 基本信息：`get_stock_info(stock_code)`
+- 主营业务：`get_main_business_description(stock_code)`
+- A股指标：`get_stock_a_indicators(stock_code)`
+
+2.2 行情数据
+- 实时行情：`get_full_realtime_data()`
+- 历史数据：`summarize_historical_data(stock_code, days=120)`
+
+2.3 财务数据
+- 财务分析：`get_financial_analysis_summary(stock_code)`
+- 关键指标：`get_key_financial_indicators(stock_code)`
+
+2.4 市场情绪和新闻
+- 千股千评：`get_stock_comments_summary()[stock_code]`
+- 相关新闻：`get_stock_news(stock_code, num=15)`
+- 百度分析：`get_baidu_analysis_summary(stock_code)`
+- 股票投票：`get_vote_baidu(stock_code)`
+
+2.5 行业和市场数据
+- 市场指标：`stock_market_desc()`
+- 巴菲特指数：`get_current_buffett_index()`
+
+2.6 机构观点
+- 盈利预测：`get_stock_profit_forecast(stock_code)`
+- 投资评级：`get_investment_ratings()`
+
+2.7 额外数据（新增）
+- 大股东变动：`get_shareholder_changes(stock_code)`
+- 公司公告：`get_company_announcements(stock_code, num=5)`
+- 行业对比：`get_industry_comparison(stock_code)`
+
+3. 数据分析和处理步骤
+
+3.1 数据预处理
+a) 整合所有收集到的数据，形成综合数据集。
+b) 进行数据异常检测，识别并处理异常值。
+c) 对矛盾的数据进行标记和初步分析。
+
+3.2 LLM分析
+a) 使用LLM进行数据解读和初步分析报告生成。提示词如下：
+
+作为一位资深的量化分析师和技术专家，请基于以下数据对 [股票代码] [股票名称] 未来的行情进行预测：
+
+[插入整合后的数据集]
+
+请提供以下分析：
+
+1. 技术面分析（300字）：
+   - 分析近期股价走势，识别关键支撑位和压力位
+   - 评估成交量变化及其对价格的影响
+   - 解读主要技术指标（如MACD、KDJ、RSI等）的信号
+   - 基于技术分析，预测短期（1-5个交易日）、中期（1-3个月）和长期（6个月-1年）可能的价格区间
+
+2. 基本面分析（300字）：
+   - 评估公司近期财务表现和未来增长潜力
+   - 分析行业地位和竞争优势
+   - 对比行业平均水平，评估当前估值的合理性
+   - 基于基本面分析，预测中长期走势
+
+3. 市场情绪分析（200字）：
+   - 解读千股千评数据和百度股市通投票数据
+   - 分析近期新闻和公司公告对股价的潜在影响
+   - 评估机构投资者的态度和预期
+
+4. 宏观环境影响（200字）：
+   - 分析当前市场整体环境（如巴菲特指数）对该股票的影响
+   - 考虑可能影响该股票的宏观经济因素和行业政策
+
+5. 风险因素（200字）：
+   - 指出可能影响预测准确性的主要风险因素
+   - 分析潜在的下行风险，包括公司特有风险和系统性风险
+   - 评估监管政策变化的潜在影响
+
+6. 投资建议（250字）：
+   - 给出明确的短期、中期和长期投资建议
+   - 提供具体的操作策略，包括建议的买入/卖出价位和止损位
+   - 针对不同类型的投资者（如价值型、成长型）给出差异化建议
+
+7. 预测置信度评估（150字）：
+   - 对各个时间段的预测给出置信度评分（1-10分）
+   - 解释影响置信度的主要因素
+
+请确保您的分析全面、客观，并提供有理有据的预测。您的分析将用于指导投资决策，请保持专业和谨慎。
+请以JSON格式返回您的分析结果，包含上述7个字段。
+
+3.3 最终报告生成
+使用LLM生成最终的个股行情预测报告。
+
+4. 预期输出格式和内容
+
+生成一份结构化的个股行情预测报告，包含以下部分：
+
+1. 股票基本信息
+   - 公司简介
+   - 主营业务
+   - 当前市场表现概览
+
+2. 技术面分析
+   - 近期走势分析
+   - 关键支撑位和压力位
+   - 技术指标解读
+   - 短期、中期和长期价格区间预测
+
+3. 基本面分析
+   - 财务状况评估
+   - 行业地位和竞争优势分析
+   - 估值水平分析（包括与行业对比）
+   - 中长期走势预测
+
+4. 市场情绪和新闻分析
+   - 投资者情绪解读
+   - 近期重要新闻及公告分析
+
+5. 宏观环境影响
+   - 市场整体环境分析
+   - 相关宏观经济因素讨论
+   - 行业政策影响评估
+
+6. 风险提示
+   - 公司特有风险因素
+   - 行业和市场系统性风险
+   - 潜在监管风险
+
+7. 投资建议
+   - 短期操作策略
+   - 中期投资建议
+   - 长期投资展望
+   - 针对不同类型投资者的建议
+
+8. 预测置信度
+   - 各时间段预测的置信度评分
+   - 影响置信度的关键因素说明
+
+9. 历史预测准确性回顾
+   - 过去预测的准确率统计
+   - 预测偏差分析和改进措施
+
+10. 预测总结
+    - 简明扼要的预测结论
+
+5. 特殊考虑和注意事项
+
+- 确保所有数据在生成报告前24小时内更新
+- 对于小盘股、新上市公司或特殊行业股票，采用专门的分析流程
+- 遇到重大突发事件时，启动紧急预测流程，增加人工分析比重
+- 根据股票特性和市场环境，动态调整预测的时间范围
+- 考虑全球经济趋势、汇率变化等跨市场因素对个股的潜在影响
+- 在报告中明确指出预测的局限性和可能的误差范围
+- 使用清晰、专业但易懂的语言，避免过于技术性的术语
+
+
+
+### 股票组合分析与投资建议模板
+
+1. 输入参数
+- 股票列表：逗号分隔的股票代码或名称
+- 资产总额：默认500万元
+- 投资偏好：保本、保守、中性、进取、激进（默认中性）
+
+2. 数据收集（针对每只股票）
+
+2.1 股票基础数据
+- 股票代码：`search_stock_code(stock_name)`
+- 基本信息：`get_stock_info(stock_code)`
+- A股指标：`get_stock_a_indicators(stock_code)`
+- 实时行情：`get_realtime_stock_data(stock_code)`
+- 历史数据摘要：`summarize_historical_data(stock_code, days=60)`
+
+2.2 财务数据
+- 财务分析摘要：`get_financial_analysis_summary(stock_code)`
+- 财务预测：`get_financial_forecast_summary()[stock_code]`
+
+2.3 市场情绪和分析
+- 千股千评：`get_stock_comments_summary()[stock_code]`
+- 百度分析：`get_baidu_analysis_summary(stock_code)`
+
+2.4 行业数据
+- 行业市盈率：`get_industry_pe_ratio(get_stock_sector(stock_code))`
+
+2.5 机构观点
+- 最新投资评级：`get_investment_ratings()`
+
+2.6 市场整体数据
+- 市场整体描述：`stock_market_desc()`
+
+3. 数据分析和处理步骤
+
+3.1 单只股票分析
+对每只股票进行综合分析，使用以下LLM提示：
+
+作为一位经验丰富的量化分析师，请基于以下数据对给定的股票进行分析并提供投资建议：
+
+[插入单只股票的整合数据]
+
+请提供以下分析，并以JSON格式返回结果：
+
+{
+  "stockCode": "股票代码",
+  "stockName": "股票名称",
+  "analysis": {
+    "fundamental": "基本面分析（100字）",
+    "technical": "技术面分析（100字）",
+    "sentiment": "市场情绪分析（100字）"
+  },
+  "evaluation": {
+    "strengths": ["优势1", "优势2", "优势3"],
+    "weaknesses": ["劣势1", "劣势2", "劣势3"],
+    "opportunities": ["机会1", "机会2", "机会3"],
+    "threats": ["威胁1", "威胁2", "威胁3"]
+  },
+  "recommendation": {
+    "shortTerm": {
+      "outlook": "短期前景（看涨/看跌/持平）",
+      "targetPrice": 数值,
+      "action": "买入/增持/持有/减持/卖出"
+    },
+    "midTerm": {
+      "outlook": "中期前景（看涨/看跌/持平）",
+      "targetPrice": 数值,
+      "action": "买入/增持/持有/减持/卖出"
+    },
+    "longTerm": {
+      "outlook": "长期前景（看涨/看跌/持平）",
+      "targetPrice": 数值,
+      "action": "买入/增持/持有/减持/卖出"
+    },
+    "riskLevel": "低/中低/中/中高/高",
+    "maxPositionPercentage": 数值（0-100）
+  }
+}
+
+3.2 投资组合分析
+基于单只股票的分析结果，进行整体投资组合分析。使用以下LLM提示：
+
+作为一位投资组合经理，请基于以下单只股票的分析结果，对整个投资组合进行分析并提供建议。考虑总资产为[资产总额]元，投资偏好为[投资偏好]：
+
+[插入所有股票的JSON分析结果]
+
+请提供以下分析，并以JSON格式返回结果：
+
+{
+  "portfolioAnalysis": {
+    "diversification": "组合多元化程度分析（100字）",
+    "riskReturnProfile": "风险收益特征分析（100字）",
+    "marketEnvironmentImpact": "当前市场环境对组合的影响分析（100字）"
+  },
+  "stockRecommendations": [
+    {
+      "stockCode": "股票代码",
+      "stockName": "股票名称",
+      "action": "买入/增持/持有/减持/卖出",
+      "targetPosition": 数值（建议持仓金额），
+      "positionPercentage": 数值（0-100，建议持仓比例）
+    },
+    // ... 重复上述结构for每只股票
+  ],
+  "riskManagement": {
+    "majorRisks": ["主要风险1", "主要风险2", "主要风险3"],
+    "riskManagementStrategies": ["风险管理策略1", "风险管理策略2", "风险管理策略3"]
+  },
+  "summary": "投资组合策略总结（200字）"
+}
+
+4. 输出格式
+
+4.1 程序可读输出
+直接输出3.2中生成的JSON结构。
+
+4.2 人类可读报告
+基于JSON结构生成一份结构化的报告，包含以下部分：
+
+1. 投资组合概览
+   - 分析的股票列表
+   - 总资产和投资偏好
+   - 组合的行业分布
+
+2. 个股分析摘要
+   - 每只股票的简要分析，包括基本面、技术面和市场情绪评估
+   - 每只股票的SWOT分析
+
+3. 组合整体分析
+   - 多元化程度评估
+   - 整体风险收益特征
+   - 当前市场环境的影响分析
+
+4. 投资建议
+   - 每只股票的具体操作建议和目标持仓
+   - 组合调整建议
+
+5. 风险管理
+   - 组合面临的主要风险因素
+   - 风险管理策略建议
+
+6. 总结
+   - 投资组合策略概述
+
+5. 特殊考虑和注意事项
+
+- 确保所有数据在生成报告前12小时内更新
+- 根据给定的投资偏好调整风险承受度和建议
+- 考虑总资产规模，给出合理的持仓金额建议
+- 考虑股票间的相关性，确保适度分散
+- 特别关注组合中的异常表现者
+- 考虑不同市值规模股票的特性
+- 在报告中明确指出预测和建议的局限性
+- 使用清晰、专业但易懂的语言
