@@ -1680,6 +1680,21 @@ class StockDataProvider:
         
         return summary_dict
 
+    def get_latest_market_fund_flow(self) -> Dict:
+        """
+        获取大盘资金流数据，返回值Dict
+        """
+        # 获取大盘资金流数据
+        stock_market_fund_flow_df = ak.stock_market_fund_flow()
+        
+        # 获取最后一行数据
+        latest_row = stock_market_fund_flow_df.iloc[-1]
+        
+        # 将最后一行数据转换为字典
+        result = latest_row.to_dict()
+        
+        return result
+
     def get_balance_sheet_summary(self) -> dict:
         """
         获取最近一个财报发行日期的资产负债表数据摘要.返回值Dict[symbol,str]
@@ -2142,6 +2157,7 @@ class StockDataProvider:
         """
         return ak.stock_mda_ym(symbol)
 
+    @retry( wait=wait_exponential(multiplier=1, min=4, max=10))  
     def get_historical_daily_data(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """
         日线数据 参数symbol: str, start_date: str, end_date: st  返回DataFrame
@@ -2361,6 +2377,37 @@ class StockDataProvider:
             return result
         except Exception as e:
             return f"获取板块资金流排名数据时出错: {str(e)}"
+
+    def get_latest_cyq_data(self, symbol: str, adjust: str = "") -> Dict:
+        """
+        获取筹码分布数据,参数 symbol: str, adjust: str = "" 返回值 Dict
+        """
+        # 获取筹码分布数据
+        stock_cyq_em_df = ak.stock_cyq_em(symbol=symbol, adjust=adjust)
+        
+        # 获取最后一行数据
+        latest_row = stock_cyq_em_df.iloc[-1]
+        
+        # 将最后一行数据转换为字典
+        result = latest_row.to_dict()
+        
+        return result
+
+    def get_sector_fund_flow(self, symbol: str, indicator: str = "今日") -> Dict[str, Dict]:
+        """
+        获取行业个股资金流数据,参数 symbol: str, indicator: str = "今日" 返回值 Dict[str, Dict]
+        """
+        # 获取行业个股资金流数据
+        stock_sector_fund_flow_summary_df = ak.stock_sector_fund_flow_summary(symbol=symbol, indicator=indicator)
+        
+        # 将DataFrame转换为字典
+        result = {}
+        for _, row in stock_sector_fund_flow_summary_df.iterrows():
+            stock_code = row['代码']
+            row_dict = row.to_dict()
+            result[stock_code] = row_dict
+        
+        return result
 
     def get_stock_main_fund_flow(self, symbol: str = "全部股票", top_n: int = 10) -> str:
         """
@@ -3130,6 +3177,36 @@ class StockDataProvider:
         else:
             return "上个季报暂无数据"
 
+    def get_stock_fund_flow(self, indicator: Literal[ "即时", "3日排行", "5日排行", "10日排行", "20日排行"]="即时") -> Dict[str, Dict]:
+        """
+        获取个股资金流量表，参数 indicator: Literal[ "即时", "3日排行", "5日排行", "10日排行", "20日排行"]="即时" 返回值 Dict[str, Dict]
+        """
+        # 获取资金流数据
+        stock_fund_flow_individual_df = ak.stock_fund_flow_individual(symbol=indicator)
+        
+        # 将DataFrame转换为字典
+        result = {}
+        for _, row in stock_fund_flow_individual_df.iterrows():
+            stock_code = row['股票代码']
+            row_dict = row.to_dict()
+            result[stock_code] = row_dict
+        
+        return result
+    def get_industry_fund_flow(indicator: Literal["即时", "3日排行", "5日排行", "10日排行", "20日排行"]="即时") -> Dict[str, Dict]:
+        """
+        获取行业资金流量表，参数 indicator: Literal[ "即时", "3日排行", "5日排行", "10日排行", "20日排行"]="即时" 返回值 Dict[str, Dict]
+        """
+        # 获取行业资金流数据
+        stock_fund_flow_industry_df = ak.stock_fund_flow_industry(symbol=indicator)
+        
+        # 将DataFrame转换为字典
+        result = {}
+        for _, row in stock_fund_flow_industry_df.iterrows():
+            industry = row['行业']
+            row_dict = row.to_dict()
+            result[industry] = row_dict
+        
+        return result
     def select_stock_by_query(self, query: str):
         """
         根据用户的自然语言查询来筛选股票数据。
