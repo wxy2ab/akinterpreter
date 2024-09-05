@@ -18,7 +18,7 @@ class SimpleDeepSeekClient(LLMApiClient):
         self.token_count = 0
         self.history = []
         self._model_list = ["deepseek-chat", "deepseek-coder"]
-        self.model = "deepseek-coder"
+        self.model = "deepseek-chat"
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.top_p = top_p
@@ -31,7 +31,7 @@ class SimpleDeepSeekClient(LLMApiClient):
 
     def set_task(self, task: str, model: Optional[str] = None) -> None:
         if task == "代码":
-            self.model = "deepseek-coder"
+            self.model = "deepseek-chat"
             self.temperature = 1.0
         elif task == "数据分析":
             self.model = "deepseek-chat"

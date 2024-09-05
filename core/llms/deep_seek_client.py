@@ -6,7 +6,7 @@ from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
 
 class DeepSeekClient(LLMApiClient):
-    def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-coder"
+    def __init__(self, api_key: Optional[str] = None,max_tokens:int=4000, base_url: str = "https://api.deepseek.com/", model: Literal["deepseek-chat", "deepseek-coder"] = "deepseek-chat"
                  , temperature: float = 0.5,
                  top_p: float = 1, frequency_penalty: float = 0, presence_penalty: float = 0,
                  stop: Optional[Union[str, List[str]]] = None
