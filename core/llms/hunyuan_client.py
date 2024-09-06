@@ -24,7 +24,7 @@ class HunyuanClient(LLMApiClient):
             self.clientProfile.httpProfile = self.httpProfile
             self.client = hunyuan_client.HunyuanClient(self.cred, "", self.clientProfile)
             self.history = []
-            self.model = "hunyuan-pro"
+            self.model = "hunyuan-turbo"
         except Exception as err:
             print(f"初始化错误: {err}")
 
