@@ -44,11 +44,11 @@ python main.py
 - **下载release版本**  
 解压到任意目录,目录不要包含中文  
 - **获得setting.ini**  
-把settings.ini.template 修改为 ***settings.ini***  
+把setting.ini.template 修改为 ***setting.ini***  
 - **配置llm_api**   
-修改settings.ini中的***llm_api***，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表  
+修改setting.ini中的***llm_api***，改成你需要的LLM API  ,取值参考后面的支持的LLM API列表  
 - **添加api_key**   
-修改settings.ini中的   对应你的llm api的api_key  
+修改setting.ini中的   对应你的llm api的api_key  
 - **windows环境:**  
 执行 **run.bat**  
 - **linux & mac:**   
