@@ -61,12 +61,12 @@ python main.py
 ## 生成配置文件
 windows:
 ```shell
-copy settings.ini.template settings.ini
+copy setting.ini.template setting.ini
 ```
 
 linux & mac:
 ```bash
-cp settings.ini.template settings.ini
+cp setting.ini.template setting.ini
 ```
 
 ## 修改配置-配置模板
