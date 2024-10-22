@@ -35,7 +35,7 @@ def is_wsl():
         return False
     # 尝试读取/proc/version文件
     try:
-        with open('/proc/version', 'r') as f:
+        with open('/proc/version', 'r', encoding='utf-8') as f:
             content = f.read().lower()
         # 检查文件内容中是否包含'microsoft'字样
         return 'microsoft' in content

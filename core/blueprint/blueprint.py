@@ -96,7 +96,7 @@ class BluePrint:
         if not os.path.exists(filename):
             raise FileNotFoundError(f"文件 {filename} 不存在")
 
-        with open(filename, 'rb') as f:
+        with open(filename, 'rb', encoding='utf-8') as f:
             data = pickle.load(f)
 
         instance = cls()

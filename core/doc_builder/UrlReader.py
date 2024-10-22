@@ -178,13 +178,13 @@ class UrlReader:
 
     def _save_extraction_code_cache(self):
         """保存提取代码缓存到文件。"""
-        with open(self._code_cache_file, 'w') as f:
+        with open(self._code_cache_file, 'w', encoding='utf-8') as f:
             json.dump(self.extraction_code_cache, f)
 
     def _load_extraction_code_cache(self):
         """从文件加载提取代码缓存。"""
         try:
-            with open(self._code_cache_file, 'r') as f:
+            with open(self._code_cache_file, 'r', encoding='utf-8') as f:
                 self.extraction_code_cache = json.load(f)
         except FileNotFoundError:
             self.extraction_code_cache = {}

@@ -29,7 +29,7 @@ class BaiduFinanceAPI:
     def _add_header(self):
         header_file = './json/baidu_headers.json'
         if os.path.exists(header_file):
-            with open(header_file, 'r') as f:
+            with open(header_file, 'r', encoding='utf-8') as f:
                 self.headers = json.load(f)
         else:
             self.headers = {

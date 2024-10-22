@@ -54,7 +54,7 @@ all_functions = \"\"\"
 {functions_str}
 \"\"\"
 """
-        with open(file_path, "w") as f:
+        with open(file_path, "w", encoding='utf-8') as f:
             f.write(all_string)
         print(f"已将函数文档字符串写入到 {file_path}")
 

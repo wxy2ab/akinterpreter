@@ -295,12 +295,12 @@ Your ranking:"""
         return memory
 
     def save_to_file(self, filename: str):
-        with open(filename, 'w') as f:
+        with open(filename, 'w', encoding='utf-8') as f:
             json.dump({"data": self.data}, f, default=lambda obj: obj.tolist() if isinstance(obj, np.ndarray) else obj)
 
     @classmethod
     def load_from_file(cls, filename: str, embedding_client: Embedding = embedding_client, sim_func=embedding_similarity) -> 'Memory':
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding='utf-8') as f:
             data = json.load(f)
         memory = cls(embedding_client, sim_func)
         memory.data = data["data"]

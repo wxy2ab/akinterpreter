@@ -4,6 +4,7 @@ from ..talk.talker_factory import TalkerFactory
 from core.utils.log import logger
 from ..planner.cli_handler import CliUIHandler
 from ..planner.replay_event_bus import ReplayEventBus
+from traceback import format_exc
 
 def print_colored(text: str, color: str = 'white', end: str = '\n', flush: bool = True):
     colors = {
@@ -52,7 +53,7 @@ async def chat_cli():
                     print(str(chunk), end='', flush=True)
         except Exception as e:
             logger.error(f"Error in chat_cli: {str(e)}")
-            await event_bus.publish("error", {"content": f"发生错误: {str(e)}"})
+            await event_bus.publish("error", {"content": f"发生错误: {str(e)} {format_exc()}"} )
 
     ui_handler.unsubscribe()
 

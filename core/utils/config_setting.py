@@ -45,7 +45,7 @@ class Config(metaclass=Singleton):
             if not self.config.has_section(section):
                 self.config.add_section(section)
             self.config[section][key] = value
-            with open(self.file_name, "w") as configfile:
+            with open(self.file_name, "w", encoding='utf-8') as configfile:
                 self.config.write(configfile)
         else:
             # 注意：在非文件模式下，set 方法不会实际修改环境变量

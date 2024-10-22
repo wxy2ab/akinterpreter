@@ -20,5 +20,5 @@ class TextFileReader(Reader):
         Returns:
             str: The content of the file.
         """
-        with open(url, 'r') as file:
+        with open(url, 'r', encoding='utf-8') as file:
             return file.read()

@@ -200,13 +200,13 @@ class StepModel:
             return
         if self.python_code_file is None:
             self.gen_python_code_file_name()
-        with open(self.python_code_file, 'w') as f:
+        with open(self.python_code_file, 'w', encoding='utf-8') as f:
             value =  list(self.results.values())[0]
             f.write(value)
         print(f"Saved python code to {self.python_code_file}")
 
     def load_python_code(self):
-        with open(self.python_code_file, 'r') as f:
+        with open(self.python_code_file, 'r', encoding='utf-8') as f:
             value =  f.read()
             key = list(self.results.keys())[0]
             self.results[key] = value

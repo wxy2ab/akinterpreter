@@ -33,7 +33,7 @@ def get_version_from_github_file(proxies=None):
     return None
 
 def get_local_version(file_path):
-    with open(file_path, 'r') as file:
+    with open(file_path, 'r', encoding='utf-8') as file:
         content = file.read()
         match = re.search(r'__version__\s*=\s*"(\d+\.\d+\.\d+)"', content)
         if match:
@@ -75,7 +75,7 @@ def extract_and_replace(zip_filename, extract_to):
     # 输出更新后的 ./core/__init__.py 内容
     core_init_path = os.path.join(os.path.dirname(extract_to), 'core', '__init__.py')
     if os.path.exists(core_init_path):
-        with open(core_init_path, 'r') as file:
+        with open(core_init_path, 'r', encoding='utf-8') as file:
             content = file.read()
             print(f"\nUpdated {core_init_path} content:\n")
             print(content)

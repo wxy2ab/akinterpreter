@@ -1,3 +1,4 @@
+import json
 from core.llms.claude_aws_client import ClaudeAwsClient
 
 
@@ -339,3 +340,17 @@ def test1_build():
     from core.utils.tsdata import check_proxy_running
     check_proxy_running("192.168.50.104",10809,"http")
     run_all_build()
+
+
+def test_remove_non_unicode():
+    from core.utils.remove_nonunicode_char import remove_invalid_chars
+    filename = "./json/tushare_docs.json"
+    remove_invalid_chars(filename)
+
+    # 尝试重新加载 JSON 文件
+    try:
+        with open(filename, encoding="utf-8") as f:
+            docs = json.load(f)
+        print("文件加载成功！")
+    except json.JSONDecodeError as e:
+        print(f"文件加载失败：{e}")

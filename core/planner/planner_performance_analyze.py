@@ -14,7 +14,7 @@ class EnhancedAkshareFunPlanner(AkshareFunPlanner):
 
     def _load_rule_version(self):
         try:
-            with open('rule_version.json', 'r') as f:
+            with open('rule_version.json', 'r', encoding='utf-8') as f:
                 return json.load(f)
         except FileNotFoundError:
             return {"version": 1, "last_updated": str(datetime.now())}
@@ -22,13 +22,13 @@ class EnhancedAkshareFunPlanner(AkshareFunPlanner):
     def _save_rule_version(self):
         self.rule_version["version"] += 1
         self.rule_version["last_updated"] = str(datetime.now())
-        with open('rule_version.json', 'w') as f:
+        with open('rule_version.json', 'w', encoding='utf-8') as f:
             json.dump(self.rule_version, f)
 
     def add_new_rule(self, rule_type: str, step_type: str, rule: str):
         """添加新规则到相应的JSON文件"""
         file_path = f"./json/{rule_type}_code_enhancement.json"
-        with open(file_path, 'r+') as f:
+        with open(file_path, 'r+', encoding='utf-8') as f:
             data = json.load(f)
             if step_type not in data:
                 data[step_type] = []

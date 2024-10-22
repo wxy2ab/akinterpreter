@@ -31,7 +31,7 @@ class UrlTraveler(Traveler):
     def _load_code_cache(self):
         """Load the code cache from file."""
         if os.path.exists(self.code_cache_path):
-            with open(self.code_cache_path, 'r') as f:
+            with open(self.code_cache_path, 'r', encoding='utf-8') as f:
                 self.code_cache = json.load(f)
         else:
             self.code_cache = {}
@@ -39,7 +39,7 @@ class UrlTraveler(Traveler):
     def _save_code_cache(self):
         """Save the code cache to file."""
         os.makedirs(os.path.dirname(self.code_cache_path), exist_ok=True)
-        with open(self.code_cache_path, 'w') as f:
+        with open(self.code_cache_path, 'w', encoding='utf-8') as f:
             json.dump(self.code_cache, f)
 
     def _generate_traverse_code(self, url: str, content: str) -> str:

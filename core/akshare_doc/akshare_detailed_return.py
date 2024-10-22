@@ -23,7 +23,7 @@ class AkShareDocEnhancer:
         Load existing supplement dictionary from JSON file if it exists.
         """
         if os.path.exists("akshare_supplement_dict.json"):
-            with open("akshare_supplement_dict.json", "r") as f:
+            with open("akshare_supplement_dict.json", "r",encoding="utf-8") as f:
                 return json.load(f)
         return {}
 
@@ -31,7 +31,7 @@ class AkShareDocEnhancer:
         """
         Save the current supplement dictionary to JSON file.
         """
-        with open("akshare_supplement_dict.json", "w") as f:
+        with open("akshare_supplement_dict.json", "w",encoding="utf-8") as f:
             json.dump(self.supplement_dict, f, indent=2)
 
     def get_all_functions(self) -> List[str]:
@@ -220,7 +220,7 @@ class AkShareDocEnhancer:
                 logging.error(error_message)
         
         logging.error(f"Failed to process {func_name} after {max_retries} attempts")
-        with open("failed.txt", "a") as f:
+        with open("failed.txt", "a", encoding='utf-8') as f:
             f.write(f"{func_name}\n")
 
     def execute_generated_code(self, code: str) -> Any:
