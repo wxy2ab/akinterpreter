@@ -22,5 +22,4 @@ class BGEM3Embedding(Embedding):
 
     @property
     def vector_size(self) -> int:
-        return 1536
-    
+        return self.model.get_sentence_embedding_dimension()
