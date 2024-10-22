@@ -22,5 +22,5 @@ class BGEM3Embedding(Embedding):
 
     @property
     def vector_size(self) -> int:
-        return 1024
+        return 1536
     
