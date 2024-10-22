@@ -327,9 +327,15 @@ def test1_session_api():
     runner = unittest.TextTestRunner()
     runner.run(suite)
 
-def test_llama_client():
+def test1_llama_client():
     from core.llms.llama_client import LlamaClient
     from core.utils.all_tools import tools_info_claude, AllTools
     client = LlamaClient()
     text = client.one_chat("hello , nice to meet you ")
     print(text)
+
+def test1_build():
+    from install.build_or_recreate import run_all_build
+    from core.utils.tsdata import check_proxy_running
+    check_proxy_running("192.168.50.104",10809,"http")
+    run_all_build()
