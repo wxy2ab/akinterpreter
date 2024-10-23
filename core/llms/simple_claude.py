@@ -18,7 +18,7 @@ class SimpleClaudeAwsClient(LLMApiClient):
                 aws_secret_access_key: Optional[str] = None,
                 aws_session_token: Optional[str] = None,
                 aws_region: str = "us-east-1", 
-                model: str = "anthropic.claude-3-5-sonnet-20240620-v1:0",
+                model: str = "anthropic.claude-3-5-sonnet-20241022-v2:0",
                 temperature: float = 0.5,
                 top_p: float = 1.0,
                 top_k: int = 250,

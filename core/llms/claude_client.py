@@ -14,7 +14,7 @@ from ..utils.handle_max_tokens import handle_max_tokens
 class ClaudeClient(LLMApiClient):
     def __init__(self, 
                  api_key: Optional[str] = None,
-                 model: str = "claude-3-5-sonnet-20240620",
+                 model: str = "claude-3-5-sonnet-20241022",
                  temperature: float = 0.5,
                  top_p: float = 1.0,
                  top_k: int = 250,
