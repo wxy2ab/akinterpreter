@@ -29,4 +29,6 @@ hunyuan_SecretId =
 hunyuan_SecretKey =  
 xunfei_spark_api_key =  
 xunfei_spark_secret_key =  
-hugging_face_api_key =  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
+hugging_face_api_key =  
+openrouter_api_key = 
+deepbricks_api_key = 
