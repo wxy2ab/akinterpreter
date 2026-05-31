@@ -13,7 +13,7 @@ class SiliconDeepSeekR1Client(MoonShotClient):
 
 
         api_key = config.get("siliconflow_key")
-        super().__init__(api_key, base_url, max_tokens=4096)
+        super().__init__(api_key, base_url, max_tokens=8192)
         if model is None or model == "":
             model = "deepseek-ai/DeepSeek-R1"
         self.model = model

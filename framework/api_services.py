@@ -23,6 +23,7 @@ class APIService:
         for func in service_init_funs:
             func()
         
+        self.load_middle_ware()
         self.load_routes()
         self.load_directory()
         self.add_exception_handler()  
@@ -62,15 +63,15 @@ class APIService:
             self.modules.append(module)
 
     def load_directory(self):
-        html_directory = os.path.abspath("static")
+        html_directory = os.path.abspath("build" if os.path.exists("build/index.html") else "static")
         if not os.path.exists(html_directory):
             os.makedirs(html_directory) 
         if not os.path.exists("output"):
             os.makedirs("output")
-        self.app.mount("/", StaticFiles(directory=html_directory,html=True), name="static")
         self.app.mount("/output", StaticFiles(directory=os.path.abspath("output")), name="static_output")
-        if os.path.exists("static/.next/static"):
-            self.app.mount("/_next/static", StaticFiles(directory=os.path.abspath("static/.next/static")), name="static_next")
+        if os.path.exists("static/.next/_next/static"):
+            self.app.mount("/_next/static", StaticFiles(directory=os.path.abspath("static/.next/_next/static")), name="static_next")
+        self.app.mount("/", StaticFiles(directory=html_directory,html=True), name="static")
 
     def load_middle_ware(self):
         self.app.add_middleware(

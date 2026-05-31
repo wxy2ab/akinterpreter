@@ -2,46 +2,59 @@ import json
 from typing import Iterator, List, Dict, Any, Optional, Tuple, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
+#pip install 'volcengine-python-sdk[ark]'
 from volcenginesdkarkruntime import Ark
 from ..utils.handle_max_tokens import handle_max_tokens
 
 class DoubaoApiClient(LLMApiClient):
+    supports_structured_output = True
+
     def __init__(self):
         config = Config()
         self.api_key = config.get("volcengine_api_key")
         self.model = config.get("volcengine_doubao")
-        
+
         # 使用自定义配置初始化 Ark 客户端
         self.client = Ark(api_key=self.api_key)
-        
+
         self.history: List[Dict[str, str]] = []
         self.stats: Dict[str, int] = {
             "call_count": {"text_chat": 0, "image_chat": 0, "tool_chat": 0},
             "total_tokens": 0
         }
-        
+
         # 设置默认参数
         self.max_tokens = 4096
         self.stop = None
         self.temperature = 1
         self.top_p = 1
         self.frequency_penalty = 1
+        self._response_format: Optional[Dict[str, Any]] = None
+
+    def set_response_format(self, fmt: Optional[Dict[str, Any]]) -> None:
+        if fmt is not None and not isinstance(fmt, dict):
+            raise TypeError("response_format must be a dict or None")
+        self._response_format = fmt
+
     @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": message})
-        
+
         if is_stream:
             return self._stream_response(self.history)
         else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=self.history,
-                max_tokens=self.max_tokens,
-                stop=self.stop,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": self.history,
+                "max_tokens": self.max_tokens,
+                "stop": self.stop,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+            }
+            if self._response_format:
+                kwargs["response_format"] = self._response_format
+            response = self.client.chat.completions.create(**kwargs)
             assistant_message = response.choices[0].message.content
             self.history.append({"role": "assistant", "content": assistant_message})
             self.stats["call_count"]["text_chat"] += 1
@@ -58,15 +71,18 @@ class DoubaoApiClient(LLMApiClient):
             {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
         ]
         self.history.append({"role": "user", "content": content})
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=self.history,
-            max_tokens=self.max_tokens,
-            stop=self.stop,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            frequency_penalty=self.frequency_penalty
-        )
+        kwargs = {
+            "model": self.model,
+            "messages": self.history,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+        }
+        if self._response_format:
+            kwargs["response_format"] = self._response_format
+        response = self.client.chat.completions.create(**kwargs)
         assistant_message = response.choices[0].message.content
         self.history.append({"role": "assistant", "content": assistant_message})
         self.stats["call_count"]["image_chat"] += 1
@@ -79,31 +95,37 @@ class DoubaoApiClient(LLMApiClient):
         if is_stream:
             return self._stream_response(messages)
         else:
-            response = self.client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                max_tokens=self.max_tokens,
-                stop=self.stop,
-                temperature=self.temperature,
-                top_p=self.top_p,
-                frequency_penalty=self.frequency_penalty
-            )
+            kwargs = {
+                "model": self.model,
+                "messages": messages,
+                "max_tokens": self.max_tokens,
+                "stop": self.stop,
+                "temperature": self.temperature,
+                "top_p": self.top_p,
+                "frequency_penalty": self.frequency_penalty,
+            }
+            if self._response_format:
+                kwargs["response_format"] = self._response_format
+            response = self.client.chat.completions.create(**kwargs)
             assistant_message = response.choices[0].message.content
             self.stats["call_count"]["text_chat"] += 1
             self.stats["total_tokens"] += response.usage.total_tokens
             return assistant_message
 
     def _stream_response(self, messages: List[Dict[str, str]]) -> Iterator[str]:
-        stream = self.client.chat.completions.create(
-            model=self.model,
-            messages=messages,
-            stream=True,
-            max_tokens=self.max_tokens,
-            stop=self.stop,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            frequency_penalty=self.frequency_penalty
-        )
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "stream": True,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+        }
+        if self._response_format:
+            kwargs["response_format"] = self._response_format
+        stream = self.client.chat.completions.create(**kwargs)
         full_response = ""
         for chunk in stream:
             if chunk.choices:
@@ -115,6 +137,30 @@ class DoubaoApiClient(LLMApiClient):
         
         self.stats["call_count"]["text_chat"] += 1
         self.stats["total_tokens"] += sum(chunk.usage.total_tokens for chunk in stream)
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        kwargs = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty,
+        }
+        # No response_format on tool paths — see role_based_llm_routing.md §7
+        # (tools + response_format interaction is ambiguous on OpenAI-compatible APIs).
+        if self._response_format and not tools:
+            kwargs["response_format"] = self._response_format
+        completion = self.client.chat.completions.create(**kwargs)
+        self.stats["call_count"]["tool_chat"] += 1
+        self.stats["total_tokens"] += completion.usage.total_tokens
+        message = completion.choices[0].message
+        return self._normalize_tool_invoke_response(
+            getattr(message, "content", "") or "",
+            getattr(message, "tool_calls", None)
+        )
 
     def clear_chat(self):
         self.history.clear()
@@ -133,7 +179,7 @@ class DoubaoApiClient(LLMApiClient):
             raise NotImplementedError("Streaming is not supported for tool_chat in DoubaoApiClient")
 
         self.history.append({"role": "user", "content": user_message})
-        
+
         request = {
             "model": self.model,
             "messages": self.history,
@@ -142,8 +188,11 @@ class DoubaoApiClient(LLMApiClient):
             "stop": self.stop,
             "temperature": self.temperature,
             "top_p": self.top_p,
-            "frequency_penalty": self.frequency_penalty
+            "frequency_penalty": self.frequency_penalty,
         }
+        # No response_format on tool paths — see role_based_llm_routing.md §7.
+        if self._response_format and not tools:
+            request["response_format"] = self._response_format
 
         completion = self.client.chat.completions.create(**request)
         

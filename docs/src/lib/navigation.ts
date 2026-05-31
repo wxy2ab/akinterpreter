@@ -1,48 +1,48 @@
 export const navigation = [
   {
-    title: '使用手册',
+    title: 'User Guide',
     links: [
-      { title: '上手使用', href: '/' },
-      { title: '推荐安装', href: '/docs/installation' },
-      { title: ' 无python安装', href: '/docs/non_python_install' },
+      { title: 'Getting Started', href: '/' },
+      { title: 'Recommended Installation', href: '/docs/installation' },
+      { title: 'Install Without Python', href: '/docs/non_python_install' },
     ],
   },
   {
-    title: '配置',
+    title: 'Configuration',
     links: [
-      { title: '选择LLM API', href: '/docs/select_llm_api' },
+      { title: 'Select LLM API', href: '/docs/select_llm_api' },
       {
-        title: '配置API_KEY',
+        title: 'Configure API Keys',
         href: '/docs/setting_api_keys',
       },
-      {title: '安装依赖', href: '/docs/requirement_install' },
-      {title: 'LLM排序', href: '/docs/llms_test' },
+      {title: 'Provider Dependencies', href: '/docs/requirement_install' },
+      {title: 'LLM Provider Notes', href: '/docs/llms_test' },
     ],
   },
   {
-    title: '使用',
+    title: 'Usage',
     links: [
-      { title: '特性', href: '/docs/featrue' },
-      { title: '指令', href: '/docs/instruction' },
+      { title: 'Features', href: '/docs/featrue' },
+      { title: 'Commands', href: '/docs/instruction' },
     ],
   },
   {
-    title: '技巧',
+    title: 'Tips',
     links: [
-      { title: '使用gpt4o', href: '/docs/use_outside' },
+      { title: 'Using Remote LLM APIs', href: '/docs/use_outside' },
     ],
   },
   {
-    title: '关联项目',
+    title: 'Related Projects',
     links: [
       { title: 'akshare', href: '/docs/akshare' },
       { title: 'ak_code_library', href: '/docs/ak_code_library' },
     ],
   },
   {
-    title: '文档模板',
+    title: 'Documentation Template',
     links: [
-      { title: '文档模板', href: '/docs/docs_template' },
+      { title: 'Documentation Template', href: '/docs/docs_template' },
     ],
   },
 ]

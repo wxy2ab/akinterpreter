@@ -1,0 +1,232 @@
+import { message } from 'antd';
+import { useCallback, useEffect, useRef } from 'react';
+import { useDispatch } from 'react-redux';
+
+import { updateAccountInfo } from '../store/slices/accountSlice';
+import { updateTick } from '../store/slices/marketSlice';
+import { updateStrategy } from '../store/slices/strategySlice';
+import { addLog, setConnected } from '../store/slices/systemSlice';
+import { updateOrder, updatePosition, updateTrade } from '../store/slices/tradingSlice';
+
+export const useWebSocket = () => {
+    const dispatch = useDispatch();
+    const wsRef = useRef<WebSocket | null>(null);
+    const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+    const isConnectingRef = useRef(false);
+    const reconnectAttemptsRef = useRef(0);
+    const maxReconnectAttempts = 10;
+
+    const connect = useCallback(() => {
+        if (isConnectingRef.current || (wsRef.current && wsRef.current.readyState === WebSocket.CONNECTING)) {
+            console.log('WebSocket already connecting, skipping...');
+            return;
+        }
+
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            console.log('WebSocket already connected, skipping...');
+            return;
+        }
+
+        isConnectingRef.current = true;
+
+        // 使用正确的WebSocket URL
+        const wsUrl = `ws://${window.location.host}/ws`;
+        console.log('Connecting to WebSocket:', wsUrl);
+
+        try {
+            const ws = new WebSocket(wsUrl);
+            wsRef.current = ws;
+
+            ws.onopen = () => {
+                console.log('WebSocket connected successfully');
+                isConnectingRef.current = false;
+                reconnectAttemptsRef.current = 0;
+                dispatch(setConnected(true));
+                dispatch(addLog('WebSocket连接已建立'));
+
+                // 订阅所有事件
+                const subscribeMessage = {
+                    type: 'subscribe',
+                    event_types: ['*']  // 订阅所有事件
+                };
+
+                console.log('Sending subscription:', subscribeMessage);
+                ws.send(JSON.stringify(subscribeMessage));
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log('WebSocket message received:', data);
+                    handleWebSocketMessage(data);
+                } catch (error) {
+                    console.error('解析WebSocket消息失败:', error);
+                    dispatch(addLog(`WebSocket消息解析错误: ${error}`));
+                }
+            };
+
+            ws.onclose = (event) => {
+                console.log('WebSocket disconnected:', event.code, event.reason);
+                isConnectingRef.current = false;
+                dispatch(setConnected(false));
+                dispatch(addLog(`WebSocket连接已断开 (${event.code}: ${event.reason})`));
+
+                // 自动重连逻辑
+                if (reconnectAttemptsRef.current < maxReconnectAttempts) {
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttemptsRef.current), 30000); // 指数退避，最大30秒
+                    reconnectAttemptsRef.current++;
+
+                    console.log(`Attempting reconnect ${reconnectAttemptsRef.current}/${maxReconnectAttempts} in ${delay}ms`);
+                    dispatch(addLog(`${delay / 1000}秒后尝试重连 (${reconnectAttemptsRef.current}/${maxReconnectAttempts})`));
+
+                    if (reconnectTimeoutRef.current) {
+                        clearTimeout(reconnectTimeoutRef.current);
+                    }
+                    reconnectTimeoutRef.current = setTimeout(() => {
+                        connect();
+                    }, delay);
+                } else {
+                    console.log('Max reconnect attempts reached');
+                    dispatch(addLog('达到最大重连次数，请手动刷新页面'));
+                    message.error('WebSocket连接失败，请刷新页面重试');
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                isConnectingRef.current = false;
+                dispatch(addLog('WebSocket连接错误'));
+            };
+
+        } catch (error) {
+            console.error('创建WebSocket连接失败:', error);
+            isConnectingRef.current = false;
+            dispatch(addLog(`WebSocket创建失败: ${error}`));
+        }
+    }, [dispatch]);
+
+    const handleWebSocketMessage = useCallback((data: any) => {
+        const { type, event_type, data: eventData } = data;
+
+        if (type === 'event') {
+            switch (event_type) {
+                case 'market_tick':
+                case 'tick_update':
+                case 'tick_data':
+                    dispatch(updateTick(eventData));
+                    break;
+
+                case 'position_update':
+                    dispatch(updatePosition(eventData));
+                    break;
+
+                case 'order_update':
+                case 'order_placed':
+                case 'order_filled':
+                case 'order_cancelled':
+                case 'order_rejected':
+                    dispatch(updateOrder(eventData));
+                    break;
+
+                case 'trade_update':
+                    dispatch(updateTrade(eventData));
+                    break;
+
+                case 'account_update':
+                    dispatch(updateAccountInfo(eventData));
+                    break;
+
+                case 'strategy_update':
+                case 'strategy_status_update':
+                    dispatch(updateStrategy(eventData));
+                    break;
+
+                case 'system_log':
+                    dispatch(addLog(`${eventData.timestamp || new Date().toLocaleTimeString()} [${eventData.level || 'INFO'}] ${eventData.message}`));
+                    break;
+
+                case 'risk_warning':
+                    message.warning(`风控警告: ${eventData.message || '风控事件'}`);
+                    dispatch(addLog(`风控警告: ${JSON.stringify(eventData)}`));
+                    break;
+
+                case 'error_occurred':
+                    message.error(`系统错误: ${eventData.message || '未知错误'}`);
+                    dispatch(addLog(`系统错误: ${JSON.stringify(eventData)}`));
+                    break;
+
+                case 'connection_status':
+                    // 处理连接状态更新
+                    dispatch(addLog(`连接状态更新: ${JSON.stringify(eventData)}`));
+                    break;
+
+                default:
+                    console.log('未处理的事件类型:', event_type, eventData);
+                    dispatch(addLog(`未处理事件: ${event_type}`));
+            }
+        } else if (type === 'connection_established') {
+            message.success('已连接到交易服务器');
+            dispatch(addLog('已连接到交易服务器'));
+        } else if (type === 'error') {
+            message.error(data.message);
+            dispatch(addLog(`错误: ${data.message}`));
+        } else {
+            console.log('未处理的消息类型:', type, data);
+        }
+    }, [dispatch]);
+
+    const disconnect = useCallback(() => {
+        console.log('Manually disconnecting WebSocket');
+
+        if (reconnectTimeoutRef.current) {
+            clearTimeout(reconnectTimeoutRef.current);
+            reconnectTimeoutRef.current = null;
+        }
+
+        if (wsRef.current) {
+            wsRef.current.close(1000, 'Manual disconnect');
+            wsRef.current = null;
+        }
+
+        dispatch(setConnected(false));
+        reconnectAttemptsRef.current = maxReconnectAttempts; // 阻止自动重连
+    }, [dispatch]);
+
+    const sendMessage = useCallback((message: any) => {
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+            console.log('Sending WebSocket message:', message);
+            wsRef.current.send(JSON.stringify(message));
+            return true;
+        } else {
+            console.warn('WebSocket not connected, cannot send message:', message);
+            return false;
+        }
+    }, []);
+
+    // 手动重连函数
+    const reconnect = useCallback(() => {
+        console.log('Manual reconnect requested');
+        disconnect();
+        setTimeout(() => {
+            reconnectAttemptsRef.current = 0;
+            connect();
+        }, 1000);
+    }, [connect, disconnect]);
+
+    useEffect(() => {
+        connect();
+
+        return () => {
+            disconnect();
+        };
+    }, [connect, disconnect]);
+
+    return {
+        connect,
+        disconnect,
+        reconnect,
+        sendMessage,
+        isConnected: wsRef.current?.readyState === WebSocket.OPEN,
+        reconnectAttempts: reconnectAttemptsRef.current,
+    };
+}; 

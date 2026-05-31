@@ -6,6 +6,8 @@ from ..utils.handle_max_tokens import handle_max_tokens
 from ..utils.config_setting import Config
 
 class BaichuanClient(LLMApiClient):
+    supports_structured_output = True
+
     def __init__(self, api_key: str ="", model: str = "Baichuan4"):
         config = Config()
         self.api_key = api_key if api_key else config.get("baichuan_api_key")
@@ -24,6 +26,12 @@ class BaichuanClient(LLMApiClient):
             "api_calls": 0,
             "total_tokens": 0
         }
+        self._response_format: Union[Dict[str, Any], None] = None
+
+    def set_response_format(self, fmt: Union[Dict[str, Any], None]) -> None:
+        if fmt is not None and not isinstance(fmt, dict):
+            raise TypeError("response_format must be a dict or None")
+        self._response_format = fmt
 
     def _make_request(self, messages: List[Dict[str, str]], stream: bool = False) -> Union[Dict, requests.Response]:
         url = f"{self.base_url}/completions"
@@ -37,6 +45,12 @@ class BaichuanClient(LLMApiClient):
             **self.parameters,
             "stream": stream
         }
+        # UNVERIFIED: Baichuan API docs require login; the OpenAI-compatible
+        # /v1/chat/completions endpoint URL suggests response_format is
+        # accepted. Confirm with a live smoke test before relying on JSON mode.
+        # See core/ccx/docs/role_based_llm_routing.md §7.1 capability matrix.
+        if self._response_format:
+            payload["response_format"] = self._response_format
 
         self.stats["api_calls"] += 1
         response = requests.post(url, headers=headers, json=payload, stream=stream)
@@ -90,6 +104,9 @@ class BaichuanClient(LLMApiClient):
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
         # Baichuan API currently doesn't support function calling
         raise NotImplementedError("Baichuan API does not support function calling.")
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._tool_invoke_via_one_chat(messages, tools)
 
     def audio_chat(self, message: str, audio_path: str) -> str:
         raise NotImplementedError("Baichuan API does not support audio chat.")

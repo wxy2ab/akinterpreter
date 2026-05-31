@@ -1,0 +1,171 @@
+/* 全局样式重置 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+        'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #333;
+    background-color: #f0f2f5;
+}
+
+#root {
+    height: 100%;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* Ant Design 样式覆盖 */
+.ant-layout {
+    min-height: 100vh;
+}
+
+.ant-layout-header {
+    padding: 0 24px;
+    background: #001529;
+    display: flex;
+    align-items: center;
+}
+
+.ant-layout-content {
+    padding: 24px;
+    background: #fff;
+}
+
+.ant-layout-sider {
+    background: #001529;
+}
+
+/* 表格样式 */
+.ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+}
+
+.ant-table-tbody>tr:hover>td {
+    background: #e6f7ff;
+}
+
+/* 卡片样式 */
+.ant-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 6px;
+}
+
+.ant-card-head {
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* 按钮样式 */
+.ant-btn {
+    border-radius: 4px;
+}
+
+.ant-btn-primary {
+    background: #1890ff;
+    border-color: #1890ff;
+}
+
+.ant-btn-primary:hover {
+    background: #40a9ff;
+    border-color: #40a9ff;
+}
+
+/* 表单样式 */
+.ant-form-item-label>label {
+    font-weight: 500;
+}
+
+/* 状态颜色 */
+.status-success {
+    color: #52c41a;
+}
+
+.status-error {
+    color: #ff4d4f;
+}
+
+.status-warning {
+    color: #faad14;
+}
+
+.status-info {
+    color: #1890ff;
+}
+
+/* 数字样式 */
+.number-positive {
+    color: #52c41a;
+}
+
+.number-negative {
+    color: #ff4d4f;
+}
+
+.number-zero {
+    color: #666;
+}
+
+/* 工具类 */
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.mb-16 {
+    margin-bottom: 16px;
+}
+
+.mb-24 {
+    margin-bottom: 24px;
+}
+
+.mr-8 {
+    margin-right: 8px;
+}
+
+.mr-16 {
+    margin-right: 16px;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .ant-layout-content {
+        padding: 16px;
+    }
+
+    .ant-layout-header {
+        padding: 0 16px;
+    }
+}

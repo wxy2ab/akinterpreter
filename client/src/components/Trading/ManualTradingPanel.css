@@ -1,0 +1,256 @@
+/* ManualTradingPanel 组件样式 */
+.manual-trading-panel {
+    width: 100%;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.manual-trading-panel .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
+    border-radius: 8px 8px 0 0;
+}
+
+.manual-trading-panel .panel-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.manual-trading-panel .panel-content {
+    padding: 20px;
+}
+
+.manual-trading-panel .form-section {
+    margin-bottom: 24px;
+}
+
+.manual-trading-panel .form-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+    padding-bottom: 8px;
+}
+
+.manual-trading-panel .form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.manual-trading-panel .form-group {
+    flex: 1;
+}
+
+.manual-trading-panel .form-group.narrow {
+    flex: 0 0 120px;
+}
+
+.manual-trading-panel label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+}
+
+.manual-trading-panel input,
+.manual-trading-panel select,
+.manual-trading-panel textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.manual-trading-panel input:focus,
+.manual-trading-panel select:focus,
+.manual-trading-panel textarea:focus {
+    outline: none;
+    border-color: #1890ff;
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.manual-trading-panel .direction-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.manual-trading-panel .direction-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.manual-trading-panel .direction-btn.buy {
+    color: #52c41a;
+    border-color: #52c41a;
+}
+
+.manual-trading-panel .direction-btn.buy.active {
+    background: #52c41a;
+    color: #fff;
+}
+
+.manual-trading-panel .direction-btn.sell {
+    color: #ff4d4f;
+    border-color: #ff4d4f;
+}
+
+.manual-trading-panel .direction-btn.sell.active {
+    background: #ff4d4f;
+    color: #fff;
+}
+
+.manual-trading-panel .offset-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.manual-trading-panel .offset-btn {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.manual-trading-panel .offset-btn.active {
+    background: #1890ff;
+    color: #fff;
+    border-color: #1890ff;
+}
+
+.manual-trading-panel .submit-section {
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.manual-trading-panel .submit-btn {
+    width: 100%;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.manual-trading-panel .submit-btn.buy {
+    background: #52c41a;
+    color: #fff;
+}
+
+.manual-trading-panel .submit-btn.buy:hover {
+    background: #73d13d;
+}
+
+.manual-trading-panel .submit-btn.sell {
+    background: #ff4d4f;
+    color: #fff;
+}
+
+.manual-trading-panel .submit-btn.sell:hover {
+    background: #ff7875;
+}
+
+.manual-trading-panel .submit-btn:disabled {
+    background: #d9d9d9;
+    cursor: not-allowed;
+}
+
+.manual-trading-panel .position-info {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.manual-trading-panel .position-info h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #333;
+}
+
+.manual-trading-panel .position-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.manual-trading-panel .position-item .label {
+    color: #666;
+}
+
+.manual-trading-panel .position-item .value {
+    font-weight: 500;
+    color: #333;
+}
+
+.manual-trading-panel .position-item .value.long {
+    color: #52c41a;
+}
+
+.manual-trading-panel .position-item .value.short {
+    color: #ff4d4f;
+}
+
+.manual-trading-panel .quick-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.manual-trading-panel .quick-btn {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s;
+}
+
+.manual-trading-panel .quick-btn:hover {
+    border-color: #1890ff;
+    color: #1890ff;
+}
+
+.manual-trading-panel .loading {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+}
+
+.manual-trading-panel .error {
+    color: #ff4d4f;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.manual-trading-panel .disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}

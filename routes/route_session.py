@@ -88,6 +88,8 @@ async def update_current_plan(session_id: str, request: Request):
     except ValueError as e:
         logger.error(f"Value Error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -130,5 +132,4 @@ def delete_session(session_id: str):
 def cleanup_sessions():
     session_manager.cleanup_sessions()
     return {"message": "Expired sessions cleaned up"}
-
 

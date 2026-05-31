@@ -340,6 +340,35 @@ class ClaudeAwsClient(LLMApiClient):
         else:
             return "".join(chunk for chunk in iterator if chunk is not None)
 
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        cleaned_tools = [tool.copy() for tool in tools]
+        for tool in cleaned_tools:
+            tool.pop("output_schema", None)
+
+        response = self.client.messages.create(
+            model=self.model,
+            messages=messages,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            top_k=self.top_k,
+            stop_sequences=self.stop_sequences,
+            tools=cleaned_tools
+        )
+        self._update_usage_stats(response)
+        content_parts = []
+        tool_calls = []
+        for block in response.content:
+            if getattr(block, "type", "") == "text":
+                content_parts.append(block.text)
+            elif getattr(block, "type", "") == "tool_use":
+                tool_calls.append({
+                    "id": getattr(block, "id", ""),
+                    "name": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {})
+                })
+        return self._normalize_tool_invoke_response("".join(content_parts), tool_calls)
+
     def one_tool_chat(self,
                       user_message: str,
                       tools: List[Dict[str, Any]],

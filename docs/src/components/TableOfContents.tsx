@@ -70,7 +70,7 @@ export function TableOfContents({
               id="on-this-page-title"
               className="font-display text-sm font-medium text-slate-900 dark:text-white"
             >
-              本页目录
+              On this page
             </h2>
             <ol role="list" className="mt-4 space-y-3 text-sm">
               {tableOfContents.map((section) => (

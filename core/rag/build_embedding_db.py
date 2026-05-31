@@ -33,7 +33,7 @@ def build_akshare_embedding_db():
 
     # 准备数据
     names = [f['name'] for f in filtered_funcs]
-    contents = [f"{f['name']}: {f['docstring'].split(":rtype")[0]}" for f in filtered_funcs]
+    contents = [f"{f['name']}: {f['docstring'].split(':rtype')[0]}" for f in filtered_funcs]
 
     # 批处理大小
     batch_size = 16

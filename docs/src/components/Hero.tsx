@@ -10,20 +10,20 @@ import blurIndigoImage from '@/images/blur-indigo.png'
 
 const codeLanguage = 'javascript'
 const code = `{
-  "query_summary": "分析大众交通今年以来的走势",
+  "query_summary": "Analyze the Dazhong Transportation trend this year",
   "steps": [
     {
       "step_number": 1,
-      "description": "获取大众交通新闻数据",
+      "description": "Retrieve news about Dazhong Transportation",
       "type": "data_retrieval",
-      "data_category": "新闻数据",
+      "data_category": "News data",
       "save_data_to": "financial_news"
     }
   ]
 }`
 
 const tabs = [
-  { name: '分析大众交通今年以来的走势', isActive: true },
+  { name: 'Analyze the Dazhong Transportation trend this year', isActive: true },
   { name: 'step 1', isActive: false },
 ]
 
@@ -54,16 +54,15 @@ export function Hero() {
             />
             <div className="relative">
               <p className="inline bg-gradient-to-r from-indigo-200 via-sky-400 to-indigo-200 bg-clip-text font-display text-5xl tracking-tight text-transparent">
-               AI让你的天赋强大一万倍
+                Make your expertise dramatically more powerful with AI
               </p>
               <p className="mt-3 text-2xl tracking-tight text-slate-400">
-                你的直觉，语言，分析，思考，都是与生俱来的卓越本领。   
-                受限于技能，时间，工具，天赋扼腕于束缚。
-                akinterprerter 尝试让你摆脱束缚。让天赋更强大。
-
+                Your intuition, language, analysis, and reasoning are valuable
+                strengths. akinterpreter helps you apply them without being
+                limited by time, tools, or implementation details.
               </p>
               <div className="mt-8 flex gap-4 md:justify-center lg:justify-start">
-                <Button href="/">查看文档</Button>
+                <Button href="/">Read the docs</Button>
                 <Button href="https://github.com/wxy2ab/akinterpreter" variant="secondary">
                   GitHub
                 </Button>

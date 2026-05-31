@@ -7,9 +7,15 @@ from typing import Literal
 from ..utils.handle_max_tokens import handle_max_tokens
 
 class ErnieApiClient(LLMApiClient):
-    def __init__(self, 
-                 api_key: str = None, 
-                 secret_key: str = None, 
+    # Baidu Qianfan ERNIE endpoint is proprietary (not OpenAI-compatible) and
+    # does not document a response_format parameter — Baidu uses different
+    # field shapes (`functions` not `tools`, `max_output_tokens` not
+    # `max_tokens`). See core/ccx/docs/role_based_llm_routing.md §7.1.
+    supports_structured_output = False
+
+    def __init__(self,
+                 api_key: str = None,
+                 secret_key: str = None,
                  api_name: Literal["ernie-4.0-8k-latest", "ernie-4.0-turbo-8k"] = "ernie-4.0-turbo-8k",
                  temperature: float = 0.8,
                  top_p: float = 0.8,
@@ -218,6 +224,24 @@ class ErnieApiClient(LLMApiClient):
             self.history.extend(messages)
 
             return "\n".join(result)
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        converted_tools = self.convert_format(tools)
+        response_data = self.send_request(messages, functions=converted_tools, record_history=False, use_full_messages=False)
+        function_call = response_data.get("function_call")
+        tool_calls = []
+        if function_call:
+            tool_calls.append({
+                "id": function_call.get("id", ""),
+                "function": {
+                    "name": function_call.get("name", ""),
+                    "arguments": function_call.get("arguments", "{}")
+                }
+            })
+        return self._normalize_tool_invoke_response(
+            response_data.get("result", "") or response_data.get("thoughts", "") or "",
+            tool_calls
+        )
 
     def convert_format(self, input_data):
         output_data = []

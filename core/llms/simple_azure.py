@@ -48,10 +48,19 @@ class SimpleAzureClient(LLMApiClient):
     def _create_client(self):
         if not self.api_key or not self.azure_endpoint:
             raise ValueError("Azure OpenAI API key and endpoint are required.")
+            
+        import httpx
+        http_client = httpx.Client(
+            limits=httpx.Limits(max_keepalive_connections=100, max_connections=200),
+            timeout=httpx.Timeout(timeout=600.0, connect=60.0, read=600.0, write=120.0)
+        )
+            
         return AzureOpenAI(
             api_key=self.api_key,
             api_version=self.api_version,
-            azure_endpoint=self.azure_endpoint
+            azure_endpoint=self.azure_endpoint,
+            http_client=http_client,
+            max_retries=5
         )
 
     def _update_usage_stats(self, response):
@@ -222,6 +231,26 @@ class SimpleAzureClient(LLMApiClient):
             response = completion.choices[0].message.content
             self._update_usage_stats(completion)
             return response
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        response = self.client.chat.completions.create(
+            model=self.deployment_name,
+            messages=messages,
+            max_tokens=self.max_tokens,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            frequency_penalty=self.frequency_penalty,
+            presence_penalty=self.presence_penalty,
+            stop=self.stop,
+            tools=tools,
+            stream=False
+        )
+        self._update_usage_stats(response)
+        message = response.choices[0].message
+        return self._normalize_tool_invoke_response(
+            getattr(message, "content", "") or "",
+            getattr(message, "tool_calls", None)
+        )
 
     def _process_tool_response(self, response, tools: List[Dict[str, Any]], function_module: Any) -> str:
         assistant_output = response.choices[0].message

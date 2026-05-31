@@ -1,8 +1,9 @@
 
 from core.talk._talker import Talker
 from core.talk.talker_factory import TalkerFactory
+from core.utils.single_ton import Singleton
 
-class ChatManager:
+class ChatManager(metaclass=Singleton):
     """
     为每个session创建一个chatbot
     因为目前session存续时间极长

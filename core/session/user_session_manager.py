@@ -176,6 +176,8 @@ class UserSessionManager(metaclass= Singleton):
         user_session = self.get_session(session_id)
         self.chat_list_update(user_session)
         chat_list = self.db.chat_list_get_one(chat_list_id)
+        if chat_list is None or chat_list.session_id != session_id:
+            raise ValueError("Chat not found")
         new_user_session = ChatListModel.to_user_session(chat_list)
         self.save_session(new_user_session)
         return new_user_session

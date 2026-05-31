@@ -1,0 +1,550 @@
+/* 策略管理面板样式 */
+.strategy-management-panel {
+    padding: 16px;
+    background: #f5f5f5;
+    min-height: 100vh;
+}
+
+/* 头部样式 */
+.strategy-management-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    margin-bottom: 16px;
+}
+
+.header-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 600;
+    color: #262626;
+}
+
+.title-icon {
+    font-size: 20px;
+    color: #1890ff;
+}
+
+.connection-status {
+    margin-left: 16px;
+}
+
+.status-indicator {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-indicator.connected {
+    background: #f6ffed;
+    color: #52c41a;
+    border: 1px solid #b7eb8f;
+}
+
+.status-indicator.disconnected {
+    background: #fff2f0;
+    color: #ff4d4f;
+    border: 1px solid #ffccc7;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 统计概览样式 */
+.overview-stats {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    flex: 1;
+    min-width: 120px;
+    padding: 16px;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.stat-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.stat-number {
+    font-size: 28px;
+    font-weight: 700;
+    color: #262626;
+    margin-bottom: 4px;
+}
+
+.stat-number.active {
+    color: #52c41a;
+}
+
+.stat-number.risk {
+    color: #ff4d4f;
+}
+
+.stat-number.profit {
+    color: #52c41a;
+}
+
+.stat-number.loss {
+    color: #ff4d4f;
+}
+
+.stat-label {
+    font-size: 14px;
+    color: #8c8c8c;
+    font-weight: 500;
+}
+
+/* 主要内容样式 */
+.strategy-management-content {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.management-tabs {
+    min-height: 600px;
+}
+
+.management-tabs .ant-tabs-content-holder {
+    padding: 16px;
+}
+
+.management-tabs .ant-tabs-tab {
+    font-weight: 500;
+}
+
+.management-tabs .ant-tabs-tab-active {
+    font-weight: 600;
+}
+
+/* 策略状态表格样式 */
+.strategy-status-table .ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #262626;
+}
+
+.strategy-row-disabled {
+    background: #f5f5f5 !important;
+    opacity: 0.7;
+}
+
+.strategy-row-risk {
+    background: #fff2f0 !important;
+}
+
+.symbols-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.symbols-container .ant-tag {
+    margin: 0;
+}
+
+/* 合约监控表格样式 */
+.symbol-monitoring-table .ant-card {
+    margin-bottom: 16px;
+}
+
+.stat-summary {
+    padding: 8px 0;
+}
+
+.stat-summary .ant-tag {
+    margin: 2px;
+}
+
+/* 策略配置编辑器样式 */
+.strategy-config-editor .ant-form-item-label>label {
+    font-weight: 500;
+}
+
+.strategy-config-editor .ant-form-item-explain {
+    font-size: 12px;
+    color: #8c8c8c;
+}
+
+.strategy-config-editor .ant-alert {
+    border-radius: 6px;
+}
+
+/* 风控管理面板样式 */
+.risk-management-panel .ant-statistic-title {
+    font-size: 14px;
+    color: #8c8c8c;
+    font-weight: 500;
+}
+
+.risk-management-panel .ant-statistic-content {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.risk-management-panel .ant-progress-line {
+    margin: 8px 0;
+}
+
+.risk-management-panel .ant-card {
+    border-radius: 8px;
+}
+
+.risk-management-panel .ant-list-item {
+    padding: 8px 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.risk-management-panel .ant-list-item:last-child {
+    border-bottom: none;
+}
+
+/* 表格响应式样式 */
+@media (max-width: 1200px) {
+    .overview-stats {
+        grid-template-columns: repeat(3, 1fr);
+    }
+
+    .stat-item {
+        min-width: 100px;
+    }
+
+    .stat-number {
+        font-size: 24px;
+    }
+}
+
+@media (max-width: 768px) {
+    .strategy-management-panel {
+        padding: 8px;
+    }
+
+    .strategy-management-header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .header-actions {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .overview-stats {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+    }
+
+    .stat-item {
+        padding: 12px 8px;
+        min-width: 80px;
+    }
+
+    .stat-number {
+        font-size: 20px;
+    }
+
+    .stat-label {
+        font-size: 12px;
+    }
+
+    .management-tabs .ant-tabs-content-holder {
+        padding: 8px;
+    }
+
+    .management-tabs .ant-tabs-tab {
+        font-size: 14px;
+        padding: 8px 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .overview-stats {
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .stat-item {
+        padding: 8px;
+    }
+
+    .stat-number {
+        font-size: 18px;
+    }
+
+    .header-title {
+        font-size: 16px;
+    }
+
+    .management-tabs .ant-tabs-tab {
+        font-size: 12px;
+        padding: 6px 8px;
+    }
+}
+
+/* 主题支持 */
+.strategy-management-panel.dark-theme {
+    background: #141414;
+    color: #fff;
+}
+
+.strategy-management-panel.dark-theme .strategy-management-header,
+.strategy-management-panel.dark-theme .stat-item,
+.strategy-management-panel.dark-theme .strategy-management-content {
+    background: #1f1f1f;
+    border-color: #434343;
+}
+
+.strategy-management-panel.dark-theme .stat-number {
+    color: #fff;
+}
+
+.strategy-management-panel.dark-theme .stat-label {
+    color: #bfbfbf;
+}
+
+.strategy-management-panel.dark-theme .status-indicator.connected {
+    background: #162312;
+    color: #52c41a;
+    border-color: #274916;
+}
+
+.strategy-management-panel.dark-theme .status-indicator.disconnected {
+    background: #2a1215;
+    color: #ff4d4f;
+    border-color: #58181c;
+}
+
+/* 高对比度模式 */
+.strategy-management-panel.high-contrast {
+    background: #000;
+    color: #fff;
+}
+
+.strategy-management-panel.high-contrast .strategy-management-header,
+.strategy-management-panel.high-contrast .stat-item,
+.strategy-management-panel.high-contrast .strategy-management-content {
+    background: #000;
+    border: 2px solid #fff;
+}
+
+.strategy-management-panel.high-contrast .stat-number {
+    color: #fff;
+    text-shadow: 1px 1px 2px #000;
+}
+
+.strategy-management-panel.high-contrast .ant-btn-primary {
+    background: #fff;
+    color: #000;
+    border-color: #fff;
+}
+
+.strategy-management-panel.high-contrast .ant-btn-danger {
+    background: #ff0000;
+    color: #fff;
+    border-color: #ff0000;
+}
+
+/* 打印样式 */
+@media print {
+    .strategy-management-panel {
+        background: #fff;
+        padding: 0;
+    }
+
+    .header-actions,
+    .management-tabs .ant-tabs-nav {
+        display: none;
+    }
+
+    .strategy-management-header {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .stat-item {
+        box-shadow: none;
+        border: 1px solid #ccc;
+    }
+
+    .strategy-management-content {
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+
+    .ant-table {
+        font-size: 12px;
+    }
+
+    .ant-table-thead>tr>th {
+        background: #f0f0f0 !important;
+        -webkit-print-color-adjust: exact;
+    }
+}
+
+/* 动画效果 */
+.strategy-management-panel .fade-in {
+    animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.strategy-management-panel .slide-in {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* 自定义滚动条 */
+.strategy-management-panel ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.strategy-management-panel ::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 4px;
+}
+
+.strategy-management-panel ::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+.strategy-management-panel ::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 加载状态样式 */
+.strategy-management-panel .ant-spin-container {
+    min-height: 400px;
+}
+
+.strategy-management-panel .ant-empty {
+    padding: 40px 0;
+}
+
+.strategy-management-panel .ant-empty-description {
+    color: #8c8c8c;
+    font-size: 14px;
+}
+
+/* 工具提示样式 */
+.strategy-management-panel .ant-tooltip-inner {
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 6px;
+    font-size: 12px;
+}
+
+/* 标签样式优化 */
+.strategy-management-panel .ant-tag {
+    border-radius: 4px;
+    font-weight: 500;
+    font-size: 12px;
+}
+
+.strategy-management-panel .ant-tag.ant-tag-green {
+    background: #f6ffed;
+    color: #52c41a;
+    border-color: #b7eb8f;
+}
+
+.strategy-management-panel .ant-tag.ant-tag-red {
+    background: #fff2f0;
+    color: #ff4d4f;
+    border-color: #ffccc7;
+}
+
+.strategy-management-panel .ant-tag.ant-tag-orange {
+    background: #fff7e6;
+    color: #fa8c16;
+    border-color: #ffd591;
+}
+
+.strategy-management-panel .ant-tag.ant-tag-blue {
+    background: #f0f5ff;
+    color: #1890ff;
+    border-color: #adc6ff;
+}
+
+/* 表单优化 */
+.strategy-management-panel .ant-form-item {
+    margin-bottom: 16px;
+}
+
+.strategy-management-panel .ant-form-item-label>label {
+    color: #262626;
+    font-weight: 500;
+}
+
+.strategy-management-panel .ant-input,
+.strategy-management-panel .ant-select-selector,
+.strategy-management-panel .ant-input-number {
+    border-radius: 6px;
+}
+
+.strategy-management-panel .ant-input:focus,
+.strategy-management-panel .ant-select-focused .ant-select-selector,
+.strategy-management-panel .ant-input-number:focus {
+    border-color: #1890ff;
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+/* 卡片样式优化 */
+.strategy-management-panel .ant-card {
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    transition: box-shadow 0.3s ease;
+}
+
+.strategy-management-panel .ant-card:hover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+}
+
+.strategy-management-panel .ant-card-head {
+    border-bottom: 1px solid #f0f0f0;
+    border-radius: 8px 8px 0 0;
+}
+
+.strategy-management-panel .ant-card-head-title {
+    font-weight: 600;
+    color: #262626;
+}

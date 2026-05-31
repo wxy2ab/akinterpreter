@@ -1,73 +1,34 @@
 ---
-title: 安装
+title: Installation
 nextjs:
   metadata:
-    title: 安装
-    description: 针对有python环境，或者代码基础的推荐安装步骤.
+    title: Installation
+    description: Recommended installation steps for Python users.
 ---
 
-目前还是推荐大家直接下载源代码来安装。但是这个需要一定的代码基础。需要熟悉如何配置python环境。  
+**English** | [简体中文](./page.zh-CN.md)
 
----
+Installing from source is recommended if you already have a Python environment.
 
-## 下载清华源的miniconda
-
-到这个地址：[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/) 下载miniconda   
-推荐这个版本，因为安装比较快。如果使用官方版本，有的时候需要自求多福。   
-
-* **windows**   
-[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Windows-x86_64.exe](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Windows-x86_64.exe)   
-
-* **linux**   
-intel cpu:   
-[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Linux-x86_64.sh](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Linux-x86_64.sh)    
-arm cpu:   
-[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Linux-aarch64.sh](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.5.0-0-Linux-aarch64.sh)   
-
-* **mac**   
-m系列cpu:    
-[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.4.0-0-MacOSX-arm64.sh](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.4.0-0-MacOSX-arm64.sh)   
-intel cpu:    
-[https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.4.0-0-MacOSX-x86_64.sh](https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py312_24.4.0-0-MacOSX-x86_64.sh)   
-
-## 安装
+## Install
 
 ```bash
-# 克隆项目
 git clone git@github.com:wxy2ab/akinterpreter.git
-
-# 进入项目目录
 cd akinterpreter
 
-# 可选，创建虚拟环境
 conda create -p ./env python=3.12
-
-# 激活虚拟环境
 conda activate ./env
 
-# 安装依赖
-pip install -r requirments.txt
-
-# 启动cli
-python cli.py
-
-# 启动web
-python main.py
+pip install -r requirements.txt
+cp setting.ini.template setting.ini
 ```
 
-## 修改配置
+Update `setting.ini`, then start the CLI or web service:
 
-参考修改配置的章节:[配置](docs/select_llm_api)
-
-
-## 运行
 ```bash
-# 启动cli
 python cli.py
-
-# 启动web
 python main.py
 ```
 
-
+See [LLM API configuration](../select_llm_api) for provider settings.
 

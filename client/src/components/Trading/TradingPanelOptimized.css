@@ -1,0 +1,204 @@
+/* 交易面板优化样式 */
+
+/* 修复Ant Design Tabs在小高度容器中的显示问题 */
+.ant-tabs-content-holder {
+    overflow: auto !important;
+}
+
+.ant-tabs-tabpane {
+    padding: 0 !important;
+}
+
+/* 统计卡片样式 */
+.ant-statistic {
+    text-align: center;
+}
+
+.ant-statistic-title {
+    font-size: 12px !important;
+    color: #666 !important;
+    margin-bottom: 4px !important;
+}
+
+.ant-statistic-content {
+    font-size: 16px !important;
+    font-weight: 600 !important;
+}
+
+/* 状态徽章 */
+.ant-badge-status-text {
+    font-size: 14px;
+    margin-left: 8px;
+}
+
+/* 表格容器优化 */
+.ant-table-wrapper {
+    margin: 0;
+}
+
+.ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+    font-size: 12px;
+    padding: 8px 12px;
+}
+
+.ant-table-tbody>tr>td {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+/* 标签样式 */
+.ant-tag {
+    margin: 0;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+/* 按钮组样式 */
+.ant-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+}
+
+.ant-btn-icon {
+    font-size: 14px;
+}
+
+/* 卡片样式 */
+.ant-card {
+    border-radius: 6px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.ant-card-head {
+    min-height: 48px;
+    padding: 0 16px;
+}
+
+.ant-card-body {
+    padding: 16px;
+}
+
+/* 布局优化 */
+.trading-panel-content {
+    height: 100%;
+    overflow: hidden;
+}
+
+.trading-section {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.trading-section-content {
+    flex: 1;
+    overflow: auto;
+    padding: 16px;
+}
+
+/* 响应式设计 */
+@media (max-width: 1200px) {
+    .ant-col {
+        margin-bottom: 16px;
+    }
+
+    .ant-statistic-title {
+        font-size: 11px !important;
+    }
+
+    .ant-statistic-content {
+        font-size: 14px !important;
+    }
+}
+
+@media (max-width: 768px) {
+    .trading-panel-header {
+        flex-direction: column;
+        gap: 12px;
+        align-items: stretch;
+    }
+
+    .ant-space {
+        justify-content: center;
+    }
+
+    .ant-col {
+        text-align: center;
+    }
+}
+
+/* 加载状态优化 */
+.ant-spin-container {
+    height: 100%;
+}
+
+.ant-spin-nested-loading>div>.ant-spin {
+    max-height: none;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* 数据为空时的样式 */
+.ant-empty {
+    margin: 40px 0;
+}
+
+.ant-empty-description {
+    color: #999;
+    font-size: 14px;
+}
+
+/* 颜色工具类 */
+.text-success {
+    color: #52c41a !important;
+}
+
+.text-danger {
+    color: #ff4d4f !important;
+}
+
+.text-warning {
+    color: #faad14 !important;
+}
+
+.text-info {
+    color: #1890ff !important;
+}
+
+.bg-success {
+    background-color: #f6ffed !important;
+}
+
+.bg-danger {
+    background-color: #fff2f0 !important;
+}
+
+.bg-warning {
+    background-color: #fffbe6 !important;
+}
+
+.bg-info {
+    background-color: #e6f7ff !important;
+}

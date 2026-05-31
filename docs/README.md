@@ -1,5 +1,6 @@
-# akinterpreter 文档
-这里面的代码我使用了taiwindui 的模板，我完整保留了他们的License文件，未做任何修改.
+# akinterpreter Documentation
 
+**English** | [简体中文](./README.zh-CN.md)
 
+The documentation site uses Tailwind UI templates. The original license is preserved without modification in [`LICENSE.md`](./LICENSE.md).
 

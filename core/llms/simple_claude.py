@@ -1,3 +1,4 @@
+from datetime import datetime
 import inspect
 from typing import List, Dict, Any, Optional, Union, Iterator
 from anthropic import AnthropicBedrock
@@ -10,7 +11,8 @@ import io
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
-from tenacity import retry, retry_if_exception,wait_fixed,stop_after_attempt
+from tenacity import retry, wait_fixed,retry_if_exception,stop_after_attempt
+from core.utils.rate_limit import rate_limit
 
 class SimpleClaudeAwsClient(LLMApiClient):
     def __init__(self, 
@@ -41,7 +43,9 @@ class SimpleClaudeAwsClient(LLMApiClient):
             'output_tokens': 0,
             "total_tokens": 0
         }
-
+        self.system_message = f"你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来.现在的时间是：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
+        self.system_message = system_message
     def _create_client(self, aws_access_key_id, aws_secret_access_key, aws_session_token):
         config = Config()
         credentials = self._get_aws_credentials(aws_access_key_id, aws_secret_access_key, aws_session_token, config)
@@ -100,7 +104,8 @@ class SimpleClaudeAwsClient(LLMApiClient):
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k,
-            stop_sequences=self.stop_sequences
+            stop_sequences=self.stop_sequences,
+            system=self.system_message  # 添加system prompt
         )
         self._update_stats(response)
         self.stat["call_count"]["text_chat"] += 1
@@ -143,7 +148,8 @@ class SimpleClaudeAwsClient(LLMApiClient):
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k,
-            stop_sequences=self.stop_sequences
+            stop_sequences=self.stop_sequences,
+            system=self.system_message  # 添加system prompt
         )
 
         self._update_stats(response)
@@ -153,6 +159,37 @@ class SimpleClaudeAwsClient(LLMApiClient):
             return self._handle_tool_stream(response, function_module, max_tokens)
         else:
             return self._handle_tool_response(response, function_module, max_tokens)
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        cleaned_tools = [tool.copy() for tool in tools]
+        for tool in cleaned_tools:
+            tool.pop("output_schema", None)
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=messages,
+            tools=cleaned_tools,
+            stream=False,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            top_k=self.top_k,
+            stop_sequences=self.stop_sequences,
+            system=self.system_message
+        )
+        self._update_stats(response)
+        content_parts = []
+        tool_calls = []
+        for block in response.content:
+            if getattr(block, "type", "") == "text":
+                content_parts.append(block.text)
+            elif getattr(block, "type", "") == "tool_use":
+                tool_calls.append({
+                    "id": getattr(block, "id", ""),
+                    "name": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {})
+                })
+        return self._normalize_tool_invoke_response("".join(content_parts), tool_calls)
 
     def _handle_tool_stream(self, response, function_module, max_tokens):
         assistant_message = ""
@@ -280,8 +317,8 @@ class SimpleClaudeAwsClient(LLMApiClient):
             return f"*首轮消息：*{assistant_message}\n*使用工具：*{[tool_call.function.name for tool_call in tool_calls]}\n*最终结果：*{final_assistant_message}"
         else:
             return assistant_message
-
-    @retry(retry=retry_if_exception(Exception),wait=wait_fixed(5),stop=stop_after_attempt(3) )
+    @rate_limit(20)    
+    @retry(retry=retry_if_exception(Exception),wait=wait_fixed(10),stop=stop_after_attempt(3) )
     def one_chat(self, message: Union[str, List[Union[str, Any]]], max_tokens: Optional[ int ]= None, is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = [{"role": "user", "content": message}] if isinstance(message, str) else message
         response = self.client.messages.create(
@@ -292,8 +329,10 @@ class SimpleClaudeAwsClient(LLMApiClient):
             temperature=self.temperature,
             top_p=self.top_p,
             top_k=self.top_k,
-            stop_sequences=self.stop_sequences
+            stop_sequences=self.stop_sequences,
+            system=self.system_message  # 添加system prompt
         )
+
         self._update_stats(response)
         self.stat["call_count"]["text_chat"] += 1
         if is_stream:

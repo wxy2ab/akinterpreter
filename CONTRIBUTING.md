@@ -1,26 +1,24 @@
+# Contributing Guide
 
-### 2. CONTRIBUTING.md
-这个文件详细说明如何贡献代码，包括项目的开发流程、代码风格指南、提交问题和拉取请求的步骤等。
+**English** | [简体中文](./CONTRIBUTING.zh-CN.md)
 
+Thank you for your interest in contributing to akinterpreter.
 
-# 贡献指南
+## Development Workflow
 
-感谢您对本项目的贡献感兴趣！请按照以下步骤进行贡献：
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/my-change`.
+3. Make focused changes and add tests when appropriate.
+4. Commit your work.
+5. Push the branch and open a pull request.
 
-## 开发流程
-1. Fork 本仓库。
-2. 创建您的特性分支 (`git checkout -b feature/fooBar`)。
-3. 提交您的修改 (`git commit -am 'Add some fooBar'`)。
-4. 推送到分支 (`git push origin feature/fooBar`)。
-5. 创建一个新的 Pull Request。
+## Code Style
 
-## 代码风格
-请遵循以下代码风格指南：
-- 使用 4 个空格缩进。
-- 注释代码，尤其是复杂的逻辑。
-- 遵循 PEP 8（针对 Python 项目）。
+- Use four spaces for Python indentation.
+- Follow PEP 8 for Python code.
+- Add comments only where the implementation is not self-explanatory.
+- Keep changes scoped to the problem being solved.
 
-## 提交问题
-如果您发现了 bug 或有新的功能建议，请通过 [GitHub Issues](https://github.com/yourusername/yourproject/issues) 提交问题。
+## Reporting Issues
 
-感谢您的贡献！
+Use [GitHub Issues](https://github.com/wxy2ab/akinterpreter/issues) to report bugs or request features. Include reproduction steps, expected behavior, actual behavior, and relevant logs when possible.

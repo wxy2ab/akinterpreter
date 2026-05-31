@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API测试页面</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        .result {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .success {
+            border-color: #28a745;
+            background-color: #d4edda;
+        }
+
+        .error {
+            border-color: #dc3545;
+            background-color: #f8d7da;
+        }
+
+        .status {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>CTP Web交易系统 - API测试页面</h1>
+        <p>这个页面用于直接测试交易管理API的响应，帮助诊断前端数据显示问题。</p>
+
+        <!-- CTP状态测试 -->
+        <div class="test-section">
+            <h3>1. CTP状态检查</h3>
+            <button onclick="testCtpStatus()">检查CTP状态</button>
+            <div id="ctp-status-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 持仓数据测试 -->
+        <div class="test-section">
+            <h3>2. 持仓数据测试</h3>
+            <button onclick="testPositions()">获取持仓数据</button>
+            <div id="positions-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 订单数据测试 -->
+        <div class="test-section">
+            <h3>3. 订单数据测试</h3>
+            <button onclick="testOrders()">获取订单数据</button>
+            <div id="orders-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 成交数据测试 -->
+        <div class="test-section">
+            <h3>4. 成交数据测试</h3>
+            <button onclick="testTrades()">获取成交数据</button>
+            <div id="trades-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 账户数据测试 -->
+        <div class="test-section">
+            <h3>5. 账户数据测试</h3>
+            <button onclick="testAccount()">获取账户数据</button>
+            <div id="account-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 强制同步测试 -->
+        <div class="test-section">
+            <h3>6. 强制同步测试</h3>
+            <button onclick="testForceSync()">强制同步数据</button>
+            <div id="sync-result" class="result" style="display:none;"></div>
+        </div>
+
+        <!-- 全部测试 -->
+        <div class="test-section">
+            <h3>7. 批量测试</h3>
+            <button onclick="runAllTests()">运行所有测试</button>
+            <button onclick="clearAllResults()">清空结果</button>
+        </div>
+    </div>
+
+    <script>
+        // 通用API调用函数
+        async function callApi(url, method = 'GET', body = null) {
+            try {
+                const options = {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+
+                if (body) {
+                    options.body = JSON.stringify(body);
+                }
+
+                const response = await fetch(url, options);
+                const data = await response.json();
+
+                return {
+                    success: response.ok,
+                    status: response.status,
+                    statusText: response.statusText,
+                    data: data
+                };
+            } catch (error) {
+                return {
+                    success: false,
+                    error: error.message,
+                    data: null
+                };
+            }
+        }
+
+        // 显示结果
+        function showResult(elementId, result, testName) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'block';
+
+            let content = `=== ${testName} ===\n`;
+            content += `时间: ${new Date().toLocaleString()}\n`;
+            content += `成功: ${result.success}\n`;
+
+            if (result.status) {
+                content += `状态码: ${result.status} ${result.statusText}\n`;
+            }
+
+            if (result.error) {
+                content += `错误: ${result.error}\n`;
+                element.className = 'result error';
+            } else {
+                element.className = 'result success';
+            }
+
+            if (result.data) {
+                content += `数据类型: ${Array.isArray(result.data) ? 'Array' : typeof result.data}\n`;
+                if (Array.isArray(result.data)) {
+                    content += `数据长度: ${result.data.length}\n`;
+                }
+                content += `响应数据:\n${JSON.stringify(result.data, null, 2)}`;
+            }
+
+            element.textContent = content;
+        }
+
+        // 测试CTP状态
+        async function testCtpStatus() {
+            const result = await callApi('/api/trading-management/ctp-status');
+            showResult('ctp-status-result', result, 'CTP状态检查');
+        }
+
+        // 测试持仓数据
+        async function testPositions() {
+            const result = await callApi('/api/trading-management/positions');
+            showResult('positions-result', result, '持仓数据获取');
+        }
+
+        // 测试订单数据
+        async function testOrders() {
+            const result = await callApi('/api/trading-management/orders');
+            showResult('orders-result', result, '订单数据获取');
+        }
+
+        // 测试成交数据
+        async function testTrades() {
+            const result = await callApi('/api/trading-management/trades');
+            showResult('trades-result', result, '成交数据获取');
+        }
+
+        // 测试账户数据
+        async function testAccount() {
+            const result = await callApi('/api/trading-management/account');
+            showResult('account-result', result, '账户数据获取');
+        }
+
+        // 测试强制同步
+        async function testForceSync() {
+            const result = await callApi('/api/trading-management/force-sync', 'POST');
+            showResult('sync-result', result, '强制同步数据');
+        }
+
+        // 运行所有测试
+        async function runAllTests() {
+            await testCtpStatus();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testPositions();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testOrders();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testTrades();
+            await new Promise(resolve => setTimeout(resolve, 500));
+            await testAccount();
+            alert('所有测试完成，请查看结果');
+        }
+
+        // 清空所有结果
+        function clearAllResults() {
+            const results = document.querySelectorAll('.result');
+            results.forEach(result => {
+                result.style.display = 'none';
+                result.textContent = '';
+                result.className = 'result';
+            });
+        }
+
+        // 页面加载时自动检查CTP状态
+        window.addEventListener('load', () => {
+            setTimeout(testCtpStatus, 1000);
+        });
+    </script>
+</body>
+
+</html>

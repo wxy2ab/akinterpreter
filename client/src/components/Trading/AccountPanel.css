@@ -1,0 +1,268 @@
+/* AccountPanel 组件样式 */
+.account-panel {
+    width: 100%;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.account-panel .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
+    border-radius: 8px 8px 0 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.account-panel .panel-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.account-panel .refresh-btn {
+    padding: 6px 12px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s;
+}
+
+.account-panel .refresh-btn:hover {
+    border-color: #1890ff;
+    color: #1890ff;
+}
+
+.account-panel .panel-content {
+    padding: 20px;
+}
+
+.account-panel .account-summary {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.account-panel .summary-card {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+}
+
+.account-panel .summary-card.primary {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border: none;
+}
+
+.account-panel .summary-card.success {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: #fff;
+    border: none;
+}
+
+.account-panel .summary-card.warning {
+    background: linear-gradient(135deg, #fc4a1a 0%, #f7b733 100%);
+    color: #fff;
+    border: none;
+}
+
+.account-panel .summary-card.danger {
+    background: linear-gradient(135deg, #fc466b 0%, #3f5efb 100%);
+    color: #fff;
+    border: none;
+}
+
+.account-panel .card-label {
+    display: block;
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.8;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.account-panel .card-value {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'Roboto Mono', monospace;
+    margin-bottom: 4px;
+}
+
+.account-panel .card-unit {
+    font-size: 12px;
+    opacity: 0.7;
+}
+
+.account-panel .account-details {
+    background: #fafafa;
+    border: 1px solid #e8e8e8;
+    border-radius: 6px;
+    padding: 16px;
+}
+
+.account-panel .details-title {
+    margin: 0 0 16px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+    padding-bottom: 8px;
+}
+
+.account-panel .details-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 16px;
+}
+
+.account-panel .detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.account-panel .detail-item:last-child {
+    border-bottom: none;
+}
+
+.account-panel .detail-label {
+    font-size: 13px;
+    color: #666;
+    font-weight: 500;
+}
+
+.account-panel .detail-value {
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'Roboto Mono', monospace;
+    color: #333;
+}
+
+.account-panel .detail-value.positive {
+    color: #52c41a;
+}
+
+.account-panel .detail-value.negative {
+    color: #ff4d4f;
+}
+
+.account-panel .detail-value.neutral {
+    color: #1890ff;
+}
+
+.account-panel .risk-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.account-panel .risk-level {
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.account-panel .risk-level.low {
+    background: #f6ffed;
+    color: #52c41a;
+    border: 1px solid #b7eb8f;
+}
+
+.account-panel .risk-level.medium {
+    background: #fff7e6;
+    color: #fa8c16;
+    border: 1px solid #ffd591;
+}
+
+.account-panel .risk-level.high {
+    background: #fff1f0;
+    color: #ff4d4f;
+    border: 1px solid #ffa39e;
+}
+
+.account-panel .statistics-section {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.account-panel .statistics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+}
+
+.account-panel .stat-item {
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    padding: 12px;
+    text-align: center;
+}
+
+.account-panel .stat-label {
+    display: block;
+    font-size: 11px;
+    color: #999;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.account-panel .stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    font-family: 'Roboto Mono', monospace;
+}
+
+.account-panel .stat-value.positive {
+    color: #52c41a;
+}
+
+.account-panel .stat-value.negative {
+    color: #ff4d4f;
+}
+
+.account-panel .loading {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.account-panel .error {
+    text-align: center;
+    padding: 40px 20px;
+    color: #ff4d4f;
+    background: #fff1f0;
+    border: 1px solid #ffa39e;
+    border-radius: 4px;
+}
+
+.account-panel .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.account-panel .last-updated {
+    text-align: right;
+    font-size: 11px;
+    color: #999;
+    margin-top: 12px;
+    font-style: italic;
+}

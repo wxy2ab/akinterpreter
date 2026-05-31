@@ -24,10 +24,10 @@ const lexend = localFont({
 export const metadata: Metadata = {
   title: {
     template: '%s - Docs',
-    default: 'akinterpreter.让不会代码的人也能用解释器',
+    default: 'akinterpreter - LLM-powered financial analysis',
   },
   description:
-    'akinterpreter 让你的与生俱来的能力提升万倍.',
+    'Use natural language to retrieve financial data, generate analysis code, and produce reports.',
 }
 
 export default function RootLayout({

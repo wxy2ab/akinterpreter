@@ -5,11 +5,15 @@ from typing import Iterator, List, Dict, Any, Union
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
+from dashscope import MultiModalConversation
+from tenacity import retry, stop_after_attempt, wait_fixed
+from ..utils.log import logger
+from ratelimit import limits, sleep_and_retry
 
 class QianWenClient(LLMApiClient):
-    def __init__(self, api_key: str = "", max_tokens: int = 2000, top_p: float = 0.8, 
+    def __init__(self, api_key: str = "", max_tokens: int = 8000, top_p: float = 0.8, 
                  repetition_penalty: float = 1, temperature: float = 1, 
-                 stop: Union[str, List[str], None] = None, enable_search: bool = False):
+                 stop: Union[str, List[str], None] = None, enable_search: bool = False,model: str = "qwen3-max", vmodel: str = "qwen3-vl-plus"):
         import dashscope
         config = Config()
         if api_key == "" and config.has_key("DASHSCOPE_API_KEY"):
@@ -20,14 +24,16 @@ class QianWenClient(LLMApiClient):
         self.request_count = 0
         self.successful_requests = 0
         self.failed_requests = 0
-        self.models = ['qwen-max', 'qwen-plus', 'qwen-max-longcontext']
-        self.model = self.models[2]
+        self.models = ['qwen-max','qwen-max-latest', 'qwen-plus', 'qwen-max-longcontext','qwen-plus-latest']
+        self.model = "qwen-max-latest" if model == "" or model is None else model
+        self.vmodel = "qwen-vl-max" if vmodel == "" or vmodel is None else vmodel
         self.max_tokens = max_tokens
         self.top_p = top_p
         self.repetition_penalty = repetition_penalty
         self.temperature = temperature
         self.stop = stop
         self.enable_search = enable_search
+        self.logger = logger
 
     @handle_max_tokens
     def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
@@ -42,8 +48,12 @@ class QianWenClient(LLMApiClient):
                 return assistant_message['content']
             else:
                 self.history.pop()
-                return "Error: Failed to get response from the model."
+                self.logger.error(f"Error: Failed to get response from the model. {response.code} - {response.message}")
+                raise "Error: Failed to get response from the model."
 
+    @sleep_and_retry
+    @limits(calls=20, period=1)
+    @retry(stop=stop_after_attempt(12), wait=wait_fixed(5))
     def one_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
         messages = self.history.copy()
         messages.append({'role': 'user', 'content': message})
@@ -55,7 +65,8 @@ class QianWenClient(LLMApiClient):
                 assistant_message = response.output.choices[0]['message']
                 return assistant_message['content']
             else:
-                return "Error: Failed to get response from the model."
+                self.logger.error(f"Error: Failed to get response from the model. {response.code} - {response.message}")
+                raise "Error: Failed to get response from the model."
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self.history.append({"role": "user", "content": user_message})
@@ -232,6 +243,18 @@ class QianWenClient(LLMApiClient):
         self.request_count += 1
         self.successful_requests += 1
 
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        response = self._send_tool_request(messages, tools, model=self.model)
+        if response.status_code != HTTPStatus.OK:
+            self.logger.error(f"Error: Failed to get response from the model. {response.code} - {response.message}")
+            raise RuntimeError("Error: Failed to get response from the model.")
+
+        assistant_message = response.output.choices[0]["message"]
+        return self._normalize_tool_invoke_response(
+            assistant_message.get("content", "") or "",
+            assistant_message.get("tool_calls", [])
+        )
+
     def _stream_tool_response(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]], function_module: Any) -> Iterator[str]:
         responses = Generation.call(
             model=self.model,
@@ -323,10 +346,97 @@ class QianWenClient(LLMApiClient):
         self.history = [self.history[0]]  # Keep the system message
 
     def image_chat(self, message: str, image_path: str) -> str:
-        raise NotImplementedError("QianWen API does not support image chat.")
+        """
+        Handle chat with image input.
+        
+        Args:
+            message (str): Text message to accompany the image
+            image_path (str): Path to image file or URL. For local files, prefix with 'file://'
+            
+        Returns:
+            str: Model's response
+        """
+        self.request_count += 1
+        
+        # Prepare the message format for image chat
+        messages = [
+            {'role': 'system', 'content': [{'text': '你是一个智能助手。'}]},
+            {'role': 'user', 'content': [
+                {'image': image_path},
+                {'text': message}
+            ]}
+        ]
+        
+        try:
+            response = MultiModalConversation.call(
+                model=self.vmodel,
+                messages=messages,
+                result_format='message',
+                max_tokens=self.max_tokens,
+                top_p=self.top_p,
+                repetition_penalty=self.repetition_penalty,
+                temperature=self.temperature,
+                stop=self.stop,
+                enable_search=self.enable_search
+            )
+            
+            if response.status_code == HTTPStatus.OK:
+                self.successful_requests += 1
+                self.total_tokens += response.usage['total_tokens']
+                return response.output.choices[0].message.content[0]["text"]
+            else:
+                self.failed_requests += 1
+                return f"Error: {response.code} - {response.message}"
+                
+        except Exception as e:
+            self.failed_requests += 1
+            return f"Error processing image chat: {str(e)}"
+
+    def video_chat(self, message: str, video_frames: List[str]) -> str:
+        """
+        Handle chat with video input (implemented as sequence of frames).
+        
+        Args:
+            message (str): Text message to accompany the video
+            video_frames (List[str]): List of paths or URLs to video frames
+            
+        Returns:
+            str: Model's response
+        """
+        self.request_count += 1
+        
+        # Prepare the message format for video chat
+        messages = [
+            {'role': 'user', 'content': [
+                {'video': video_frames},
+                {'text': message}
+            ]}
+        ]
+        
+        try:
+            response = MultiModalConversation.call(
+                model=self.vmodel,
+                messages=messages,
+                result_format='message',
+                max_tokens=self.max_tokens,
+                top_p=self.top_p,
+                repetition_penalty=self.repetition_penalty,
+                temperature=self.temperature,
+                stop=self.stop,
+                enable_search=self.enable_search
+            )
+            
+            if response.status_code == HTTPStatus.OK:
+                self.successful_requests += 1
+                self.total_tokens += response.usage['total_tokens']
+                return response.output.choices[0].message.content[0]["text"]
+            else:
+                self.failed_requests += 1
+                return f"Error: {response.code} - {response.message}"
+                
+        except Exception as e:
+            self.failed_requests += 1
+            return f"Error processing video chat: {str(e)}"
 
     def audio_chat(self, message: str, audio_path: str) -> str:
         raise NotImplementedError("QianWen API does not support audio chat.")
-
-    def video_chat(self, message: str, video_path: str) -> str:
-        raise NotImplementedError("QianWen API does not support video chat.")

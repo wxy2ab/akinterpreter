@@ -1,0 +1,405 @@
+/* 交易面板基本样式 */
+.trading-panel {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    max-height: 100vh;
+    background: var(--bg-primary, #ffffff);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    overflow: hidden;
+}
+
+/* 头部控制区 */
+.trading-panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    background: var(--bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+    flex-shrink: 0;
+}
+
+.header-left {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+}
+
+.header-left h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary, #212529);
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary, #6c757d);
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger-color, #dc3545);
+}
+
+.status-indicator.connected {
+    background: var(--success-color, #28a745);
+}
+
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+}
+
+.trading-status {
+    display: flex;
+    gap: 8px;
+}
+
+.status-badge {
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.status-badge.enabled {
+    background: var(--success-bg, #d4edda);
+    color: var(--success-color, #155724);
+}
+
+.status-badge.disabled {
+    background: var(--danger-bg, #f8d7da);
+    color: var(--danger-color, #721c24);
+}
+
+.header-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.btn {
+    padding: 8px 16px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+}
+
+.btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.btn.btn-secondary {
+    background: var(--secondary-color, #6c757d);
+    color: white;
+}
+
+.btn.btn-secondary:hover:not(:disabled) {
+    background: var(--secondary-dark, #5a6268);
+}
+
+.btn.btn-info {
+    background: var(--info-color, #17a2b8);
+    color: white;
+}
+
+.btn.btn-info:hover:not(:disabled) {
+    background: var(--info-dark, #138496);
+}
+
+.btn.btn-warning {
+    background: var(--warning-color, #ffc107);
+    color: #212529;
+}
+
+.btn.btn-warning:hover:not(:disabled) {
+    background: var(--warning-dark, #e0a800);
+}
+
+/* 统计概览 */
+.trading-statistics {
+    display: flex;
+    gap: 24px;
+    padding: 16px 20px;
+    background: var(--bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+    overflow-x: auto;
+    flex-shrink: 0;
+}
+
+.stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-width: 80px;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: var(--text-secondary, #6c757d);
+    font-weight: 500;
+}
+
+.stat-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary, #212529);
+}
+
+.stat-value.profit {
+    color: var(--success-color, #28a745);
+}
+
+.stat-value.loss {
+    color: var(--danger-color, #dc3545);
+}
+
+/* 主要内容区 */
+.trading-panel-content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    gap: 1px;
+    background: var(--border-color, #e9ecef);
+}
+
+/* 左侧交易控制面板 */
+.trading-controls {
+    width: 400px;
+    min-width: 350px;
+    max-width: 500px;
+    background: var(--bg-primary, #ffffff);
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border-color, #e9ecef);
+}
+
+.trading-tabs {
+    display: flex;
+    background: var(--bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+}
+
+.tab-button {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary, #6c757d);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border-bottom: 2px solid transparent;
+}
+
+.tab-button:hover {
+    background: var(--bg-hover, #e9ecef);
+}
+
+.tab-button.active {
+    color: var(--primary-color, #007bff);
+    border-bottom-color: var(--primary-color, #007bff);
+    background: var(--bg-primary, #ffffff);
+}
+
+.trading-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 20px;
+}
+
+/* 右侧信息展示面板 */
+.trading-info {
+    flex: 1;
+    background: var(--bg-primary, #ffffff);
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.info-tabs {
+    display: flex;
+    background: var(--bg-secondary, #f8f9fa);
+    border-bottom: 1px solid var(--border-color, #e9ecef);
+    overflow-x: auto;
+}
+
+.info-tabs .tab-button {
+    flex: none;
+    min-width: 120px;
+    white-space: nowrap;
+}
+
+.info-content {
+    flex: 1;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+/* 加载状态 */
+.loading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(255, 255, 255, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.loading-spinner {
+    padding: 20px;
+    background: var(--bg-primary, #ffffff);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    font-size: 16px;
+    color: var(--text-primary, #212529);
+}
+
+/* 响应式设计 */
+@media (max-width: 1024px) {
+    .trading-panel-content {
+        flex-direction: column;
+    }
+
+    .trading-controls {
+        width: 100%;
+        max-width: none;
+        min-width: 0;
+        height: 50%;
+        border-right: none;
+        border-bottom: 1px solid var(--border-color, #e9ecef);
+    }
+
+    .trading-statistics {
+        padding: 12px 16px;
+        gap: 16px;
+    }
+
+    .stat-item {
+        min-width: 60px;
+    }
+
+    .stat-label {
+        font-size: 11px;
+    }
+
+    .stat-value {
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 768px) {
+    .trading-panel-header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 12px 16px;
+    }
+
+    .header-left,
+    .header-right {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .header-controls {
+        flex-wrap: wrap;
+    }
+
+    .trading-statistics {
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+
+    .trading-tabs {
+        overflow-x: auto;
+    }
+
+    .tab-button {
+        white-space: nowrap;
+        min-width: 100px;
+    }
+}
+
+/* 暗色主题支持 */
+@media (prefers-color-scheme: dark) {
+    .trading-panel {
+        --bg-primary: #1a1a1a;
+        --bg-secondary: #2d2d2d;
+        --bg-hover: #3d3d3d;
+        --text-primary: #ffffff;
+        --text-secondary: #b3b3b3;
+        --border-color: #404040;
+        --primary-color: #4dabf7;
+        --success-color: #51cf66;
+        --success-bg: #2b8a3e;
+        --danger-color: #ff6b6b;
+        --danger-bg: #c92a2a;
+        --warning-color: #ffd43b;
+        --warning-dark: #fab005;
+        --info-color: #74c0fc;
+        --info-dark: #339af0;
+        --secondary-color: #868e96;
+        --secondary-dark: #6c757d;
+    }
+}
+
+/* 高对比度模式 */
+@media (prefers-contrast: high) {
+    .trading-panel {
+        --border-color: #000000;
+    }
+
+    .tab-button.active {
+        border-bottom-width: 3px;
+    }
+
+    .btn {
+        border-width: 2px;
+    }
+}
+
+/* 打印样式 */
+@media print {
+
+    .trading-panel-header,
+    .trading-tabs,
+    .info-tabs,
+    .header-controls,
+    .loading-overlay {
+        display: none;
+    }
+
+    .trading-panel-content {
+        flex-direction: column;
+    }
+
+    .trading-controls {
+        display: none;
+    }
+
+    .trading-info {
+        width: 100%;
+    }
+}

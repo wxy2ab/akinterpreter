@@ -1,12 +1,95 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 import re
 from typing import Generator, Iterator, List, Dict, Any, Union
-import pandas as pd
-import numpy as np
 import json
 from ..utils.log import logger
 
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    pd = None
+
+try:
+    import numpy as np
+except ModuleNotFoundError:
+    np = None
+
+
+def _require_optional_time_series_dependencies():
+    missing = []
+    if pd is None:
+        missing.append("pandas")
+    if np is None:
+        missing.append("numpy")
+    if missing:
+        raise ModuleNotFoundError(
+            "LLMApiClient time-series prediction helpers require optional "
+            f"dependencies: {', '.join(missing)}"
+        )
+    return pd, np
+
 class LLMApiClient(ABC):
+
+    supports_structured_output: bool = False
+
+    def set_history(self, history: List[Dict[str, str]]):
+        if not hasattr(self, "history"):
+            self.history = []
+        self.history = history
+
+    def set_response_format(self, fmt: Union[Dict[str, Any], None]) -> None:
+        """Enable / disable structured output for subsequent chat calls.
+
+        ``fmt`` is one of:
+            * ``{"type": "json_object"}`` — any JSON, no schema
+            * ``{"type": "json_schema", "json_schema": {...}}`` — strict schema
+            * ``None`` — disable
+
+        Subclasses that set ``supports_structured_output = True`` MUST
+        override this to wire ``fmt`` into the next API request. The base
+        class is a no-op so unsupported clients silently degrade to
+        prompt-only discipline.
+        """
+        pass
+
+    def get_response_format(self) -> Union[Dict[str, Any], None]:
+        return getattr(self, "_response_format", None)
+
+    def json_chat(
+        self,
+        message: str,
+        *,
+        schema: Union[Dict[str, Any], None] = None,
+        reset_after: bool = True,
+        parse: bool = True,
+    ) -> Union[Dict[str, Any], List[Any], str]:
+        """One-shot JSON-mode chat with automatic parsing.
+
+        Flow: enable response_format (if supported) → one_chat → parse JSON
+        with brace-substring fallback → optionally restore prior format.
+        Clients that don't support structured output still attempt to
+        parse the result, relying on prompt-level discipline.
+        """
+        prior_fmt = self.get_response_format()
+        if self.supports_structured_output:
+            if schema is not None:
+                self.set_response_format({
+                    "type": "json_schema",
+                    "json_schema": schema,
+                })
+            else:
+                self.set_response_format({"type": "json_object"})
+        try:
+            raw = self.one_chat(message)
+            if not parse:
+                return raw
+            return _parse_json_lenient(raw)
+        finally:
+            if reset_after:
+                self.set_response_format(prior_fmt)
+
     """LLM API客户端（如Gemini）的抽象基类。"""
     @abstractmethod
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
@@ -35,6 +118,114 @@ class LLMApiClient(ABC):
         """
         pass
 
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        将消息和工具定义发送给 API，返回结构化响应。
+
+        与 tool_chat 的区别：
+        - 不自动执行工具，不修改 history
+        - 接受完整的 messages 列表（包含 system/user）
+        - 返回 dict: {"content": str, "tool_calls": list[dict]}
+          其中 tool_calls 每项格式: {"tool_name": str, "arguments": dict, "tool_use_id": str}
+
+        子类应当覆写此方法。默认实现通过 tool_chat 做兼容处理。
+        """
+        raise NotImplementedError(
+            f"{type(self).__name__} does not implement tool_invoke. "
+            "Override this method to support structured tool calling."
+        )
+
+    def _safe_parse_tool_arguments(self, arguments: Any) -> Dict[str, Any]:
+        if arguments in (None, ""):
+            return {}
+        if isinstance(arguments, dict):
+            return arguments
+        if isinstance(arguments, str):
+            try:
+                parsed = json.loads(arguments)
+            except json.JSONDecodeError:
+                return {"raw_input": arguments}
+            return parsed if isinstance(parsed, dict) else {"raw_input": parsed}
+        return {"raw_input": arguments}
+
+    def _normalize_tool_calls(self, tool_calls: Any) -> List[Dict[str, Any]]:
+        normalized_calls: List[Dict[str, Any]] = []
+        for index, tool_call in enumerate(tool_calls or []):
+            if isinstance(tool_call, dict):
+                function_info = tool_call.get("function") or {}
+                tool_name = function_info.get("name") or tool_call.get("name") or ""
+                arguments = function_info.get("arguments")
+                if arguments is None:
+                    arguments = tool_call.get("input")
+                tool_use_id = tool_call.get("id") or tool_call.get("tool_use_id") or str(index)
+            else:
+                function_info = getattr(tool_call, "function", None)
+                tool_name = getattr(function_info, "name", "") if function_info is not None else getattr(tool_call, "name", "")
+                arguments = getattr(function_info, "arguments", None) if function_info is not None else None
+                if arguments is None:
+                    arguments = getattr(tool_call, "input", None)
+                tool_use_id = getattr(tool_call, "id", "") or getattr(tool_call, "tool_use_id", "") or str(index)
+
+            normalized_calls.append({
+                "tool_name": tool_name,
+                "arguments": self._safe_parse_tool_arguments(arguments),
+                "tool_use_id": tool_use_id,
+            })
+        return normalized_calls
+
+    def _normalize_tool_invoke_response(
+        self,
+        content: Any = "",
+        tool_calls: Any = None,
+        **metadata: Any,
+    ) -> Dict[str, Any]:
+        payload = {
+            "content": "" if content is None else str(content),
+            "tool_calls": self._normalize_tool_calls(tool_calls),
+        }
+        for key, value in metadata.items():
+            if value is not None:
+                payload[key] = value
+        return payload
+
+    def _messages_to_prompt(self, messages: List[Dict[str, Any]]) -> str:
+        prompt_parts: List[str] = []
+        for message in messages or []:
+            role = message.get("role") or message.get("Role") or "user"
+            content = message.get("content")
+            if content is None:
+                content = message.get("Content")
+            if isinstance(content, list):
+                flattened_parts: List[str] = []
+                for part in content:
+                    if isinstance(part, dict):
+                        text = part.get("text") or part.get("content")
+                        if text is None:
+                            text = json.dumps(part, ensure_ascii=False)
+                        flattened_parts.append(str(text))
+                    else:
+                        flattened_parts.append(str(part))
+                content = "\n".join(flattened_parts)
+            prompt_parts.append(f"{role}: {content}")
+        return "\n\n".join(prompt_parts)
+
+    def _tool_invoke_via_one_chat(self, messages: List[Dict[str, Any]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        try:
+            response = self.one_chat(messages, is_stream=False)
+        except Exception:
+            response = self.one_chat(self._messages_to_prompt(messages), is_stream=False)
+
+        if isinstance(response, dict):
+            return {
+                "content": str(response.get("content", "")),
+                "tool_calls": response.get("tool_calls", []),
+            }
+        if isinstance(response, str):
+            content = response
+        else:
+            content = "".join(response)
+        return {"content": content, "tool_calls": []}
+
     @abstractmethod
     def audio_chat(self, message: str, audio_path: str) -> str:
         """处理文本消息和音频文件，并返回LLM的文本响应。"""
@@ -54,7 +245,11 @@ class LLMApiClient(ABC):
     def get_stats(self) -> Dict[str, Any]:
         """返回使用情况统计信息（例如，token使用情况、API调用计数）。"""
         pass
-    
+    def set_system_message(self, system_message: str = "你是一个智能助手,擅长把复杂问题清晰明白通俗易懂地解答出来"):
+        if not hasattr(self, "history"):
+            self.history = []
+        self.history = [{"role": "system", "content": system_message}]
+        
     def set_parameters(self, **kwargs):
         valid_params = ["temperature", "top_p", "frequency_penalty", "presence_penalty",
                         "max_tokens", "stop", "model", "stop_sequences", "logit_bias",
@@ -87,6 +282,7 @@ class LLMApiClient(ABC):
         返回：
         Union[List[Dict[str, float]], pd.Series, pd.DataFrame]: 与输入格式相同的预测股票价格。
         """
+        _require_optional_time_series_dependencies()
         # 验证interval参数
         valid_intervals = ["分钟", "小时", "天", "周", "月"]
         if interval not in valid_intervals:
@@ -151,6 +347,7 @@ class LLMApiClient(ABC):
 
     def _generate_future_index(self, last_date: pd.Timestamp, num_of_predict: int, interval: str) -> pd.DatetimeIndex:
         """生成未来的日期索引"""
+        _require_optional_time_series_dependencies()
         if interval == "分钟":
             return pd.date_range(start=last_date + pd.Timedelta(minutes=1), periods=num_of_predict, freq='T')
         elif interval == "小时":
@@ -182,6 +379,7 @@ class LLMApiClient(ABC):
         返回：
         Union[List[float], np.ndarray, pd.Series, pd.DataFrame]: 与输入格式相同的预测值。
         """
+        _require_optional_time_series_dependencies()
         
         # 预处理输入数据
         if data_processor:
@@ -289,54 +487,114 @@ class LLMApiClient(ABC):
             # 尝试解析JSON
             data = json.loads(compressed)
             
-            # 验证所需的键是否存在
-            required_keys = ["topic", "key_points", "open_questions"]
-            if not all(key in data for key in required_keys):
-                raise ValueError("压缩历史记录中缺少必要的键")
-
-            # 存储解析后的数据（这里只是一个示例，您可能需要根据实际需求调整存储方式）
-            self.compressed_data = data
-
-            # 创建压缩后的历史记录，确保至少有两个条目
-            compressed_history = [
-                {"role": "user", "content": "我们之前的聊天要点是什么？"},
-                {"role": "assistant", "content": f"我们讨论的主要话题是：{data['topic']}。关键点包括：{', '.join(data['key_points'])}。" + (f"还有一些未解决的问题：{', '.join(data['open_questions'])}。" if data['open_questions'] else "")}
-            ]
+            # 🔧 支持新的简化格式（只有summary键）和旧格式（topic/key_points/open_questions）
+            if "summary" in data:
+                # 新格式：只有一个summary键
+                summary_content = data['summary']
+                # 存储解析后的数据
+                self.compressed_data = data
+                # 创建超级简洁的压缩历史（只用一条消息）
+                compressed_history = [
+                    {"role": "user", "content": f"[已压缩历史] {summary_content}"}
+                ]
+            elif all(key in data for key in ["topic", "key_points", "open_questions"]):
+                # 旧格式：兼容性支持
+                self.compressed_data = data
+                compressed_history = [
+                    {"role": "user", "content": "我们之前的聊天要点是什么？"},
+                    {"role": "assistant", "content": f"我们讨论的主要话题是：{data['topic']}。关键点包括：{', '.join(data['key_points'])}。" + (f"还有一些未解决的问题：{', '.join(data['open_questions'])}。" if data['open_questions'] else "")}
+                ]
+            else:
+                raise ValueError("压缩历史记录格式不正确")
 
             return compressed_history
 
         except json.JSONDecodeError:
-            # 如果JSON解析失败，返回基本的两个条目
+            # 如果JSON解析失败，返回基本的一条消息
+            logger.warning("JSON解析失败，使用原始文本作为压缩历史")
             return [
-                {"role": "user", "content": "我们之前的聊天要点是什么？"},
-                {"role": "assistant", "content": "抱歉，我无法准确总结之前的对话。我们可以从这里重新开始我们的讨论。"}
+                {"role": "user", "content": f"[已压缩历史] {compressed[:100]}"}  # 只保留前100字符
             ]
         except Exception as e:
             # 处理其他可能的错误
-            print(f"解析压缩历史记录时出错：{e}")
+            logger.warning(f"解析压缩历史记录时出错：{e}")
             return [
-                {"role": "user", "content": "我们之前的聊天要点是什么？"},
-                {"role": "assistant", "content": "在总结我们之前的对话时遇到了一些问题。我们可以从这里重新开始我们的讨论。"}
+                {"role": "user", "content": "[已压缩历史] 早期对话已被压缩，继续当前任务。"}
             ]
 
     def compress_history(self, history: List[Dict[str, str]]) -> List[Dict[str, str]]:
         """
         使用 one_chat 方法压缩历史记录。
         这个方法需要在具体的 LLMApiClient 实现中重写，以适应特定的 API。
+        
+        🔧 修复：加入基于消息长度的判断，避免不必要的压缩
         """
+        # 🔧 修复：先检查是否真的需要压缩
+        # 计算历史消息的总长度（估算token数）
+        total_chars = sum(len(str(msg.get('content', ''))) for msg in history)
+        estimated_tokens = total_chars
+        
+        # 如果消息总长度较小，无需压缩，直接返回
+        # 保守阈值：< 15K tokens 或 消息数 < 15 条
+        if estimated_tokens < 15000 and len(history) < 15:
+            logger.info(f"历史消息总长度较小(约{estimated_tokens:,}tokens, {len(history)}条)，无需压缩")
+            return history
+        
+        logger.info(f"历史消息总长度较大(约{estimated_tokens:,}tokens, {len(history)}条)，开始使用LLM压缩")
+        
+        # 🔧 更激进的压缩提示：限制输出为100字以内的一句话摘要
         prompt = """
-        请对以下对话历史进行高度概括和压缩：
+        请将以下对话历史压缩为一句话摘要（不超过100字）：
 
         {history}
 
-        请按照以下格式输出压缩后的结果：
-        1. 主要话题：(简要描述主要讨论的话题)
-        2. 关键点：(列出3-5个关键点，每个点不超过15字)
-        3. 未解决问题：(如果有的话，列出1-2个未解决的问题)
+        要求：
+        1. 只保留最关键的信息（如：目标、当前进度、最新结果）
+        2. 省略所有细节和中间过程
+        3. 用一句话概括即可
+        4. 输出格式：JSON，只包含一个键 "summary"
 
-        请确保输出的总字数不超过200字。输出应为JSON格式，键名分别为"topic", "key_points", "open_questions"。
+        示例输出：{{"summary": "正在优化策略，目标夏普率2.5，当前已完成5次迭代，最佳结果2.1"}}
         """
 
-        history_text = "\n".join([f"{msg['role']}: {msg['content']}" for msg in history])
+        # 🔧 优化历史文本格式：只保留content，去掉tool_calls等冗余信息
+        history_text = "\n".join([f"{msg['role']}: {str(msg.get('content', ''))[:200]}" for msg in history])  # 每条消息只保留前200字符
         compressed = self.one_chat(prompt.format(history=history_text))
-        return self.parse_and_store_compressed_history(compressed)
+        
+        compressed_history = self.parse_and_store_compressed_history(compressed)
+        
+        # 验证压缩效果
+        compressed_chars = sum(len(str(msg.get('content', ''))) for msg in compressed_history)
+        logger.info(f"压缩完成: {len(compressed_history)}条消息, 约{compressed_chars:,}tokens")
+
+        return compressed_history
+
+
+def _parse_json_lenient(raw: Any) -> Any:
+    """Tolerant JSON parser used by ``LLMApiClient.json_chat``.
+
+    Order of attempts: direct ``json.loads`` → strip ```` ```...``` ```` code
+    fence → curly brace substring → square brace substring. Raises
+    ``ValueError`` if no variant parses.
+    """
+    if raw is None:
+        raise ValueError("empty response from LLM")
+    text = str(raw).strip()
+    if text.startswith("```"):
+        first_nl = text.find("\n")
+        last_fence = text.rfind("```")
+        if first_nl != -1 and last_fence > first_nl:
+            text = text[first_nl + 1:last_fence].strip()
+    try:
+        return json.loads(text)
+    except (json.JSONDecodeError, ValueError):
+        pass
+    for opener, closer in (("{", "}"), ("[", "]")):
+        start = text.find(opener)
+        end = text.rfind(closer)
+        if 0 <= start < end:
+            try:
+                return json.loads(text[start:end + 1])
+            except (json.JSONDecodeError, ValueError):
+                continue
+    raise ValueError(f"could not parse JSON from LLM response: {text[:240]!r}")

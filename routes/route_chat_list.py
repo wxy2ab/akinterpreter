@@ -25,11 +25,15 @@ def chat_list_add_new(session_id:str):
 
 @router.get("/change_chat")
 def chat_list_change(session_id:str,chat_list_id:str):
-    user_session = session_manager.chat_list_change_chat(session_id,chat_list_id)
-    return user_session
+    try:
+        return session_manager.chat_list_change_chat(session_id,chat_list_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 @router.delete("/delete_chat")
 def chat_list_delete(session_id: str = Query(...), chat_list_id: str = Query(...)):
+    chat = session_manager.chat_list_get_one(chat_list_id)
+    if chat is None or chat.session_id != session_id:
+        raise HTTPException(status_code=404, detail="Chat not found")
     session_manager.chat_list_delete(chat_list_id)
     return {"message": "chat deleted", "status": True}
-

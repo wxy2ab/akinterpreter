@@ -6,9 +6,8 @@ import mimetypes
 import os
 import time
 from typing import Any, Dict, List, Union, Iterator
-from vertexai.preview.generative_models import GenerativeModel, Part, Tool, GenerationConfig
-import vertexai
-from google.oauth2 import service_account
+from google.cloud import aiplatform
+from google.protobuf.struct_pb2 import Value
 from ._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 import asyncio
@@ -16,13 +15,9 @@ import queue
 import threading
 from ..utils.log import logger as logging
 from ..utils.handle_max_tokens import handle_max_tokens
-
-#众所周知，这个类在一定范围内是运行不了的
-#想运行这个库，应该开启proxy 设置
-#不过这个api目前版本智能程度一般，你未必想用
-#使用这个文件需要安装下面的库
-#pip install google-cloud-aiplatform
-from google.protobuf.struct_pb2 import Value
+from google.oauth2 import service_account
+from google.cloud.aiplatform.v1.schema.predict.instance import ImageInstance, TextPrompt, VideoInstance, Content, Part
+from google.cloud.aiplatform.gapic.schema import predict_instance
 
 def convert_proto_struct_to_dict(struct):
     result = {}
@@ -40,9 +35,9 @@ def convert_proto_struct_to_dict(struct):
                 result[key] = convert_proto_struct_to_dict(value.struct_value)
             elif value.HasField('list_value'):
                 result[key] = [convert_proto_value(v) for v in value.list_value.values]
-        else:
-            result[key] = value
-    return result
+            else:
+                result[key] = value
+        return result
 
 def convert_proto_value(value):
     if value.HasField('null_value'):
@@ -90,24 +85,29 @@ class GeminiAPIClient(LLMApiClient):
             service_account_path,
             scopes=["https://www.googleapis.com/auth/cloud-platform"])
 
-        vertexai.init(project=project_id,
-                      location=location,
-                      credentials=credentials)
-        self.model = GenerativeModel("gemini-1.5-pro-preview-0409")
-        self.chat = self.model.start_chat()
+        aiplatform.init(project=project_id,
+                            location=location,
+                            credentials=credentials)
+
+        # 使用 Endpoint 方式
+        endpoint_name = "projects/" + project_id + "/locations/" + location + "/endpoints/" + "your-endpoint-name"  # 替换为您的 Endpoint 名称
+        self.endpoint = aiplatform.Endpoint(endpoint_name)
+
         self.function_calls = 0
         self.total_tokens = 0
         self.history = []
         self.stat = {"call_count": {"tool_chat": 0}, "total_tokens": 0}
-        self.generation_config = GenerationConfig(temperature=0.7,
-                                                  top_k=40,
-                                                  max_output_tokens=1000)
+        self.generation_config = {
+            "temperature": 0.7,
+            "top_k": 40,
+            "max_output_tokens": 8000
+        }
 
     @staticmethod
     def find_project_root(start_dir=None):
         """
         查找项目根目录。
-        
+
         这个方法从给定的起始目录（默认为当前工作目录）开始，
         逐级向上查找，直到找到包含 'wxy2ab.json' 文件的目录，
         或者到达文件系统的根目录。
@@ -143,6 +143,26 @@ class GeminiAPIClient(LLMApiClient):
         if is_stream:
             return self._stream_response(message)
         else:
+            response = self._predict(message)
+            self._update_metadata(response)
+            self._add_to_history("assistant", response["content"])
+            return response["content"]
+
+
+    def _add_to_history(self, role: str, content: str):
+        self.history.append({"role": role, "content": content})
+
+    def _get_chat_history(self):
+        return self.history
+
+    @handle_max_tokens
+    def text_chat(self, message: str, is_stream: bool = False) -> Union[str, Iterator[str]]:
+        self.function_calls += 1
+        self._add_to_history("user", message)
+
+        if is_stream:
+            return self._stream_response(message)
+        else:
             response = self.chat.send_message(message, generation_config=self.generation_config)
             self._update_metadata(response)
             self._add_to_history("assistant", response.text)
@@ -150,39 +170,39 @@ class GeminiAPIClient(LLMApiClient):
 
     def tool_chat(self, user_message: str, tools: List[Dict[str, Any]], function_module: Any, is_stream: bool = False) -> Union[str, Iterator[str]]:
         self._add_to_history("user", user_message)
-        vertex_tools = Tool.from_dict({'function_declarations': tools})
+        # 构建 Vertex AI 请求数据
+        request = {
+            "prompt": user_message,
+            "tools": tools,
+            "generation_config": self.generation_config
+        }
 
         if is_stream:
-            return self._stream_tool_chat(user_message, vertex_tools, function_module)
+            return self._stream_tool_chat(request, function_module)
         else:
-            return self._non_stream_tool_chat(user_message, vertex_tools, function_module)
+            return self._non_stream_tool_chat(request, function_module)
 
-    def _non_stream_tool_chat(self, user_message: str,
-                              vertex_tools: List[Tool],
-                              function_module: Any) -> str:
-        response = self.chat.send_message(
-            user_message,
-            tools=vertex_tools,
-            generation_config=self.generation_config)
+    def _non_stream_tool_chat(self, request: dict, function_module: Any) -> str:
+        response = self._predict(request)
         self._update_metadata(response)
-        assistant_message = response.text
-        function_call = response.candidates[0].content.parts[
-            -1] if response.candidates[0].content.parts else None
+        assistant_message = response["content"]
+        function_call = response.get("function_call", None)
 
         self._add_to_history("assistant", assistant_message)
         self._update_usage_stats(response)
 
-        if function_call and isinstance(function_call, Tool):
-            function_name = function_call.function.name
-            function_args = function_call.function.args
+        if function_call:
+            function_name = function_call["name"]
+            function_args = function_call.get("args", {})
 
-            tool_result = self._execute_function(function_name, function_args,
-                                                 function_module)
+            tool_result = self._execute_function(function_name, function_args, function_module)
 
-            final_response = self.chat.send_message(
-                f"Function {function_name} returned: {tool_result}",
-                generation_config=self.generation_config)
-            final_assistant_message = final_response.text
+            final_response_request = {
+                "prompt": f"Function {function_name} returned: {tool_result}",
+                "generation_config": self.generation_config
+            }
+            final_response = self._predict(final_response_request)
+            final_assistant_message = final_response["content"]
             self._add_to_history("assistant", final_assistant_message)
             self._update_metadata(final_response)
 
@@ -191,16 +211,24 @@ class GeminiAPIClient(LLMApiClient):
             self.stat["call_count"]["tool_chat"] += 1
             return assistant_message
 
-    def _stream_tool_chat(self, user_message: str, vertex_tools: Tool, function_module: Any) -> Iterator[str]:
+    def _stream_tool_chat(self, request: dict, function_module: Any) -> Iterator[str]:
         iterator = AsyncContentIterator()
-        threading.Thread(target=self._stream_tool_chat_thread, args=(user_message, vertex_tools, function_module, iterator)).start()
+        threading.Thread(target=self._stream_tool_chat_thread, args=(request, function_module, iterator)).start()
         return iterator
 
-    def _stream_tool_chat_thread(self, user_message: str, vertex_tools: Tool, function_module: Any, iterator: "AsyncContentIterator"):
+    def _stream_tool_chat_thread(self, request: dict, function_module: Any, iterator: "AsyncContentIterator"):
         try:
-            for chunk in self.chat.send_message(user_message, tools=[vertex_tools], generation_config=self.generation_config, stream=True):
-                self._process_chunk(chunk, function_module, iterator)
-            self.stat["call_count"]["tool_chat"] += 1
+            responses = self.endpoint.predict(instances=[request], stream=True) # Streaming prediction
+            for chunk in responses:
+                if "predictions" in chunk and chunk["predictions"]: # New structure, use chunk["predictions"][0] if it is a list of predictions
+                  prediction = chunk["predictions"][0]
+                  if "function_call" in prediction:
+                      self._process_function_call_from_chunk(prediction, function_module, iterator)
+                  elif "content" in prediction:
+                      iterator.add_content(prediction["content"])
+
+                if "usage" in chunk: # Extract usage if exists
+                  self._update_usage_stats(chunk)
         except Exception as e:
             logging.error(f"Error in tool_chat: {str(e)}", exc_info=True)
             iterator.add_content("An error occurred during processing. Please try again.")
@@ -217,28 +245,20 @@ class GeminiAPIClient(LLMApiClient):
         except Exception as e:
             logging.warning(f"Error processing chunk: {str(e)}", exc_info=True)
 
-    def _has_function_call(self, chunk):
-        try:
-            return (hasattr(chunk, 'candidates') and
-                    chunk.candidates and
-                    hasattr(chunk.candidates[0], 'content') and
-                    hasattr(chunk.candidates[0].content, 'parts') and
-                    chunk.candidates[0].content.parts and
-                    hasattr(chunk.candidates[0].content.parts[0], 'function_call'))
-        except Exception:
-            return False
+    def _has_function_call(self, prediction):
+        return "function_call" in prediction
 
-    def _has_text_content(self, chunk):
+    def _has_text_content(self, prediction):
+        return "content" in prediction and bool(prediction["content"])
+    
+    def _process_function_call_from_chunk(self, prediction, function_module, iterator):
         try:
-            return hasattr(chunk, 'text') and bool(chunk.text)
-        except Exception:
-            return False
-
-    def _process_function_call_from_chunk(self, chunk, function_module, iterator):
-        try:
-            function_call = chunk.candidates[0].content.parts[0].function_call
-            function_name = function_call.name
+            function_call = prediction["function_call"]
+            function_name = function_call.get('name', '') # Get safely function name
             function_args = self._safe_get_args(function_call)
+
+            if not function_name:
+                return
 
             self._stream_function_call_info(iterator, function_name, function_args)
             tool_result = self._execute_function(function_name, function_args, function_module)
@@ -246,22 +266,22 @@ class GeminiAPIClient(LLMApiClient):
             self._stream_final_response(function_name, tool_result, iterator)
         except Exception as e:
             logging.error(f"Error processing function call from chunk: {str(e)}", exc_info=True)
-            iterator.add_content(f"Error processing function call: {str(e)}")
+            iterator.add_content(f"Error processing function call: {str(e)}\n")
+  
+    def _safe_get_args(self, function_call): # Same logic, but working on new format
+        args = function_call.get('args', None)
+        if args is None:
+            return {}
 
-    def _safe_get_args(self, function_call):
         try:
-            args = getattr(function_call, 'args', None)
-            if args is None:
-                return {}
-            if hasattr(args, 'items'):  # If it's a dict-like object
-                return convert_proto_struct_to_dict(args)
-            elif isinstance(args, str):  # If it's a string (possibly JSON)
+            if isinstance(args, dict):
+                return args
+            elif isinstance(args, str):
                 try:
                     return json.loads(args)
                 except json.JSONDecodeError:
-                    return {"arg": args}  # Treat the whole string as a single argument
-            else:
-                return {"arg": str(args)}  # Convert any other type to string
+                    return {"arg": args}
+            return {"arg": str(args)}
         except Exception as e:
             logging.warning(f"Error converting function args: {str(e)}", exc_info=True)
             return {}
@@ -382,71 +402,110 @@ class GeminiAPIClient(LLMApiClient):
 
         return output
 
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        response = self._predict({
+            "prompt": messages,
+            "tools": tools,
+            "generation_config": self.generation_config
+        })
+        function_call = response.get("function_call")
+        tool_calls = []
+        if function_call:
+            tool_calls.append({
+                "id": function_call.get("id", ""),
+                "function": {
+                    "name": function_call.get("name", ""),
+                    "arguments": json.dumps(function_call.get("args", {}), ensure_ascii=False)
+                }
+            })
+        return self._normalize_tool_invoke_response(response.get("content", "") or "", tool_calls)
+
     def _update_usage_stats(self, response):
-        self.stat["total_tokens"] += response.usage.total_tokens
+
+      if "usage" in response:
+        usage = response["usage"]
+        self.stat["total_tokens"] += usage.get('total_tokens', 0) # changed to usage.get
+        self.stat["prompt_token_count"] = usage.get('prompt_tokens', 0)
+        self.stat["candidate_token_count"] = usage.get('completion_tokens', 0) # changed to completion_tokens
+        self.total_tokens = self.stat["total_tokens"]
 
     def clear_chat(self):
-        self.chat = self.model.start_chat()
-        self.history = []
+        # No direct equivalent for clear_chat in new API per message history within a chat session.
+        self.history = [] # Clear local history
 
     def get_stats(self):
         return self.stat
 
     def image_chat(self, message: str, image_path: str):
-        self.function_calls += 1
-        image = Part.from_image(image_path)
-        self._add_to_history("user", f"{message} [Image: {image_path}]")
-        response = self.chat.send_message(
-            [message, image], generation_config=self.generation_config)
-        self._update_metadata(response)
-        self._add_to_history("assistant", response.text)
-        return response.text
+        try:
+            with open(image_path, "rb") as image_file:
+                image_bytes = image_file.read()
+            image = Part(
+                data=image_bytes,
+                mime_type="image/jpeg" # 确保mime_type正确
+            )
+
+            request = {
+              "prompt": TextPrompt(text=message),
+              "image": ImageInstance(bytes_base64_encoded=image)
+
+            }
+            response = self._predict(request)
+            return response.get("content", "No response content")
+
+
+        except Exception as e:
+            return f"Error processing image: {e}"
+
 
     def audio_chat(self, message: str, audio_path: str):
-        self.function_calls += 1
+      try:
         mime_type, _ = mimetypes.guess_type(audio_path)
         if mime_type is None:
-            mime_type = "audio/mpeg"  # Default MIME type, adjust as needed
+            mime_type = "audio/mpeg"
 
         with open(audio_path, "rb") as audio_file:
             audio_data = audio_file.read()
+        audio = Part(data=audio_data, mime_type=mime_type)
 
-        audio = Part.from_data(data=audio_data, mime_type=mime_type)
-        self._add_to_history("user", f"{message} [Audio: {audio_path}]")
-        response = self.chat.send_message([message, audio])
-        self._update_metadata(response)
-        self._add_to_history("assistant", response.text)
-        return response.text
+        request = {
+            "prompt": TextPrompt(text=message),
+            "audio": audio
+        }
+        response = self._predict(request)
+        return response.get("content", "No response content")
+      except Exception as e:
+        return f"Error processing audio: {e}"
 
     def video_chat(self, message: str, video_path: str):
-        self.function_calls += 1
+      try:
         mime_type, _ = mimetypes.guess_type(video_path)
         if mime_type is None:
-            mime_type = "video/mp4"  # Default MIME type, adjust as needed
-
+            mime_type = "video/mp4"
         with open(video_path, "rb") as video_file:
             video_data = video_file.read()
 
-        video = Part.from_data(data=video_data, mime_type=mime_type)
-        self._add_to_history("user", f"{message} [Video: {video_path}]")
-        response = self.chat.send_message([message, video])
-        self._update_metadata(response)
-        self._add_to_history("assistant", response.text)
-        return response.text
+        video = Part(data=video_data, mime_type=mime_type)
+
+        request = {
+            "prompt": TextPrompt(text=message),
+            "video": video
+        }
+        response = self._predict(request)
+        return response.get("content", "No response content")
+      except Exception as e:
+        return f"Error processing video: {e}"
 
     def get_chat_history(self):
         return self._get_chat_history()
 
     def one_chat(self, message: Union[str, List[Union[str, Part]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         try:
-            temp_chat = self.model.start_chat()
-
             if is_stream:
-                return self._stream_response(message, chat=temp_chat)
+                return self._stream_response(message) #流式调用保持不变
             else:
-                response = temp_chat.send_message(message, generation_config=self.generation_config)
-                self._update_metadata(response)
-                return response.text
+                response = self._predict({"prompt": message, "generation_config": self.generation_config}) #正确调用_predict
+                return response["content"]
         except Exception as e:
             error_message = f"Error in one_chat: {str(e)}"
             print(error_message)
@@ -477,39 +536,34 @@ class GeminiAPIClient(LLMApiClient):
         except Exception as e:
             print(f"Error updating usage metadata: {str(e)}")
 
-    def set_generation_config(self,
-                              temperature=0.7,
-                              top_p=1,
-                              top_k=40,
-                              max_output_tokens=1000):
-        """
-        设置生成配置参数。
-    
-        :param temperature: 控制随机性的温度参数
-        :param top_p: 用于核采样的累积概率阈值
-        :param top_k: 用于采样的最高概率标记数
-        :param max_output_tokens: 生成的最大标记数
-        """
-        self.generation_config = GenerationConfig(
-            temperature=temperature,
-            top_p=top_p,
-            top_k=top_k,
-            max_output_tokens=max_output_tokens)
+            temp_chat = self.model.start_chat()
 
-    def _stream_response(self, message: Union[str, List[Union[str, Part]]], chat=None, tools=None) -> Iterator[str]:
-        try:
-            if chat is None:
-                chat = self.chat
 
-            responses = chat.send_message(message, generation_config=self.generation_config, tools=tools, stream=True)
-            full_response = ""
-            for chunk in responses:
-                full_response += chunk.text
-                yield chunk.text
-                # self._update_metadata(chunk)  # 如果需要，可以取消注释
-            self.history.append({"role": "assistant", "content": full_response})
-        except Exception as e:
-            yield f"Error in streaming response: {str(e)}"
+    def _stream_response(self, message, chat=None, tools=None) -> Iterator[str]:
+        request = {
+            "prompt": message,
+            "generation_config": self.generation_config,
+            "tools": tools
+        }
+
+        responses = self.endpoint.predict(instances=[request], stream=True)
+        full_response = ""
+        for chunk in responses:
+          if "predictions" in chunk and chunk["predictions"]:
+            prediction = chunk["predictions"][0]
+            if "content" in prediction:
+                full_response += prediction["content"]
+                yield prediction["content"]
+
+        self.history.append({"role": "assistant", "content": full_response})
+
+    def _predict(self, request):
+        response = self.endpoint.predict(instances=[request])
+        if response.predictions and isinstance(response.predictions[0], dict):
+            return response.predictions[0]
+        else:
+          logging.warning(f"Unexpected prediction format {response.predictions}")
+          return {"content": f"Unexpected prediction format {response.predictions}"}
 
 
 class AsyncContentIterator(Iterator[str]):
@@ -535,3 +589,8 @@ class AsyncContentIterator(Iterator[str]):
         if item is None:
             raise StopIteration
         return item
+#众所周知，这个类在一定范围内是运行不了的
+#想运行这个库，应该开启proxy 设置
+#不过这个api目前版本智能程度一般，你未必想用
+#使用这个文件需要安装下面的库
+#pip install google-cloud-aiplatform

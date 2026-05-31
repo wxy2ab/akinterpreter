@@ -30,6 +30,8 @@ class LLMFactory(metaclass=Singleton):
         config = Config()
         if name == "" and config.has_key("llm_api"):
             name = config.get("llm_api")
+            logger.warning(f"⚠️ LLMFactory.get_instance() 收到空字符串参数，从setting.ini读取默认配置: {name}")
+            logger.warning("这可能不是期望的行为，建议检查调用处是否应该使用agent_llm_config.yaml中的配置")
             
         module_name = self.llm_classes.get(name.lower())
         if module_name is None:

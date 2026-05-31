@@ -1,0 +1,75 @@
+/* PositionsTable 组件样式 */
+.positions-table {
+    width: 100%;
+}
+
+.positions-table .refresh-button {
+    margin-bottom: 16px;
+}
+
+.positions-table .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.positions-table .direction-long {
+    color: #52c41a;
+    font-weight: bold;
+}
+
+.positions-table .direction-short {
+    color: #ff4d4f;
+    font-weight: bold;
+}
+
+.positions-table .position-pnl.positive {
+    color: #52c41a;
+    font-weight: bold;
+}
+
+.positions-table .position-pnl.negative {
+    color: #ff4d4f;
+    font-weight: bold;
+}
+
+.positions-table .position-price {
+    font-family: monospace;
+    text-align: right;
+}
+
+.positions-table .position-volume {
+    font-family: monospace;
+    text-align: right;
+}
+
+.positions-table .position-margin {
+    font-family: monospace;
+    text-align: right;
+}
+
+.positions-table .quick-close-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #ff4d4f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.positions-table .quick-close-btn:hover {
+    background: #ff7875;
+}
+
+.positions-table .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.positions-table .loading-state {
+    text-align: center;
+    padding: 40px 20px;
+}

@@ -1,0 +1,278 @@
+/* AlgoTradingPanel 组件样式 */
+.algo-trading-panel {
+    width: 100%;
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.algo-trading-panel .panel-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid #f0f0f0;
+    background: #fafafa;
+    border-radius: 8px 8px 0 0;
+}
+
+.algo-trading-panel .panel-title {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+}
+
+.algo-trading-panel .panel-content {
+    padding: 20px;
+}
+
+.algo-trading-panel .form-section {
+    margin-bottom: 24px;
+}
+
+.algo-trading-panel .form-section h3 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e8e8e8;
+    padding-bottom: 8px;
+}
+
+.algo-trading-panel .form-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+    align-items: center;
+}
+
+.algo-trading-panel .form-group {
+    flex: 1;
+}
+
+.algo-trading-panel .form-group.narrow {
+    flex: 0 0 120px;
+}
+
+.algo-trading-panel label {
+    display: block;
+    margin-bottom: 4px;
+    font-size: 12px;
+    font-weight: 500;
+    color: #666;
+}
+
+.algo-trading-panel input,
+.algo-trading-panel select,
+.algo-trading-panel textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    font-size: 14px;
+    transition: border-color 0.3s;
+}
+
+.algo-trading-panel input:focus,
+.algo-trading-panel select:focus,
+.algo-trading-panel textarea:focus {
+    outline: none;
+    border-color: #1890ff;
+    box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.algo-trading-panel .algorithm-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.algo-trading-panel .algorithm-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+    text-align: center;
+}
+
+.algo-trading-panel .algorithm-btn.active {
+    background: #1890ff;
+    color: #fff;
+    border-color: #1890ff;
+}
+
+.algo-trading-panel .algorithm-btn:hover:not(.active) {
+    border-color: #1890ff;
+    color: #1890ff;
+}
+
+.algo-trading-panel .direction-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+
+.algo-trading-panel .direction-btn {
+    flex: 1;
+    padding: 8px 16px;
+    border: 1px solid #d9d9d9;
+    background: #fff;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s;
+}
+
+.algo-trading-panel .direction-btn.buy {
+    color: #52c41a;
+    border-color: #52c41a;
+}
+
+.algo-trading-panel .direction-btn.buy.active {
+    background: #52c41a;
+    color: #fff;
+}
+
+.algo-trading-panel .direction-btn.sell {
+    color: #ff4d4f;
+    border-color: #ff4d4f;
+}
+
+.algo-trading-panel .direction-btn.sell.active {
+    background: #ff4d4f;
+    color: #fff;
+}
+
+.algo-trading-panel .params-section {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 4px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.algo-trading-panel .params-section h4 {
+    margin: 0 0 12px 0;
+    font-size: 14px;
+    color: #333;
+}
+
+.algo-trading-panel .param-group {
+    margin-bottom: 12px;
+}
+
+.algo-trading-panel .param-group:last-child {
+    margin-bottom: 0;
+}
+
+.algo-trading-panel .param-description {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 8px;
+    font-style: italic;
+}
+
+.algo-trading-panel .submit-section {
+    padding-top: 20px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.algo-trading-panel .submit-btn {
+    width: 100%;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    background: #1890ff;
+    color: #fff;
+}
+
+.algo-trading-panel .submit-btn:hover {
+    background: #40a9ff;
+}
+
+.algo-trading-panel .submit-btn:disabled {
+    background: #d9d9d9;
+    cursor: not-allowed;
+}
+
+.algo-trading-panel .algo-preview {
+    background: #f0f7ff;
+    border: 1px solid #b3d8ff;
+    border-radius: 4px;
+    padding: 12px;
+    margin-bottom: 16px;
+}
+
+.algo-trading-panel .algo-preview h4 {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+    color: #1890ff;
+}
+
+.algo-trading-panel .preview-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+    font-size: 12px;
+}
+
+.algo-trading-panel .preview-item .label {
+    color: #666;
+}
+
+.algo-trading-panel .preview-item .value {
+    font-weight: 500;
+    color: #333;
+}
+
+.algo-trading-panel .warning {
+    background: #fff7e6;
+    border: 1px solid #ffec99;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #d48806;
+}
+
+.algo-trading-panel .info {
+    background: #e6f7ff;
+    border: 1px solid #91d5ff;
+    border-radius: 4px;
+    padding: 8px 12px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #0958d9;
+}
+
+.algo-trading-panel .loading {
+    text-align: center;
+    padding: 20px;
+    color: #999;
+}
+
+.algo-trading-panel .error {
+    color: #ff4d4f;
+    font-size: 12px;
+    margin-top: 4px;
+}
+
+.algo-trading-panel .disabled {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.algo-trading-panel .help-text {
+    font-size: 11px;
+    color: #999;
+    margin-top: 4px;
+    line-height: 1.4;
+}

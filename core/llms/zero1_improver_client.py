@@ -12,6 +12,6 @@ class Zero1LLamaImproverClient(MoonShotClient):
         config = Config()
         api_key = config.get("zero_one_api_key")
         super().__init__(api_key, base_url)
-        self._model_list=["yi-large","yi-medium","yi-large-turbo"]
-        self.model = "yi-large-turbo"
+        self._model_list=["yi-large","yi-medium","yi-large-turbo","yi-lightning"]
+        self.model = "yi-lightning"
 

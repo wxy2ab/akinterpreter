@@ -3,15 +3,11 @@ title: akshare
 nextjs:
   metadata:
     title: akshare
-    description: akshare
+    description: akshare data provider
 ---
 
-目前数据都是从 akshare 来的。感谢akshare 大佬们提供接口。
-
----
+**English** | [简体中文](./page.zh-CN.md)
 
 ## akshare
 
-akshare 是一个开源项目。   
-提供海量的数据接口。   
-地址在 [akshare](https://akshare.akfamily.xyz/)
+[akshare](https://akshare.akfamily.xyz/) is an open-source project that provides a large collection of financial data APIs. akinterpreter uses it as a primary data provider.

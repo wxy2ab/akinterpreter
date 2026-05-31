@@ -1,0 +1,372 @@
+/* 策略追踪面板样式 */
+.strategy-tracking-panel {
+    padding: 16px;
+    background: #f5f5f5;
+    min-height: 100vh;
+}
+
+.strategy-tracking-card {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+}
+
+.strategy-tracking-card .ant-card-head {
+    background: linear-gradient(90deg, #1890ff 0%, #69c0ff 100%);
+    color: white;
+    border-radius: 8px 8px 0 0;
+}
+
+.strategy-tracking-card .ant-card-head-title {
+    color: white;
+    font-weight: bold;
+}
+
+.strategy-tracking-card .ant-card-extra {
+    color: white;
+}
+
+.strategy-tracking-card .ant-card-extra .ant-btn {
+    border-color: rgba(255, 255, 255, 0.3);
+    color: white;
+}
+
+.strategy-tracking-card .ant-card-extra .ant-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
+.strategy-tracking-card .ant-card-extra .ant-btn-dangerous {
+    background: rgba(255, 77, 79, 0.1);
+    border-color: rgba(255, 77, 79, 0.3);
+}
+
+.strategy-tracking-card .ant-card-extra .ant-btn-dangerous:hover {
+    background: rgba(255, 77, 79, 0.2);
+    border-color: rgba(255, 77, 79, 0.5);
+}
+
+/* 统计概览样式 */
+.strategy-tracking-panel .ant-statistic {
+    text-align: center;
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+}
+
+.strategy-tracking-panel .ant-statistic:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.strategy-tracking-panel .ant-statistic-title {
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 4px;
+}
+
+.strategy-tracking-panel .ant-statistic-content {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* 选项卡样式 */
+.strategy-tracking-panel .ant-tabs-tab {
+    font-weight: 500;
+}
+
+.strategy-tracking-panel .ant-tabs-tab-active {
+    background: rgba(24, 144, 255, 0.1);
+    border-radius: 4px 4px 0 0;
+}
+
+.strategy-tracking-panel .ant-tabs-content-holder {
+    background: white;
+    padding: 0;
+    border-radius: 0 0 8px 8px;
+}
+
+/* 表格样式增强 */
+.strategy-tracking-panel .ant-table-thead>tr>th {
+    background: #fafafa;
+    font-weight: 600;
+    color: #262626;
+    border-bottom: 2px solid #e8e8e8;
+}
+
+.strategy-tracking-panel .ant-table-tbody>tr:hover>td {
+    background: #e6f7ff !important;
+}
+
+.strategy-tracking-panel .ant-table-tbody>tr.ant-table-row-selected:hover>td {
+    background: #bae7ff !important;
+}
+
+/* 策略信号表格行样式 */
+.strategy-signals-table .signal-row-buy {
+    background-color: #f6ffed !important;
+    border-left: 3px solid #52c41a;
+}
+
+.strategy-signals-table .signal-row-sell {
+    background-color: #fff2f0 !important;
+    border-left: 3px solid #ff4d4f;
+}
+
+.strategy-signals-table .signal-row-close {
+    background-color: #fffbe6 !important;
+    border-left: 3px solid #faad14;
+}
+
+.strategy-signals-table .signal-row-buy:hover,
+.strategy-signals-table .signal-row-sell:hover,
+.strategy-signals-table .signal-row-close:hover {
+    background-color: #e6f7ff !important;
+}
+
+/* 交易执行表格行样式 */
+.trade-executions-table .trade-row-profit {
+    background-color: #f6ffed !important;
+    border-left: 3px solid #52c41a;
+}
+
+.trade-executions-table .trade-row-loss {
+    background-color: #fff2f0 !important;
+    border-left: 3px solid #ff4d4f;
+}
+
+.trade-executions-table .trade-row-profit:hover,
+.trade-executions-table .trade-row-loss:hover {
+    background-color: #e6f7ff !important;
+}
+
+/* 策略统计表格行样式 */
+.strategy-statistics-table .strategy-row-s {
+    background-color: #f9f0ff !important;
+    border-left: 3px solid #722ed1;
+}
+
+.strategy-statistics-table .strategy-row-a {
+    background-color: #f6ffed !important;
+    border-left: 3px solid #52c41a;
+}
+
+.strategy-statistics-table .strategy-row-b {
+    background-color: #e6f7ff !important;
+    border-left: 3px solid #1890ff;
+}
+
+.strategy-statistics-table .strategy-row-c {
+    background-color: #fffbe6 !important;
+    border-left: 3px solid #faad14;
+}
+
+.strategy-statistics-table .strategy-row-d {
+    background-color: #fff2f0 !important;
+    border-left: 3px solid #ff4d4f;
+}
+
+.strategy-statistics-table .strategy-row-s:hover,
+.strategy-statistics-table .strategy-row-a:hover,
+.strategy-statistics-table .strategy-row-b:hover,
+.strategy-statistics-table .strategy-row-c:hover,
+.strategy-statistics-table .strategy-row-d:hover {
+    background-color: #e6f7ff !important;
+}
+
+/* 进度条样式 */
+.strategy-statistics-table .ant-progress-line {
+    margin-bottom: 2px;
+}
+
+.strategy-statistics-table .ant-progress-bg {
+    border-radius: 2px;
+}
+
+/* 标签样式增强 */
+.strategy-tracking-panel .ant-tag {
+    font-size: 11px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-weight: 500;
+}
+
+/* 过滤器样式 */
+.strategy-tracking-panel .ant-card-small .ant-card-head {
+    min-height: 48px;
+    padding: 0 16px;
+}
+
+.strategy-tracking-panel .ant-card-small .ant-card-body {
+    padding: 16px;
+}
+
+/* 过滤器标签样式 */
+.strategy-tracking-panel .ant-tag {
+    margin: 2px 4px 2px 0;
+    font-size: 12px;
+}
+
+/* 分页样式 */
+.strategy-tracking-panel .ant-pagination {
+    margin: 16px 0;
+    text-align: right;
+}
+
+.strategy-tracking-panel .ant-pagination-options {
+    margin-left: 16px;
+}
+
+/* 汇总行样式 */
+.strategy-tracking-panel .ant-table-summary {
+    background: #fafafa;
+    border-top: 2px solid #e8e8e8;
+}
+
+.strategy-tracking-panel .ant-table-summary td {
+    font-weight: 600;
+    color: #262626;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .strategy-tracking-panel {
+        padding: 8px;
+    }
+
+    .strategy-tracking-panel .ant-col {
+        margin-bottom: 8px;
+    }
+
+    .strategy-tracking-panel .ant-statistic {
+        padding: 8px;
+    }
+
+    .strategy-tracking-panel .ant-statistic-content {
+        font-size: 16px;
+    }
+
+    .strategy-tracking-panel .ant-table-scroll {
+        overflow-x: auto;
+    }
+}
+
+@media (max-width: 480px) {
+    .strategy-tracking-panel .ant-statistic-content {
+        font-size: 14px;
+    }
+
+    .strategy-tracking-panel .ant-table-thead>tr>th,
+    .strategy-tracking-panel .ant-table-tbody>tr>td {
+        padding: 8px 4px;
+        font-size: 12px;
+    }
+}
+
+/* 暗色主题支持 */
+@media (prefers-color-scheme: dark) {
+    .strategy-tracking-panel {
+        background: #141414;
+    }
+
+    .strategy-tracking-card {
+        background: #1f1f1f;
+        border-color: #434343;
+    }
+
+    .strategy-tracking-panel .ant-statistic {
+        background: #1f1f1f;
+        border: 1px solid #434343;
+    }
+
+    .strategy-tracking-panel .ant-table-thead>tr>th {
+        background: #262626;
+        color: #ffffff;
+        border-color: #434343;
+    }
+
+    .strategy-tracking-panel .ant-table-tbody>tr>td {
+        background: #1f1f1f;
+        border-color: #434343;
+        color: #ffffff;
+    }
+
+    .strategy-tracking-panel .ant-table-tbody>tr:hover>td {
+        background: #262626 !important;
+    }
+}
+
+/* 高对比度支持 */
+@media (prefers-contrast: high) {
+    .strategy-tracking-panel .ant-tag {
+        border-width: 2px;
+        font-weight: bold;
+    }
+
+    .strategy-tracking-panel .ant-table-thead>tr>th {
+        border-width: 2px;
+    }
+
+    .strategy-tracking-panel .ant-table-tbody>tr>td {
+        border-width: 1px;
+    }
+}
+
+/* 动画效果 */
+.strategy-tracking-panel .ant-table-tbody>tr {
+    transition: background-color 0.3s ease;
+}
+
+.strategy-tracking-panel .ant-statistic {
+    animation: fadeIn 0.6s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 加载状态样式 */
+.strategy-tracking-panel .ant-spin-container {
+    min-height: 200px;
+}
+
+.strategy-tracking-panel .ant-spin-blur {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* 打印样式 */
+@media print {
+    .strategy-tracking-panel {
+        background: white;
+        padding: 0;
+    }
+
+    .strategy-tracking-card .ant-card-head {
+        background: white;
+        color: black;
+        border-bottom: 2px solid black;
+    }
+
+    .strategy-tracking-panel .ant-btn,
+    .strategy-tracking-panel .ant-tabs-extra-content {
+        display: none;
+    }
+
+    .strategy-tracking-panel .ant-table-pagination {
+        display: none;
+    }
+
+    .strategy-tracking-panel .ant-table {
+        break-inside: avoid;
+    }
+}

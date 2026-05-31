@@ -27,7 +27,7 @@ class ChatListModel(BaseModel):
             current_plan=user_session.current_plan,
             step_codes=user_session.step_codes,
             data=user_session.data,
-            name=user_session.current_plan.get("query_summary",f"{user_session.created_at.strftime("%Y-%m-%d %H:%M")}的计划")
+            name=user_session.current_plan.get("query_summary", f"{user_session.created_at.strftime('%Y-%m-%d %H:%M')}的计划")
         )
     @staticmethod
     def to_user_session(chat_list: "ChatListModel") -> UserSession:

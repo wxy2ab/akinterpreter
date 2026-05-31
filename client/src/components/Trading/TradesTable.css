@@ -1,0 +1,64 @@
+/* TradesTable 组件样式 */
+.trades-table {
+    width: 100%;
+}
+
+.trades-table .refresh-button {
+    margin-bottom: 16px;
+}
+
+.trades-table .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.trades-table .status-indicator {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.trades-table .direction-buy {
+    color: #52c41a;
+    font-weight: bold;
+}
+
+.trades-table .direction-sell {
+    color: #ff4d4f;
+    font-weight: bold;
+}
+
+.trades-table .trade-time {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.trades-table .trade-price {
+    font-family: monospace;
+    text-align: right;
+}
+
+.trades-table .trade-volume {
+    font-family: monospace;
+    text-align: right;
+}
+
+.trades-table .commission {
+    font-family: monospace;
+    text-align: right;
+    color: #ff4d4f;
+}
+
+.trades-table .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.trades-table .loading-state {
+    text-align: center;
+    padding: 40px 20px;
+}

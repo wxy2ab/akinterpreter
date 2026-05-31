@@ -148,6 +148,26 @@ class SimpleDoubaoClient(LLMApiClient):
         self.stats["call_count"]["text_chat"] += 1
         # Note: We can't accurately count tokens for streaming responses without additional API calls
 
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "max_tokens": self.max_tokens,
+            "stop": self.stop,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "frequency_penalty": self.frequency_penalty
+        }
+        response = self._make_request(payload)
+        self.stats["call_count"]["tool_chat"] += 1
+        self.stats["total_tokens"] += response["usage"]["total_tokens"]
+        message = response["choices"][0]["message"]
+        return self._normalize_tool_invoke_response(
+            message.get("content", "") or "",
+            message.get("tool_calls", [])
+        )
+
     def clear_chat(self):
         self.history.clear()
 

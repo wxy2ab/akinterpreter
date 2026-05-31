@@ -1,0 +1,105 @@
+/* OrdersTable 组件样式 */
+.orders-table {
+    width: 100%;
+}
+
+.orders-table .refresh-button {
+    margin-bottom: 16px;
+}
+
+.orders-table .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.orders-table .direction-buy {
+    color: #52c41a;
+    font-weight: bold;
+}
+
+.orders-table .direction-sell {
+    color: #ff4d4f;
+    font-weight: bold;
+}
+
+.orders-table .offset-open {
+    color: #1890ff;
+}
+
+.orders-table .offset-close {
+    color: #f59e0b;
+}
+
+.orders-table .order-status {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.orders-table .order-status.submitted {
+    background: #e6f7ff;
+    color: #1890ff;
+}
+
+.orders-table .order-status.filled {
+    background: #f6ffed;
+    color: #52c41a;
+}
+
+.orders-table .order-status.cancelled {
+    background: #fff1f0;
+    color: #ff4d4f;
+}
+
+.orders-table .order-status.partially-filled {
+    background: #fff7e6;
+    color: #fa8c16;
+}
+
+.orders-table .order-price {
+    font-family: monospace;
+    text-align: right;
+}
+
+.orders-table .order-volume {
+    font-family: monospace;
+    text-align: right;
+}
+
+.orders-table .order-time {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.orders-table .cancel-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    background: #ff4d4f;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.orders-table .cancel-btn:hover {
+    background: #ff7875;
+}
+
+.orders-table .cancel-btn:disabled {
+    background: #d9d9d9;
+    cursor: not-allowed;
+}
+
+.orders-table .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.orders-table .loading-state {
+    text-align: center;
+    padding: 40px 20px;
+}

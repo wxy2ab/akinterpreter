@@ -1,0 +1,163 @@
+/* AlgoOrdersTable 组件样式 */
+.algo-orders-table {
+    width: 100%;
+}
+
+.algo-orders-table .refresh-button {
+    margin-bottom: 16px;
+}
+
+.algo-orders-table .table-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.algo-orders-table .direction-buy {
+    color: #52c41a;
+    font-weight: bold;
+}
+
+.algo-orders-table .direction-sell {
+    color: #ff4d4f;
+    font-weight: bold;
+}
+
+.algo-orders-table .algorithm-tag {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.algo-orders-table .algorithm-tag.twap {
+    background: #e6f7ff;
+    color: #1890ff;
+}
+
+.algo-orders-table .algorithm-tag.vwap {
+    background: #f6ffed;
+    color: #52c41a;
+}
+
+.algo-orders-table .algorithm-tag.iceberg {
+    background: #fff7e6;
+    color: #fa8c16;
+}
+
+.algo-orders-table .algorithm-tag.smart {
+    background: #f9f0ff;
+    color: #722ed1;
+}
+
+.algo-orders-table .progress-bar {
+    width: 100px;
+    height: 6px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+    position: relative;
+}
+
+.algo-orders-table .progress-fill {
+    height: 100%;
+    background: #1890ff;
+    transition: width 0.3s ease;
+}
+
+.algo-orders-table .progress-text {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.algo-orders-table .algo-status {
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.algo-orders-table .algo-status.running {
+    background: #e6f7ff;
+    color: #1890ff;
+}
+
+.algo-orders-table .algo-status.paused {
+    background: #fff7e6;
+    color: #fa8c16;
+}
+
+.algo-orders-table .algo-status.completed {
+    background: #f6ffed;
+    color: #52c41a;
+}
+
+.algo-orders-table .algo-status.cancelled {
+    background: #fff1f0;
+    color: #ff4d4f;
+}
+
+.algo-orders-table .control-buttons {
+    display: flex;
+    gap: 4px;
+}
+
+.algo-orders-table .control-btn {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.algo-orders-table .control-btn.pause {
+    background: #fa8c16;
+    color: white;
+}
+
+.algo-orders-table .control-btn.resume {
+    background: #1890ff;
+    color: white;
+}
+
+.algo-orders-table .control-btn.stop {
+    background: #ff4d4f;
+    color: white;
+}
+
+.algo-orders-table .control-btn:hover {
+    opacity: 0.8;
+}
+
+.algo-orders-table .control-btn:disabled {
+    background: #d9d9d9;
+    cursor: not-allowed;
+}
+
+.algo-orders-table .volume-info {
+    font-family: monospace;
+    text-align: right;
+}
+
+.algo-orders-table .price-info {
+    font-family: monospace;
+    text-align: right;
+}
+
+.algo-orders-table .time-info {
+    font-family: monospace;
+    font-size: 12px;
+}
+
+.algo-orders-table .empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #999;
+}
+
+.algo-orders-table .loading-state {
+    text-align: center;
+    padding: 40px 20px;
+}

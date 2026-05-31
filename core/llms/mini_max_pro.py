@@ -1,14 +1,16 @@
 import json
-from typing import Any, Dict, Generator, Iterator, List, Union
+from typing import Any, Dict, Generator, Iterator, List, Union, Literal
 
+from ratelimit import limits, sleep_and_retry
 import requests
+from tenacity import retry, stop_after_attempt, wait_exponential
 from core.llms._llm_api_client import LLMApiClient
 from ..utils.config_setting import Config
 from ..utils.handle_max_tokens import handle_max_tokens
 from ..utils.log import logger
 
 class MiniMaxProClient(LLMApiClient):
-    def __init__(self, model: str = "abab6.5s-chat"):
+    def __init__(self, model: Literal["MiniMax-M2.7-highspeed", "MiniMax-M2.7"] = "MiniMax-M2.7-highspeed"):
         config = Config()
         self.api_key = config.get("minimax_api_key")
         self.model = model
@@ -26,7 +28,7 @@ class MiniMaxProClient(LLMApiClient):
             "bot_setting": [
                 {
                     "bot_name": "信息处理专家",
-                    "content": "你擅长信息处理，严格遵循指令，删除编写代码、输出结构完整的JSON、输出结构优秀的markdown"
+                    "content": "你擅长信息处理，喜欢中文，严格遵循指令，输出结构完整的JSON,或者是格式化的markdown"
                 }
             ],
             "reply_constraints": {"sender_type": "BOT", "sender_name": "信息处理专家"},
@@ -37,6 +39,12 @@ class MiniMaxProClient(LLMApiClient):
         }
         self.debug = False
         self._last_id = ""
+
+    def _set_system_message(self, message: str):
+        self.parameters["bot_setting"][0]["content"] = message
+
+    def set_system_message(self, message: str):
+        self._set_system_message(message)
 
     def _make_request(self, messages: List[Dict[str, str]], stream: bool = False, **kwargs) -> Union[Dict, Generator]:
         payload = {
@@ -49,10 +57,14 @@ class MiniMaxProClient(LLMApiClient):
         
         self.stats["api_calls"] += 1
         response = requests.post(self.base_url, headers=self.headers, json=payload, stream=stream)
+        content = response.json()
         if self.debug and not stream:
-            content = response.json()
             if "id" in content:
+                self._last_id = content['id']
                 logger.info(f"response ID: {content['id']}")
+        else:
+            if "id" in content:
+                self._last_id = content['id']
         response.raise_for_status()
 
         if stream:
@@ -88,7 +100,7 @@ class MiniMaxProClient(LLMApiClient):
         else:
             assistant_message = response['reply']
             self.history.append({"sender_type": "BOT", "sender_name": "MM智能助理", "text": assistant_message})
-            self.stats["total_tokens"] += response['usage']['total_tokens']
+            #self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
 
     def _process_stream_response(self, response: Generator) -> Iterator[str]:
@@ -108,6 +120,10 @@ class MiniMaxProClient(LLMApiClient):
                 self.stats["total_tokens"] += chunk['usage']['total_tokens']
         self.history.append({"sender_type": "BOT", "sender_name": "MM智能助理", "text": full_response})
 
+
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=4, max=15))
+    @sleep_and_retry
+    @limits(calls=20, period=1)
     def one_chat(self, message: Union[str, List[Union[str, Any]]], is_stream: bool = False) -> Union[str, Iterator[str]]:
         if isinstance(message, str):
             messages = [{"sender_type": "USER", "sender_name": "USER", "text": message}]
@@ -119,7 +135,7 @@ class MiniMaxProClient(LLMApiClient):
             return self._process_stream_response(response)
         else:
             if 'base_resp' in response and response['base_resp']['status_code'] != 0:
-                raise Exception(response['base_resp']['status_msg'])
+                raise Exception( json.dumps(response['base_resp'], ensure_ascii=False))
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return response['reply']
 
@@ -138,6 +154,9 @@ class MiniMaxProClient(LLMApiClient):
             self.history.append({"sender_type": "BOT", "sender_name": "MM智能助理", "text": assistant_message})
             self.stats["total_tokens"] += response['usage']['total_tokens']
             return assistant_message
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        return self._tool_invoke_via_one_chat(messages, tools)
 
     def audio_chat(self, message: str, audio_path: str) -> str:
         raise NotImplementedError("MiniMax API does not support audio chat.")

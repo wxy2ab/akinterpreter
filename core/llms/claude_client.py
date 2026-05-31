@@ -14,11 +14,11 @@ from ..utils.handle_max_tokens import handle_max_tokens
 class ClaudeClient(LLMApiClient):
     def __init__(self, 
                  api_key: Optional[str] = None,
-                 model: str = "claude-3-5-sonnet-20241022",
-                 temperature: float = 0.5,
+                 model: str = "claude-opus-4.6",
+                 temperature: float = 1,
                  top_p: float = 1.0,
                  top_k: int = 250,
-                 max_tokens: int = 4096,
+                 max_tokens: Optional[int] = None,
                  stop_sequences: Optional[List[str]] = None):
         self.model = model
         self.temperature = temperature
@@ -140,6 +140,36 @@ class ClaudeClient(LLMApiClient):
             return self._handle_tool_stream(response, function_module, max_tokens)
         else:
             return self._handle_tool_response(response, function_module, max_tokens)
+
+    def tool_invoke(self, messages: List[Dict[str, str]], tools: List[Dict[str, Any]]) -> Dict[str, Any]:
+        cleaned_tools = [tool.copy() for tool in tools]
+        for tool in cleaned_tools:
+            tool.pop("output_schema", None)
+
+        response = self.client.messages.create(
+            model=self.model,
+            max_tokens=self.max_tokens,
+            messages=messages,
+            tools=cleaned_tools,
+            stream=False,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            top_k=self.top_k,
+            stop_sequences=self.stop_sequences
+        )
+        self._update_stats(response)
+        content_parts = []
+        tool_calls = []
+        for block in response.content:
+            if getattr(block, "type", "") == "text":
+                content_parts.append(block.text)
+            elif getattr(block, "type", "") == "tool_use":
+                tool_calls.append({
+                    "id": getattr(block, "id", ""),
+                    "name": getattr(block, "name", ""),
+                    "input": getattr(block, "input", {})
+                })
+        return self._normalize_tool_invoke_response("".join(content_parts), tool_calls)
 
     def _handle_tool_stream(self, response, function_module, max_tokens):
         assistant_message = ""
